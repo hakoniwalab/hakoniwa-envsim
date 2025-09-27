@@ -15,7 +15,12 @@ def plot_areas(areas: List[VisualArea], show_wind: bool = True) -> None:
 
     # 温度で塗り分け
     temps = [a.temperature for a in areas if a.temperature is not None]
-    vmin, vmax = (min(temps), max(temps)) if temps else (0, 1)
+    if temps:
+        vmin, vmax = min(temps), max(temps)
+        if abs(vmax - vmin) < 1e-6:
+            vmin, vmax = vmin - 1.0, vmax + 1.0  # 幅を強制的に確保
+    else:
+        vmin, vmax = 0.0, 1.0        
 
     for area in areas:
         aabb = area.aabb2d
@@ -43,11 +48,13 @@ def plot_areas(areas: List[VisualArea], show_wind: bool = True) -> None:
             wx, wy, wz = area.wind_velocity
             mag = (wx**2 + wy**2 + wz**2) ** 0.5
             if mag > 1e-6:  # 風速の大きさが閾値より大きい場合のみ描画
+                scale = 0.3  # 矢印長さをスケールダウン
                 ax.arrow(
-                    cy, cx, wy, wx,   # ROS座標系 (Y軸=横, X軸=縦)
-                    head_width=0.2, head_length=0.3,
+                    cy, cx, wy * scale, wx * scale,
+                    head_width=0.1, head_length=0.15,
                     fc="blue", ec="blue"
-                )
+)
+
 
 
     # 軸範囲
@@ -80,9 +87,9 @@ def plot_areas(areas: List[VisualArea], show_wind: bool = True) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Visualize Hakoniwa Environment Areas in 2D")
-    parser.add_argument("--area", default="../examples/models/area.json", help="Path to area.json")
-    parser.add_argument("--property", default="../examples/models/property.json", help="Path to property.json")
-    parser.add_argument("--link", default="../examples/models/link.json", help="Path to link.json")
+    parser.add_argument("--area", default="../examples/datasets/simple_room/area.json", help="Path to area.json")
+    parser.add_argument("--property", default="../examples/datasets/simple_room/property.json", help="Path to property.json")
+    parser.add_argument("--link", default="../examples/datasets/simple_room/link.json", help="Path to link.json")
     parser.add_argument("--no-wind", action="store_true", help="Disable wind vector drawing")
 
     args = parser.parse_args()
