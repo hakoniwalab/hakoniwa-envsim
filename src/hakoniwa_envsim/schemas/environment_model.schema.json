@@ -1,5 +1,5 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Hakoniwa Environment Model",
   "type": "object",
   "properties": {
@@ -8,22 +8,22 @@
       "description": "スキーマバージョン"
     },
     "meta": {
-      "$ref": "#/definitions/Meta"
+      "$ref": "#/$defs/Meta"
     },
     "grid": {
-      "$ref": "#/definitions/Grid"
+      "$ref": "#/$defs/Grid"
     },
     "base": {
-      "$ref": "#/definitions/Base"
+      "$ref": "#/$defs/Base"
     },
     "zones": {
       "type": "array",
-      "items": { "$ref": "#/definitions/Zone" }
+      "items": { "$ref": "#/$defs/Zone" }
     }
   },
   "required": ["version", "meta", "grid", "base"],
 
-  "definitions": {
+  "$defs": {
     "Meta": {
       "type": "object",
       "properties": {
@@ -44,29 +44,22 @@
           "description": "軸の取り方 (例: ENU = East-North-Up, NED = North-East-Down)"
         },
         "units": {
-          "$ref": "#/definitions/Units"
+          "$ref": "#/$defs/Units"
         }
       },
-      "required": ["crs", "origin_latlon", "axis", "units"]
+      "required": ["crs", "origin_latlon", "axis", "units"],
+      "additionalProperties": false
     },
 
     "Units": {
       "type": "object",
       "properties": {
-        "length": {
-          "type": "string",
-          "description": "距離の単位 (例: m)"
-        },
-        "speed": {
-          "type": "string",
-          "description": "速度の単位 (例: m/s)"
-        },
-        "temp": {
-          "type": "string",
-          "description": "温度の単位 (例: C または K)"
-        }
+        "length": { "type": "string" },
+        "speed": { "type": "string" },
+        "temp": { "type": "string" }
       },
-      "required": ["length", "speed", "temp"]
+      "required": ["length", "speed", "temp"],
+      "additionalProperties": false
     },
 
     "Grid": {
@@ -76,39 +69,30 @@
           "type": "array",
           "items": { "type": "number" },
           "minItems": 3,
-          "maxItems": 3,
-          "description": "領域の大きさ [x, y, z] (m)"
+          "maxItems": 3
         },
         "cell_m": {
           "type": "array",
           "items": { "type": "number" },
           "minItems": 3,
-          "maxItems": 3,
-          "description": "セルの大きさ [dx, dy, dz] (m)"
+          "maxItems": 3
         },
-        "levels": {
-          "type": "integer",
-          "description": "鉛直層数 (MVPでは1)"
-        }
+        "levels": { "type": "integer" }
       },
-      "required": ["extent_m", "cell_m", "levels"]
+      "required": ["extent_m", "cell_m", "levels"],
+      "additionalProperties": false
     },
 
     "Base": {
       "type": "object",
       "properties": {
-        "wind": { "$ref": "#/definitions/WindBase" },
-        "temperature_C": {
-          "type": "number",
-          "description": "温度 (摂氏)"
-        },
-        "pressure_atm": {
-          "type": "number",
-          "description": "気圧 (atm)"
-        },
-        "time_mods": { "$ref": "#/definitions/TimeMods" }
+        "wind": { "$ref": "#/$defs/WindBase" },
+        "temperature_C": { "type": "number" },
+        "pressure_atm": { "type": "number" },
+        "time_mods": { "$ref": "#/$defs/TimeMods" }
       },
-      "required": ["wind"]
+      "required": ["wind"],
+      "additionalProperties": false
     },
 
     "WindBase": {
@@ -118,50 +102,49 @@
           "type": "array",
           "items": { "type": "number" },
           "minItems": 3,
-          "maxItems": 3,
-          "description": "基準点での風速ベクトル [x,y,z] (m/s)。全域一様な風"
+          "maxItems": 3
         },
-        "dir_deg": {
-          "type": "number",
-          "description": "風向 (度)。風が吹いてくる方向"
-        },
-        "speed_ms": {
-          "type": "number",
-          "description": "風速 (m/s)"
-        },
+        "dir_deg": { "type": "number" },
+        "speed_ms": { "type": "number" },
         "grad_ms_per_km": {
           "type": "array",
           "items": { "type": "number" },
           "minItems": 2,
-          "maxItems": 2,
-          "description": "水平方向の風速勾配 [gx, gy] (m/s per km)。例: gx=0.5 → 東へ1kmで+0.5 m/s"
+          "maxItems": 2
         }
       },
       "oneOf": [
         { "required": ["vector_ms"] },
         { "required": ["dir_deg", "speed_ms"] }
-      ]
+      ],
+      "additionalProperties": false
     },
 
     "Zone": {
       "type": "object",
       "properties": {
         "name": { "type": "string" },
-        "shape": { "$ref": "#/definitions/Shape" },
-        "effect": { "$ref": "#/definitions/Effect" },
+        "shape": { "$ref": "#/$defs/Shape" },
+        "effect": { "$ref": "#/$defs/Effect" },
         "priority": { "type": "integer" },
-        "active": { "$ref": "#/definitions/Active" },
-        "time_mods": { "$ref": "#/definitions/TimeMods" }
+        "active": { "$ref": "#/$defs/Active" },
+        "time_mods": { "$ref": "#/$defs/TimeMods" }
       },
-      "required": ["name", "shape", "effect"]
+      "required": ["name", "shape", "effect"],
+      "additionalProperties": false
     },
 
     "Shape": {
       "type": "object",
       "properties": {
-        "circle": { "$ref": "#/definitions/Circle" },
-        "rect": { "$ref": "#/definitions/Rect" }
-      }
+        "circle": { "$ref": "#/$defs/Circle" },
+        "rect": { "$ref": "#/$defs/Rect" }
+      },
+      "oneOf": [
+        { "required": ["circle"] },
+        { "required": ["rect"] }
+      ],
+      "additionalProperties": false
     },
 
     "Circle": {
@@ -175,7 +158,8 @@
         },
         "radius_m": { "type": "number" }
       },
-      "required": ["center_m", "radius_m"]
+      "required": ["center_m", "radius_m"],
+      "additionalProperties": false
     },
 
     "Rect": {
@@ -194,7 +178,8 @@
           "maxItems": 2
         }
       },
-      "required": ["center_m", "size_m"]
+      "required": ["center_m", "size_m"],
+      "additionalProperties": false
     },
 
     "Effect": {
@@ -202,29 +187,24 @@
       "properties": {
         "mode": {
           "type": "string",
-          "enum": ["absolute", "scale", "add"],
-          "description": "効果の種類"
+          "enum": ["absolute", "scale", "add"]
         },
         "wind_ms": {
           "type": "array",
           "items": { "type": "number" },
           "minItems": 3,
-          "maxItems": 3,
-          "description": "absolute モード時の風ベクトル"
+          "maxItems": 3
         },
-        "scale": {
-          "type": "number",
-          "description": "scale モード時の倍率"
-        },
+        "scale": { "type": "number" },
         "add_ms": {
           "type": "array",
           "items": { "type": "number" },
           "minItems": 3,
-          "maxItems": 3,
-          "description": "add モード時の加算ベクトル"
+          "maxItems": 3
         }
       },
-      "required": ["mode"]
+      "required": ["mode"],
+      "additionalProperties": false
     },
 
     "Active": {
@@ -232,7 +212,8 @@
       "properties": {
         "t_from_s": { "type": "number" },
         "t_to_s": { "type": "number" }
-      }
+      },
+      "additionalProperties": false
     },
 
     "TimeMods": {
@@ -240,15 +221,15 @@
       "properties": {
         "apply_to": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "適用対象 (例: wind, temperature)"
+          "items": { "type": "string" }
         },
         "periodic": {
           "type": "array",
-          "items": { "$ref": "#/definitions/Periodic" }
+          "items": { "$ref": "#/$defs/Periodic" }
         },
-        "turbulence": { "$ref": "#/definitions/Turbulence" }
-      }
+        "turbulence": { "$ref": "#/$defs/Turbulence" }
+      },
+      "additionalProperties": false
     },
 
     "Periodic": {
@@ -258,7 +239,8 @@
         "freq_hz": { "type": "number" },
         "phase_deg": { "type": "number" }
       },
-      "required": ["amp", "freq_hz"]
+      "required": ["amp", "freq_hz"],
+      "additionalProperties": false
     },
 
     "Turbulence": {
@@ -266,13 +248,13 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["gauss", "perlin", "ou"],
-          "description": "乱流モデルの種類"
+          "enum": ["gauss", "perlin", "ou"]
         },
         "std_ms": { "type": "number" },
         "seed": { "type": "integer" }
       },
-      "required": ["type", "std_ms"]
+      "required": ["type", "std_ms"],
+      "additionalProperties": false
     }
   }
 }

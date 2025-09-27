@@ -38,3 +38,59 @@
 
 
 
+
+# スキーマ構成
+
+本リポジトリでは、**人が作るCreatorモデル** と **シミュレータが読む実行モデル** を分離します。
+
+| レイヤ        | 目的             | ファイル                            | 要点                                     |
+| ---------- | -------------- | ------------------------------- | -------------------------------------- |
+| Creatorモデル | 直感的に編集する元データ   | `environment_model.schema.json` | CRS/単位、グリッド、ベース風、ゾーン効果、時変（周期/乱流）       |
+| 実行モデル（分割）  | シミュレーション実行に最適化 | `space_area.schema.json`        | 3D領域（AABB）集合                           |
+| 〃          | 〃              | `area_properties.schema.json`   | エリア非依存の基準プロパティ（`id` 必須）                |
+| 〃          | 〃              | `link.schema.json`              | `area_id` ↔ `area_property_id` の疎結合リンク |
+| 〃（任意）      | 〃              | `boundary.schema.json`          | 地面/天井/壁などの境界定義                         |
+
+**設計意図**
+
+* Creatorモデルは **人間の編集体験を最優先**（意味がわかるフィールド名・単位付き）。
+* 実行モデルは **検索と計算効率を優先**（AABB + 参照リンク + 簡潔な型）。
+* 両者はツールで変換（Creator → 実行モデル）。Visualizer/Creator/ConverterはPythonで提供予定。
+
+---
+
+## バリデーション手順
+
+### CLIで検証
+
+```bash
+# jsonschema-cli を使う例
+pipx install check-jsonschema
+
+# Creatorモデルを検証（environment_model）
+check-jsonschema --schemafile src/hakoniwa_envsim/schemas/environment_model.schema.json \
+  examples/creator/kobe_bay.env.json
+
+# 実行モデル（分割）を検証
+check-jsonschema --schemafile src/hakoniwa_envsim/schemas/space_area.schema.json \
+  examples/models/space_areas.json
+
+check-jsonschema --schemafile src/hakoniwa_envsim/schemas/area_properties.schema.json \
+  examples/models/area_properties.json
+
+check-jsonschema --schemafile src/hakoniwa_envsim/schemas/link.schema.json \
+  examples/models/links.json
+```
+
+### Pythonで検証
+
+```python
+from jsonschema import validate
+import json
+
+schema = json.load(open("src/hakoniwa_envsim/schemas/space_area.schema.json"))
+data = json.load(open("examples/models/space_areas.json"))
+validate(instance=data, schema=schema)
+print("OK")
+```
+
