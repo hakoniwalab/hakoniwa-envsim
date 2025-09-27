@@ -1,0 +1,10 @@
+{
+  "links": [
+    { "area_id": "area_1", "area_property_id": "prop_area_1" },
+    { "area_id": "area_2", "area_property_id": "prop_area_2" },
+    { "area_id": "area_3", "area_property_id": "prop_area_3" },
+    { "area_id": "area_4", "area_property_id": "prop_area_4" },
+    { "area_id": "area_5", "area_property_id": "prop_area_5" },
+    { "area_id": "area_6", "area_property_id": "prop_area_6" }
+  ]
+}
