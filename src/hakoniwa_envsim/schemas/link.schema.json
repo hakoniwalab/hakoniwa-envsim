@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AreaPropertyLinks",
+  "type": "object",
+  "properties": {
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "area_id": {
+            "type": "string",
+            "description": "エリアを識別するID（space_areas[].area_id）"
+          },
+          "area_property_id": {
+            "type": "string",
+            "description": "プロパティ定義を識別するID（area_properties[].id）"
+          }
+        },
+        "required": ["area_id", "area_property_id"],
+        "additionalProperties": false
+      },
+      "uniqueItems": true,
+      "description": "エリアとプロパティ定義を結ぶリンクの集合"
+    }
+  },
+  "required": ["links"],
+  "additionalProperties": false
+}

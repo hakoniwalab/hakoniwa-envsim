@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SpaceAreas",
+  "type": "object",
+  "properties": {
+    "space_areas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "area_id": {
+            "type": "string",
+            "description": "Unique identifier for the area"
+          },
+          "bounds": {
+            "type": "object",
+            "properties": {
+              "min": {
+                "type": "object",
+                "properties": {
+                  "x": { "type": "number" },
+                  "y": { "type": "number" },
+                  "z": { "type": "number" }
+                },
+                "required": ["x", "y", "z"],
+                "additionalProperties": false
+              },
+              "max": {
+                "type": "object",
+                "properties": {
+                  "x": { "type": "number" },
+                  "y": { "type": "number" },
+                  "z": { "type": "number" }
+                },
+                "required": ["x", "y", "z"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["min", "max"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["area_id", "bounds"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["space_areas"],
+  "additionalProperties": false
+}

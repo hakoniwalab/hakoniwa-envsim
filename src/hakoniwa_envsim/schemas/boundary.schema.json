@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Boundaries",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Boundary identifier (e.g. ground, ceiling, wall)"
+      },
+      "position": {
+        "type": "array",
+        "items": { "type": "number" },
+        "minItems": 3,
+        "maxItems": 3,
+        "description": "Position of the boundary center [x, y, z]"
+      },
+      "size": {
+        "type": "array",
+        "items": { "type": "number" },
+        "minItems": 2,
+        "maxItems": 3,
+        "description": "Size dimensions. At least width and depth; height optional."
+      },
+      "rotation": {
+        "type": "array",
+        "items": { "type": "number" },
+        "minItems": 3,
+        "maxItems": 3,
+        "description": "Rotation angles [roll, pitch, yaw] in radians or degrees"
+      }
+    },
+    "required": ["name", "position", "size", "rotation"],
+    "additionalProperties": false
+  }
+}

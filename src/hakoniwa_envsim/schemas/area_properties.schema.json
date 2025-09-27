@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AreaProperties",
+  "type": "object",
+  "properties": {
+    "area_properties": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for this property set (used in Link)"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "wind_velocity": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "3D wind velocity vector [x,y,z]"
+              },
+              "temperature": {
+                "type": "number",
+                "description": "Temperature in Celsius"
+              },
+              "sea_level_atm": {
+                "type": "number",
+                "description": "Relative sea level atmospheric pressure"
+              }
+            },
+            "required": ["wind_velocity", "temperature", "sea_level_atm"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "properties"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["area_properties"],
+  "additionalProperties": false
+}
