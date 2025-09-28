@@ -22,6 +22,7 @@
     }
   },
   "required": ["version", "meta", "grid", "base"],
+  "additionalProperties": false,
 
   "$defs": {
     "Meta": {
@@ -181,29 +182,59 @@
       "required": ["center_m", "size_m"],
       "additionalProperties": false
     },
-
     "Effect": {
       "type": "object",
       "properties": {
-        "mode": {
-          "type": "string",
-          "enum": ["absolute", "scale", "add"]
-        },
+        "mode": { "type": "string", "enum": ["absolute", "scale", "add", "vortex", "turbulence"] },
+
         "wind_ms": {
           "type": "array",
           "items": { "type": "number" },
-          "minItems": 3,
-          "maxItems": 3
+          "minItems": 3, "maxItems": 3,
+          "description": "absolute モード時の風ベクトル"
         },
-        "scale": { "type": "number" },
+        "scale": { "type": "number", "description": "scale モード時の倍率" },
         "add_ms": {
           "type": "array",
           "items": { "type": "number" },
-          "minItems": 3,
-          "maxItems": 3
+          "minItems": 3, "maxItems": 3,
+          "description": "add モード時の加算ベクトル"
+        },
+
+        "vortex": {
+          "type": "object",
+          "properties": {
+            "center_m": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+            "gain": { "type": "number" },
+            "decay": { "type": "string", "enum": ["inv_r", "gaussian"], "default": "inv_r" },
+            "sigma_m": { "type": "number" },
+            "r_min_m": { "type": "number", "default": 0.1 },
+            "clockwise": { "type": "boolean", "default": true },
+            "max_ms": { "type": "number" }
+          },
+          "required": ["center_m", "gain"],
+          "additionalProperties": false
+        },
+
+        "turbulence": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["gauss", "perlin", "ou"] },
+            "std_ms": { "type": "number" },
+            "seed": { "type": "integer" }
+          },
+          "required": ["type", "std_ms"],
+          "additionalProperties": false
         }
       },
       "required": ["mode"],
+      "allOf": [
+        { "if": { "properties": { "mode": { "const": "absolute" } } }, "then": { "required": ["wind_ms"] } },
+        { "if": { "properties": { "mode": { "const": "scale"    } } }, "then": { "required": ["scale"] } },
+        { "if": { "properties": { "mode": { "const": "add"      } } }, "then": { "required": ["add_ms"] } },
+        { "if": { "properties": { "mode": { "const": "vortex"   } } }, "then": { "required": ["vortex"] } },
+        { "if": { "properties": { "mode": { "const": "turbulence"} } }, "then": { "required": ["turbulence"] } }
+      ],
       "additionalProperties": false
     },
 
