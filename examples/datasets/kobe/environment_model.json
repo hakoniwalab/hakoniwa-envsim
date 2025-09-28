@@ -103,8 +103,8 @@
       "shape": { "rect": { "min_m": [3370.866142, 2499.55595], "size_m": [1129.133858, 1333.48135] } },
       "effect": {
         "mode": "turbulence",
-        "turbulence": { "type": "gauss", "std_ms": 1.0, "seed": 123 },
-        "gps_abs": 0.8
+        "turbulence": { "type": "gauss", "std_ms": 1.5, "seed": 123 },
+        "gps_abs": 0.7
       },
       "priority": 2
     }
