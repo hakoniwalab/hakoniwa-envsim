@@ -5,7 +5,8 @@
       "properties": {
         "wind_velocity": [0.0, 0.0, 0.0],
         "temperature": 10.5,
-        "sea_level_atm": 0.98
+        "sea_level_atm": 0.98,
+        "gps_strength": 0.9
       }
     },
     {
@@ -13,7 +14,8 @@
       "properties": {
         "wind_velocity": [0.0, -1.0, 0.0],
         "temperature": -15.0,
-        "sea_level_atm": 1.1
+        "sea_level_atm": 1.1,
+        "gps_strength": 1.0
       }
     },
     {
@@ -21,7 +23,8 @@
       "properties": {
         "wind_velocity": [-1.0, 1.0, 0.0],
         "temperature": 55.0,
-        "sea_level_atm": 0.8
+        "sea_level_atm": 0.8,
+        "gps_strength": 0.9
       }
     },
     {
@@ -29,7 +32,8 @@
       "properties": {
         "wind_velocity": [-1.0, -1.0, 0.0],
         "temperature": 55.0,
-        "sea_level_atm": 0.97
+        "sea_level_atm": 0.97,
+        "gps_strength": 1.0
       }
     },
     {
@@ -37,7 +41,8 @@
       "properties": {
         "wind_velocity": [1.0, 1.0, 0.0],
         "temperature": 55.0,
-        "sea_level_atm": 1.0
+        "sea_level_atm": 1.0,
+        "gps_strength": 0.3
       }
     },
     {
@@ -45,7 +50,8 @@
       "properties": {
         "wind_velocity": [1.0, -1.0, 0.0],
         "temperature": 55.0,
-        "sea_level_atm": 1.2
+        "sea_level_atm": 1.2,
+        "gps_strength": 0.5
       }
     }
   ]

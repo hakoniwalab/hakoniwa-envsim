@@ -1,0 +1,111 @@
+{
+  "version": "0.1",
+  "meta": {
+    "crs": "local-enu",
+    "origin_latlon": [35.0, 135.0],
+    "axis": "ENU",
+    "units": {
+      "length": "m",
+      "speed": "m/s",
+      "temp": "C"
+    }
+  },
+  "grid": {
+    "extent_m": [20.0, 20.0, 10.0],
+    "cell_m": [1.0, 1.0, 10.0],
+    "levels": 1
+  },
+  "base": {
+    "wind": {
+      "vector_ms": [1.0, 0.0, 0.0]
+    },
+    "temperature_C": 20.0,
+    "pressure_atm": 1.0,
+    "gps_strength": 1.0
+  },
+  "zones": [
+    {
+      "name": "jet_zone",
+      "shape": {
+        "rect": {
+          "center_m": [5.0, 10.0],
+          "size_m": [4.0, 6.0]
+        }
+      },
+      "effect": {
+        "mode": "add",
+        "add_ms": [0.0, 1.5, 0.0]
+      },
+      "priority": 1
+    },
+    {
+      "name": "vortex_zone",
+      "shape": {
+        "circle": {
+          "center_m": [15.0, 10.0],
+          "radius_m": 5.0
+        }
+      },
+      "effect": {
+        "mode": "vortex",
+        "vortex": {
+          "center_m": [15.0, 10.0],
+          "gain": 5.0,
+          "decay": "inv_r",
+          "r_min_m": 0.5,
+          "clockwise": true,
+          "max_ms": 3.0
+        }
+      },
+      "priority": 2
+    },
+    {
+      "name": "turbulence_zone",
+      "shape": {
+        "rect": {
+          "center_m": [10.0, 5.0],
+          "size_m": [6.0, 4.0]
+        }
+      },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": {
+          "type": "gauss",
+          "std_ms": 0.8,
+          "seed": 42
+        }
+      },
+      "priority": 1
+    },
+    {
+      "name": "gps_block_zone",
+      "shape": {
+        "rect": {
+          "center_m": [10.0, 15.0],
+          "size_m": [6.0, 4.0]
+        }
+      },
+      "effect": {
+        "mode": "add",
+        "add_ms": [0.0, 0.0, 0.0],
+        "gps_abs": 0.3
+      },
+      "priority": 3
+    },
+    {
+      "name": "gps_weak_zone",
+      "shape": {
+        "circle": {
+          "center_m": [18.0, 5.0],
+          "radius_m": 4.0
+        }
+      },
+      "effect": {
+        "mode": "add",
+        "add_ms": [0.0, 0.0, 0.0],
+        "gps_scale": 0.7
+      },
+      "priority": 2
+    }
+  ]
+}
