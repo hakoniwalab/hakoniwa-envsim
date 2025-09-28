@@ -32,6 +32,7 @@ class CreatorBuilder:
             "wind_velocity": w,
             "temperature": float(self.env["base"].get("temperature_C", 20.0)),
             "sea_level_atm": float(self.env["base"].get("pressure_atm", 1.0)),
+            "gps_strength": float(self.env["base"].get("gps_strength", 1.0))
         }
         return self
 
@@ -74,20 +75,28 @@ class CreatorBuilder:
             return self
 
         zones = [ZoneEffect(z) for z in zone_defs]
+        zones_sorted = sorted(zones, key=lambda z: z.priority, reverse=True)
 
         for prop, area in zip(self.props, self.areas):
             cx, cy = _cell_center(area["bounds"])
             pos = (cx, cy, 0.0)
-            wind = np.array(prop["properties"]["wind_velocity"])
 
-            # priority順に適用
-            for z in sorted(zones, key=lambda z: z.priority, reverse=True):
+            # Base wind & gps
+            wind = np.array(prop["properties"]["wind_velocity"], dtype=float)
+            gps = float(prop["properties"].get("gps_strength", 1.0))
+
+            # Apply zones
+            for z in zones_sorted:
                 if z.contains(pos):
                     wind = z.apply(wind, pos)
+                    gps = z.apply_gps(gps, pos)
 
+            # Update props
             prop["properties"]["wind_velocity"] = list(map(float, wind))
+            prop["properties"]["gps_strength"] = gps
 
         return self
+
 
     # ---- Step5: link 生成 --------------------------------------------------
     def build_links(self) -> "CreatorBuilder":

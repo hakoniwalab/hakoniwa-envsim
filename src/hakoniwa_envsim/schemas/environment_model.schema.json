@@ -90,6 +90,12 @@
         "wind": { "$ref": "#/$defs/WindBase" },
         "temperature_C": { "type": "number" },
         "pressure_atm": { "type": "number" },
+        "gps_strength": {
+          "type": "number",
+          "minimum": 0.0, "maximum": 1.0,
+          "default": 1.0,
+          "description": "GNSS 受信強度(0..1)。1=良好、0=遮蔽。"
+        },        
         "time_mods": { "$ref": "#/$defs/TimeMods" }
       },
       "required": ["wind"],
@@ -225,6 +231,18 @@
           },
           "required": ["type", "std_ms"],
           "additionalProperties": false
+        },
+        "gps_abs": {
+          "type": "number", "minimum": 0.0, "maximum": 1.0,
+          "description": "このゾーン内でのGPS強度を絶対値で指定"
+        },
+        "gps_add": {
+          "type": "number",
+          "description": "GPS強度の加算（クリップは0..1で実装側が行う）"
+        },
+        "gps_scale": {
+          "type": "number",
+          "description": "GPS強度の倍率（実装側で0..1にクリップ）"
         }
       },
       "required": ["mode"],

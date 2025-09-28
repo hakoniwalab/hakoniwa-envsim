@@ -1,7 +1,11 @@
+from __future__ import annotations
+from dataclasses import dataclass
+from typing import Any, Dict, Tuple
 import math
+import random 
 import numpy as np
-import random
 
+Pos3 = Tuple[float, float, float]
 
 class ZoneEffect:
     """
@@ -125,3 +129,17 @@ class ZoneEffect:
             noise = np.zeros(3)
 
         return np.array(wind_ms) + noise
+
+
+    # ---------- gps ----------
+    def apply_gps(self, base: float, pos: Pos3) -> float:
+        eff = self.effect
+        # GPS効果は mode と独立に併用可、という設計にする
+        g = base
+        if "gps_abs" in eff:
+            g = float(eff["gps_abs"])
+        if "gps_add" in eff:
+            g += float(eff["gps_add"])
+        if "gps_scale" in eff:
+            g *= float(eff["gps_scale"])
+        return max(0.0, min(1.0, g))
