@@ -44,13 +44,27 @@ class ZoneEffect:
         dx, dy = pos_m[0] - cx, pos_m[1] - cy
         return dx * dx + dy * dy <= r * r
 
+
     def _contains_rect(self, pos_m):
-        cx, cy = self.shape["rect"]["center_m"]
-        sx, sy = self.shape["rect"]["size_m"]
-        return (
-            abs(pos_m[0] - cx) <= sx / 2
-            and abs(pos_m[1] - cy) <= sy / 2
-        )
+        r = self.shape["rect"]
+
+        # --- 正規化: xmin, xmax, ymin, ymax を求める ---
+        if "min_m" in r and "size_m" in r:
+            xmin, ymin = map(float, r["min_m"])
+            sx,   sy   = map(float, r["size_m"])
+            xmax, ymax = xmin + sx, ymin + sy
+        elif "min_m" in r and "max_m" in r:
+            xmin, ymin = map(float, r["min_m"])
+            xmax, ymax = map(float, r["max_m"])
+        else:
+            # 既存の center_m + size_m にも対応（後方互換）
+            cx, cy = map(float, r["center_m"])
+            sx, sy = map(float, r["size_m"])
+            xmin, xmax = cx - sx * 0.5, cx + sx * 0.5
+            ymin, ymax = cy - sy * 0.5, cy + sy * 0.5
+
+        x, y = pos_m[0], pos_m[1]
+        return (xmin <= x <= xmax) and (ymin <= y <= ymax)
 
     # ============================================================
     # Effect 適用
@@ -68,7 +82,10 @@ class ZoneEffect:
         elif mode == "scale":
             return np.array(wind_ms) * self.effect["scale"]
         elif mode == "add":
-            return np.array(wind_ms) + np.array(self.effect["add_ms"])
+            if "add_ms" in self.effect:
+                return np.array(wind_ms) + np.array(self.effect["add_ms"])
+            else:
+                return wind_ms
         elif mode == "vortex":
             return self._apply_vortex(wind_ms, pos_m)
         elif mode == "turbulence":

@@ -172,20 +172,16 @@
     "Rect": {
       "type": "object",
       "properties": {
-        "center_m": {
-          "type": "array",
-          "items": { "type": "number" },
-          "minItems": 2,
-          "maxItems": 2
-        },
-        "size_m": {
-          "type": "array",
-          "items": { "type": "number" },
-          "minItems": 2,
-          "maxItems": 2
-        }
+        "center_m": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+        "size_m":   { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+        "min_m":    { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+        "max_m":    { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
       },
-      "required": ["center_m", "size_m"],
+      "oneOf": [
+        { "required": ["center_m", "size_m"] },
+        { "required": ["min_m", "size_m"] },
+        { "required": ["min_m", "max_m"] } 
+      ],
       "additionalProperties": false
     },
     "Effect": {

@@ -121,17 +121,6 @@ def _cell_center(bounds: Dict[str, Any]) -> Tuple[float, float]:
     cy = (float(mn["y"]) + float(mx["y"])) * 0.5
     return cx, cy
 
-def _inside(shape: Dict[str, Any], x: float, y: float) -> bool:
-    if "rect" in shape:
-        center = shape["rect"]["center_m"]; size = shape["rect"]["size_m"]
-        cx, cy = float(center[0]), float(center[1])
-        sx, sy = float(size[0]), float(size[1])
-        return (abs(x - cx) <= sx * 0.5) and (abs(y - cy) <= sy * 0.5)
-    if "circle" in shape:
-        c = shape["circle"]["center_m"]; r = float(shape["circle"]["radius_m"])
-        dx, dy = x - float(c[0]), y - float(c[1])
-        return dx*dx + dy*dy <= r*r
-    return False
 
 
 
@@ -144,8 +133,8 @@ def load_environment_model(path: str | Path) -> Dict[str, Any]:
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Create datasets from environment_model.json")
-    parser.add_argument("--infile", default="../examples/datasets/wind_tunnel/environment_model.json")
-    parser.add_argument("--outdir", default="../examples/datasets/wind_tunnel/generated")
+    parser.add_argument("--infile", default="../examples/datasets/kobe/environment_model.json")
+    parser.add_argument("--outdir", default="../examples/datasets/kobe/generated")
     parser.add_argument("--no-zones", action="store_true", help="Ignore zones even if present")
     args = parser.parse_args()
 
