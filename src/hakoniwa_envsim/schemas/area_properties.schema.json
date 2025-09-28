@@ -29,9 +29,15 @@
               "sea_level_atm": {
                 "type": "number",
                 "description": "Relative sea level atmospheric pressure"
+              },
+              "gps_strength": {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 1.0,
+                "description": "GPS signal strength (0.0 to 1.0, 1.0=best, 0.0=blocked)"
               }
             },
-            "required": ["wind_velocity", "temperature", "sea_level_atm"],
+            "required": ["wind_velocity", "temperature", "sea_level_atm", "gps_strength"],
             "additionalProperties": false
           }
         },

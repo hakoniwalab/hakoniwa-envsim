@@ -60,6 +60,7 @@ class AreaProperty:
     wind_velocity: Vec3
     temperature: float
     sea_level_atm: float
+    gps_strength: float
 
 
 @dataclass(frozen=True)
@@ -77,7 +78,7 @@ class VisualArea:
     temperature: Optional[float] = None
     sea_level_atm: Optional[float] = None
     wind_velocity: Optional[Vec3] = None  # (x, y, z)
-
+    gps_strength: Optional[float] = None
 
 __all__ = [
     "Point3D",

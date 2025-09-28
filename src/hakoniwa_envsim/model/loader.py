@@ -67,6 +67,7 @@ class ModelLoader:
                 wind_velocity=tuple(map(float, p["wind_velocity"])),
                 temperature=float(p["temperature"]),
                 sea_level_atm=float(p["sea_level_atm"]),
+                gps_strength=float(p.get("gps_strength", 1.0))
             )
         return props
 
@@ -105,6 +106,7 @@ class ModelLoader:
                     temperature=ap.temperature,
                     sea_level_atm=ap.sea_level_atm,
                     wind_velocity=ap.wind_velocity,
+                    gps_strength=ap.gps_strength,
                 )
             )
             linked_ids.add(sa.area_id)

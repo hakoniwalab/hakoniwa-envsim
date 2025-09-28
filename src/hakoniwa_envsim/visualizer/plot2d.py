@@ -7,31 +7,45 @@ import argparse
 from hakoniwa_envsim.model.models import VisualArea
 from hakoniwa_envsim.model.loader import ModelLoader
 
-
-def plot_areas(areas: List[VisualArea], show_wind: bool = True) -> None:
-    """Visualize environment areas in ROS 2D coordinates (X forward, Y left)."""
+def plot_areas(areas: List[VisualArea], show_wind: bool = True, mode: str = "temperature") -> None:
+    """Visualize environment areas in ROS 2D coordinates (X forward, Y left).
+    mode: "temperature" or "gps"
+    """
 
     fig, ax = plt.subplots(figsize=(6, 6))
 
-    # 温度で塗り分け
-    temps = [a.temperature for a in areas if a.temperature is not None]
-    if temps:
-        vmin, vmax = min(temps), max(temps)
-        if abs(vmax - vmin) < 1e-6:
-            vmin, vmax = vmin - 1.0, vmax + 1.0  # 幅を強制的に確保
+    # 可視化する値の選択
+    if mode == "temperature":
+        values = [a.temperature for a in areas if a.temperature is not None]
+        cmap = plt.cm.coolwarm
+        label = "Temperature [°C]"
+        get_value = lambda a: a.temperature if a.temperature is not None else 0.0
+    elif mode == "gps":
+        values = [a.gps_strength for a in areas if getattr(a, "gps_strength", None) is not None]
+        cmap = plt.cm.RdYlGn
+        label = "GPS Strength"
+        get_value = lambda a: getattr(a, "gps_strength", 0.0)
     else:
-        vmin, vmax = 0.0, 1.0        
+        raise ValueError(f"Unsupported mode: {mode}")
 
+    # 値のレンジ計算
+    if values:
+        vmin, vmax = min(values), max(values)
+        if abs(vmax - vmin) < 1e-6:
+            vmin, vmax = vmin - 0.1, vmax + 0.1
+    else:
+        vmin, vmax = 0.0, 1.0
+
+    # 各エリア描画
     for area in areas:
         aabb = area.aabb2d
-        temp = area.temperature if area.temperature is not None else 0.0
-        color = plt.cm.coolwarm((temp - vmin) / (vmax - vmin)) if temps else "gray"
+        val = get_value(area)
+        color = cmap((val - vmin) / (vmax - vmin)) if values else "gray"
 
-        # Rect: 横軸=Y, 縦軸=X
         rect = patches.Rectangle(
-            (aabb.ymin, aabb.xmin),  # (Ymin, Xmin)
-            aabb.ymax - aabb.ymin,   # 幅 = ΔY
-            aabb.xmax - aabb.xmin,   # 高さ = ΔX
+            (aabb.ymin, aabb.xmin),   # (Ymin, Xmin)
+            aabb.ymax - aabb.ymin,    # 幅 = ΔY
+            aabb.xmax - aabb.xmin,    # 高さ = ΔX
             linewidth=1,
             edgecolor="black",
             facecolor=color,
@@ -39,23 +53,18 @@ def plot_areas(areas: List[VisualArea], show_wind: bool = True) -> None:
         )
         ax.add_patch(rect)
 
-        cx, cy = aabb.center()  # center() は (x,y)
-        #ax.text(cy, cx, f"{area.area_id}\nT={temp:.1f}°C",
-        #        ha="center", va="center", fontsize=8)
-
         # 風向ベクトル
         if show_wind and area.wind_velocity:
             wx, wy, wz = area.wind_velocity
             mag = (wx**2 + wy**2 + wz**2) ** 0.5
-            if mag > 1e-6:  # 風速の大きさが閾値より大きい場合のみ描画
-                scale = 0.3  # 矢印長さをスケールダウン
+            if mag > 1e-6:
+                scale = 0.3
+                cx, cy = aabb.center()
                 ax.arrow(
                     cy, cx, wy * scale, wx * scale,
                     head_width=0.1, head_length=0.15,
                     fc="blue", ec="blue"
-)
-
-
+                )
 
     # 軸範囲
     xmin = min(a.aabb2d.xmin for a in areas)
@@ -63,35 +72,28 @@ def plot_areas(areas: List[VisualArea], show_wind: bool = True) -> None:
     ymin = min(a.aabb2d.ymin for a in areas)
     ymax = max(a.aabb2d.ymax for a in areas)
 
-    pad_x, pad_y = 1.0, 1.0
-    ax.set_xlim(ymin - pad_y, ymax + pad_y)  # 横軸=Y
-    ax.set_ylim(xmin - pad_x, xmax + pad_x)  # 縦軸=X
-
-    # ROS: Y+ は左 → 横軸を反転
+    ax.set_xlim(ymin - 1.0, ymax + 1.0)
+    ax.set_ylim(xmin - 1.0, xmax + 1.0)
     ax.invert_xaxis()
-
     ax.set_aspect("equal", adjustable="box")
-    ax.grid(False)
     ax.set_xlabel("Y [m] (ROS left is +)")
     ax.set_ylabel("X [m] (ROS forward is +)")
-    ax.set_title("Hakoniwa Environment Map (ROS 2D)")
+    ax.set_title(f"Hakoniwa Environment Map ({mode})")
 
-    if temps:
-        sm = plt.cm.ScalarMappable(cmap="coolwarm", norm=plt.Normalize(vmin=vmin, vmax=vmax))
+    if values:
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
         sm.set_array([])
         cbar = plt.colorbar(sm, ax=ax)
-        cbar.set_label("Temperature [°C]")
+        cbar.set_label(label)
 
     plt.show()
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Visualize Hakoniwa Environment Areas in 2D")
-    parser.add_argument("--area", default="../examples/datasets/simple_room/area.json", help="Path to area.json")
-    parser.add_argument("--property", default="../examples/datasets/simple_room/property.json", help="Path to property.json")
-    parser.add_argument("--link", default="../examples/datasets/simple_room/link.json", help="Path to link.json")
-    parser.add_argument("--no-wind", action="store_true", help="Disable wind vector drawing")
-
+    parser.add_argument("--area", default="../examples/datasets/simple_room/area.json")
+    parser.add_argument("--property", default="../examples/datasets/simple_room/property.json")
+    parser.add_argument("--link", default="../examples/datasets/simple_room/link.json")
+    parser.add_argument("--no-wind", action="store_true")
+    parser.add_argument("--mode", choices=["temperature", "gps"], default="gps", help="Visualization mode")
     args = parser.parse_args()
 
     loader = ModelLoader(validate_schema=True)
@@ -100,4 +102,4 @@ if __name__ == "__main__":
     links = loader.load_links(args.link)
     scene = loader.build_visual_areas(areas, props, links)
 
-    plot_areas(scene, show_wind=not args.no_wind)
+    plot_areas(scene, show_wind=not args.no_wind, mode=args.mode)
