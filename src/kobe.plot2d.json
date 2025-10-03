@@ -14,6 +14,15 @@
   "tiles": "OpenStreetMap.Mapnik",
   "zoom": null,
 
+    "markers": [
+    {"lat": 34.65436065, "lon": 135.17003369, "label": "Origin"},
+    {"lat": 34.6804, "lon": 135.1859, "label": "Kobe Port Tower"},
+    {"lat": 34.7056, "lon": 135.1962, "label": "Shin-Kobe Station"},
+    {"lat": 34.6776, "lon": 135.1778, "label": "Meriken Park"},
+    {"lat": 34.6840, "lon": 135.1950, "label": "Kobe City Hall"},
+    {"lat": 34.6964, "lon": 135.2006, "label": "Kitano Ijinkan"}
+    ],
+
   "print_latlon": false,
   "print_shifted_origin": true
 }

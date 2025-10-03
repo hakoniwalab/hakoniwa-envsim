@@ -21,6 +21,15 @@ except Exception:
 from hakoniwa_envsim.model.models import VisualArea
 from hakoniwa_envsim.model.loader import ModelLoader
 
+# ====== Marker utilities ======
+from dataclasses import dataclass
+
+@dataclass
+class Marker:
+    lat: float
+    lon: float
+    label: str | None = None
+
 
 def _resolve_provider(tiles: str):
     """
@@ -71,6 +80,23 @@ def _get_transformers() -> Tuple[Transformer, Transformer]:
     to_merc = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
     to_geo = Transformer.from_crs("EPSG:3857", "EPSG:4326", always_xy=True)
     return to_merc, to_geo
+
+
+def _lonlat_to_enu(origin_lat: float, origin_lon: float,
+                   lat: float, lon: float,
+                   offset_x: float, offset_y: float) -> tuple[float, float]:
+    """
+    緯度経度 → ENU (x=east, y=north) [m]
+    画像側の式: X = X0 + (y + offset_y), Y = Y0 + (x + offset_x)
+    逆に ENU を求める: y = (X - X0) - offset_y, x = (Y - Y0) - offset_x
+    戻り: (x, y)
+    """
+    to_merc, _ = _get_transformers()
+    X0, Y0 = to_merc.transform(origin_lon, origin_lat)
+    Xp, Yp = to_merc.transform(lon, lat)
+    y = (Xp - X0) - offset_y
+    x = (Yp - Y0) - offset_x
+    return x, y
 
 
 def _enu_to_lonlat(origin_lat: float, origin_lon: float,
@@ -158,6 +184,7 @@ def plot_areas(
     origin_lon: float | None = None,
     tiles: str = "OpenStreetMap.Mapnik",
     zoom: int | None = None,
+    markers: list["Marker"] | None = None,
 ) -> None:
     """
     mode: "temperature" or "gps"
@@ -247,6 +274,25 @@ def plot_areas(
                     length_includes_head=True,
                     zorder=4,
                 )
+    # ---- マーカー描画（任意）----
+    if markers:
+        if origin_lat is None or origin_lon is None:
+            raise ValueError("markers を使うには --origin-lat / --origin-lon が必要です（configでも可）")
+        for m in markers:
+            x_m, y_m = _lonlat_to_enu(origin_lat, origin_lon, m.lat, m.lon, args.offset_x, args.offset_y)
+            # 軸は (横=Y, 縦=X)
+            ax.plot(y_m, x_m, marker='o', markersize=6, mec='black', mfc='yellow', zorder=6)
+            if m.label:
+                ax.annotate(m.label, (y_m, x_m), 
+                    xytext=(5, 8), 
+                    textcoords='offset points', 
+                    fontsize=14,                      # フォントサイズを大きく (例: 9 -> 14)
+                    color='navy',                     # テキストの色を濃い青に
+                    bbox=dict(boxstyle="round,pad=0.3", # 見やすくするため、少し余白を広げる
+                            fc="lightyellow",         # 背景色を薄い黄色に
+                            ec="red",                 # 枠線の色を赤に
+                            alpha=0.9),               # 少し不透明度を上げる
+                    zorder=1)
 
     # ---- 軸など（従来どおり）----
     xmin = min(a.aabb2d.xmin for a in areas); xmax = max(a.aabb2d.xmax for a in areas)
@@ -396,6 +442,12 @@ if __name__ == "__main__":
     parser.add_argument("--print-shifted-origin", action="store_true",
                         help="offset を 0 にしても同じ結果になるシフト済み原点の緯度経度を標準出力")
 
+    # 追加: マーカー指定（複数可）
+    parser.add_argument(
+        "--marker", action="append",
+        help="地図に点マーカーを追加: 'lat,lon[,label]' を複数指定可"
+    )
+
     # 1st parse to get config path
     prelim, _ = parser.parse_known_args()
     _ = _apply_config_defaults(parser, getattr(prelim, "config", None))
@@ -413,6 +465,23 @@ if __name__ == "__main__":
     props = loader.load_area_properties(args.property)
     links = loader.load_links(args.link)
     scene = loader.build_visual_areas(areas, props, links)
+
+    # markers の入力（CLI or config）を解釈
+    cli_markers = getattr(args, 'marker', None) or []
+    cfg_markers = getattr(args, 'markers', None) or []  # config JSON 用（配列）
+
+    parsed_markers = []
+    for s in cli_markers:
+        parts = [p.strip() for p in s.split(',')]
+        if len(parts) < 2:
+            raise ValueError(f"--marker の形式は 'lat,lon[,label]' です: {s}")
+        lat = float(parts[0]); lon = float(parts[1])
+        label = parts[2] if len(parts) >= 3 else None
+        parsed_markers.append(Marker(lat=lat, lon=lon, label=label))
+    for m in cfg_markers:
+        lat = float(m['lat']); lon = float(m['lon'])
+        label = m.get('label')
+        parsed_markers.append(Marker(lat=lat, lon=lon, label=label))
 
     # 先に緯度経度出力（必要なら）
     if args.print_latlon:
@@ -446,73 +515,5 @@ if __name__ == "__main__":
         origin_lon=args.origin_lon,
         tiles=args.tiles,
         zoom=args.zoom,
-    )
-    parser = argparse.ArgumentParser(description="Visualize Hakoniwa Environment Areas in 2D / Map overlay")
-    parser.add_argument("--area", required=True)
-    parser.add_argument("--property", required=True)
-    parser.add_argument("--link", required=True)
-    parser.add_argument("--no-wind", action="store_true")
-    parser.add_argument("--mode", choices=["temperature", "gps"], default="gps")
-    parser.add_argument("--wind-scale", type=float, default=1.0)
-
-    # 地図オーバーレイ
-    parser.add_argument("--overlay-map", action="store_true", help="背景に地図タイルをオーバーレイ")
-    parser.add_argument("--origin-lat", type=float, help="ローカル原点の緯度")
-    parser.add_argument("--origin-lon", type=float, help="ローカル原点の経度")
-    parser.add_argument("--tiles", default="OpenStreetMap.Mapnik",
-                        help="ctx.providers.* のキー（例: OpenStreetMap.Mapnik / Stamen.TonerLite / Esri.WorldImagery）")
-    parser.add_argument("--zoom", type=int, default=None, help="地図タイルのズーム（未指定なら自動）")
-    parser.add_argument("--offset-x", type=float, default=0.0, help="原点X方向[m]の補正")
-    parser.add_argument("--offset-y", type=float, default=0.0, help="原点Y方向[m]の補正")
-
-    # 追加: 緯度経度の標準出力
-    parser.add_argument("--print-latlon", action="store_true", help="各エリア中心の緯度経度をCSVで標準出力")
-    parser.add_argument("--print-which", choices=["center"], default="center",
-                        help="今はcenterのみ。将来拡張用の指定")
-
-    # 追加: offset を吸収した原点（緯度経度）を出力
-    parser.add_argument("--print-shifted-origin", action="store_true",
-                        help="offset を 0 にしても同じ結果になるシフト済み原点の緯度経度を標準出力")
-
-    args = parser.parse_args()
-
-    loader = ModelLoader(validate_schema=True)
-    areas = loader.load_space_areas(args.area)
-    props = loader.load_area_properties(args.property)
-    links = loader.load_links(args.link)
-    scene = loader.build_visual_areas(areas, props, links)
-
-    # 先に緯度経度出力（必要なら）
-    if args.print_latlon:
-        if args.origin_lat is None or args.origin_lon is None:
-            raise ValueError("--print-latlon には --origin-lat / --origin-lon が必要です")
-        print_area_latlons(
-            scene,
-            origin_lat=args.origin_lat,
-            origin_lon=args.origin_lon,
-            offset_x=args.offset_x,
-            offset_y=args.offset_y,
-            which=args.print_which,
-        )
-
-    # シフト済み原点の出力
-    if args.print_shifted_origin:
-        if args.origin_lat is None or args.origin_lon is None:
-            raise ValueError("--print-shifted-origin には --origin-lat / --origin-lon が必要です")
-        lat_s, lon_s = compute_shifted_origin(args.origin_lat, args.origin_lon, args.offset_x, args.offset_y)
-        # 検証に便利なコマンド例も一緒にコメントで出す
-        print("# shifted_origin_lat,shifted_origin_lon")
-        print(f"{lat_s:.8f},{lon_s:.8f}")
-        print("# 再現コマンド例: --origin-lat {0:.8f} --origin-lon {1:.8f} --offset-x 0 --offset-y 0".format(lat_s, lon_s))
-
-    plot_areas(
-        scene,
-        show_wind=not args.no_wind,
-        mode=args.mode,
-        wind_scale=args.wind_scale,
-        overlay_map=args.overlay_map,
-        origin_lat=args.origin_lat,
-        origin_lon=args.origin_lon,
-        tiles=args.tiles,
-        zoom=args.zoom,
+        markers=parsed_markers,
     )
