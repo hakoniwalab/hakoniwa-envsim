@@ -58,7 +58,7 @@ class PlotRenderer:
                 interpolation="bilinear"
         )
 
-        # グリッド描画（横=Y, 縦=X）
+        # グリッド描画（横=X, 縦=Y）
         for a in areas:
             aabb = a.aabb2d
             val = getv(a)
@@ -68,10 +68,12 @@ class PlotRenderer:
                 face_rgba = (1.0, 0.0, 0.0, alpha)
             else:
                 face_rgba = cmap(norm(val))
-            rect = patches.Rectangle((aabb.ymin, aabb.xmin),
-                                     aabb.ymax - aabb.ymin,
-                                     aabb.xmax - aabb.xmin,
-                                     linewidth=0, facecolor=face_rgba, zorder=2)
+            rect = patches.Rectangle(
+                (aabb.ymin, aabb.xmin),          # 左下 = (Ymin, Xmin)
+                aabb.ymax - aabb.ymin,           # 横幅 = ΔY
+                aabb.xmax - aabb.xmin,           # 縦幅 = ΔX
+                linewidth=0, facecolor=face_rgba, zorder=2
+)
             ax.add_patch(rect)
 
         # 風ベクトルスケール
@@ -87,12 +89,17 @@ class PlotRenderer:
 
         for a in areas:
             if a.wind_velocity:
-                wx, wy, wz = a.wind_velocity
+                wx, wy, wz = a.wind_velocity  # ENU風速 (x=北+, y=西+)
                 mag = (wx**2 + wy**2 + wz**2) ** 0.5
                 if mag > 1e-6:
-                    cx, cy = a.aabb2d.center()
-                    ax.arrow(cy, cx, wy * s, wx * s, head_width=0.5*s, head_length=0.25*s,
-                             fc="blue", ec="blue", length_includes_head=True, zorder=4)
+                    cx, cy = a.aabb2d.center()  # (x, y) in ENU
+                    # プロット座標系に合わせて (y, x) で配置
+                    ax.arrow(cy, cx,
+                            wy * s,   # 横成分 (Y軸方向)
+                            wx * s,   # 縦成分 (X軸方向)
+                            head_width=0.5*s, head_length=0.25*s,
+                            fc="blue", ec="blue", length_includes_head=True, zorder=4)
+
 
         # マーカー
         for m in markers or []:
@@ -115,8 +122,8 @@ class PlotRenderer:
         ax.set_ylim(xmin - 1.0, xmax + 1.0)
         #ax.invert_xaxis()
         ax.set_aspect("equal", adjustable="box")
-        ax.set_xlabel("Y [m] (ROS left is +)")
-        ax.set_ylabel("X [m] (ROS forward is +)")
+        ax.set_xlabel("N [m]")
+        ax.set_ylabel("E [m]")
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm); sm.set_array([])
         cbar = plt.colorbar(sm, ax=ax, fraction=0.035, pad=0.02); cbar.set_label(cbar_label)
         plt.tight_layout(); plt.show()
