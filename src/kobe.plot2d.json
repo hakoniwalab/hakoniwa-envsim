@@ -1,0 +1,19 @@
+{
+  "area": "../examples/datasets/kobe/generated/area.json",
+  "property": "../examples/datasets/kobe/generated/property.json",
+  "link": "../examples/datasets/kobe/generated/link.json",
+
+  "overlay_map": true,
+  "origin_lat": 34.65436065,
+  "origin_lon": 135.17003369,
+  "offset_x": 0,
+  "offset_y": 0,
+
+  "mode": "gps",
+  "wind_scale": 1.0,
+  "tiles": "OpenStreetMap.Mapnik",
+  "zoom": null,
+
+  "print_latlon": false,
+  "print_shifted_origin": true
+}

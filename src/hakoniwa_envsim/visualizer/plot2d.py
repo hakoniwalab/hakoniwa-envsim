@@ -1,6 +1,8 @@
 # plot2d.py  —  2D可視化 + 地図オーバーレイ（緯度経度出力対応版）
 from __future__ import annotations
 import argparse
+import json
+from pathlib import Path
 from typing import List, Tuple
 
 import numpy as np
@@ -323,7 +325,128 @@ def compute_shifted_origin(origin_lat: float, origin_lon: float, offset_x: float
     return lat_s, lon_s
 
 
+def _apply_config_defaults(parser: argparse.ArgumentParser, config_path: str | None) -> dict:
+    """
+    --config で指定された JSON を読み込み、parser に set_defaults で反映する。
+    返り値はロードした辞書（無ければ空辞書）。
+    キーは引数名（--origin-lat → origin_lat）で指定。
+    例:
+    {
+      "area": ".../area.json",
+      "property": ".../property.json",
+      "link": ".../link.json",
+      "overlay_map": true,
+      "origin_lat": 34.6913,
+      "origin_lon": 135.1880,
+      "offset_x": -5000,
+      "offset_y": -2000,
+      "mode": "gps",
+      "wind_scale": 1.0,
+      "tiles": "OpenStreetMap.Mapnik",
+      "zoom": null,
+      "print_latlon": true,
+      "print_shifted_origin": true
+    }
+    """
+    cfg = {}
+    if not config_path:
+        return cfg
+    p = Path(config_path)
+    if not p.exists():
+        raise FileNotFoundError(f"config not found: {p}")
+    with p.open("r", encoding="utf-8") as f:
+        cfg = json.load(f)
+    if not isinstance(cfg, dict):
+        raise ValueError("config json must be an object")
+    # argparse のデフォルトに上書き（CLI はこの後に再パースされ優先される）
+    parser.set_defaults(**cfg)
+    return cfg
+
+
 if __name__ == "__main__":
+    # 1st pass: --config だけ先に読む
+    base_parser = argparse.ArgumentParser(add_help=False)
+    base_parser.add_argument("--config", help="引数をまとめたJSONファイル")
+
+    parser = argparse.ArgumentParser(description="Visualize Hakoniwa Environment Areas in 2D / Map overlay",
+                                     parents=[base_parser])
+    parser.add_argument("--area", required=False)
+    parser.add_argument("--property", required=False)
+    parser.add_argument("--link", required=False)
+    parser.add_argument("--no-wind", action="store_true")
+    parser.add_argument("--mode", choices=["temperature", "gps"], default="gps")
+    parser.add_argument("--wind-scale", type=float, default=1.0)
+
+    # 地図オーバーレイ
+    parser.add_argument("--overlay-map", action="store_true", help="背景に地図タイルをオーバーレイ")
+    parser.add_argument("--origin-lat", type=float, help="ローカル原点の緯度")
+    parser.add_argument("--origin-lon", type=float, help="ローカル原点の経度")
+    parser.add_argument("--tiles", default="OpenStreetMap.Mapnik",
+                        help="ctx.providers.* のキー（例: OpenStreetMap.Mapnik / Stamen.TonerLite / Esri.WorldImagery）")
+    parser.add_argument("--zoom", type=int, default=None, help="地図タイルのズーム（未指定なら自動）")
+    parser.add_argument("--offset-x", type=float, default=0.0, help="原点X方向[m]の補正")
+    parser.add_argument("--offset-y", type=float, default=0.0, help="原点Y方向[m]の補正")
+
+    # 追加: 緯度経度の標準出力
+    parser.add_argument("--print-latlon", action="store_true", help="各エリア中心の緯度経度をCSVで標準出力")
+    parser.add_argument("--print-which", choices=["center"], default="center",
+                        help="今はcenterのみ。将来拡張用の指定")
+
+    # 追加: offset を吸収した原点（緯度経度）を出力
+    parser.add_argument("--print-shifted-origin", action="store_true",
+                        help="offset を 0 にしても同じ結果になるシフト済み原点の緯度経度を標準出力")
+
+    # 1st parse to get config path
+    prelim, _ = parser.parse_known_args()
+    _ = _apply_config_defaults(parser, getattr(prelim, "config", None))
+
+    # 2nd parse with defaults overridden by CLI
+    args = parser.parse_args()
+
+    # --- 最低限の必須チェック（config 経由でも可） ---
+    missing = [k for k in ("area", "property", "link") if getattr(args, k) in (None, "")]
+    if missing:
+        raise ValueError(f"missing required args (via CLI or config): {', '.join(missing)}")
+
+    loader = ModelLoader(validate_schema=True)
+    areas = loader.load_space_areas(args.area)
+    props = loader.load_area_properties(args.property)
+    links = loader.load_links(args.link)
+    scene = loader.build_visual_areas(areas, props, links)
+
+    # 先に緯度経度出力（必要なら）
+    if args.print_latlon:
+        if args.origin_lat is None or args.origin_lon is None:
+            raise ValueError("--print-latlon には --origin-lat / --origin-lon が必要です (config でも可)")
+        print_area_latlons(
+            scene,
+            origin_lat=args.origin_lat,
+            origin_lon=args.origin_lon,
+            offset_x=args.offset_x,
+            offset_y=args.offset_y,
+            which=args.print_which,
+        )
+
+    # シフト済み原点の出力
+    if args.print_shifted_origin:
+        if args.origin_lat is None or args.origin_lon is None:
+            raise ValueError("--print-shifted-origin には --origin-lat / --origin-lon が必要です (config でも可)")
+        lat_s, lon_s = compute_shifted_origin(args.origin_lat, args.origin_lon, args.offset_x, args.offset_y)
+        print("# shifted_origin_lat,shifted_origin_lon")
+        print(f"{lat_s:.8f},{lon_s:.8f}")
+        print("# 再現コマンド例: --origin-lat {0:.8f} --origin-lon {1:.8f} --offset-x 0 --offset-y 0".format(lat_s, lon_s))
+
+    plot_areas(
+        scene,
+        show_wind=not args.no_wind,
+        mode=args.mode,
+        wind_scale=args.wind_scale,
+        overlay_map=args.overlay_map,
+        origin_lat=args.origin_lat,
+        origin_lon=args.origin_lon,
+        tiles=args.tiles,
+        zoom=args.zoom,
+    )
     parser = argparse.ArgumentParser(description="Visualize Hakoniwa Environment Areas in 2D / Map overlay")
     parser.add_argument("--area", required=True)
     parser.add_argument("--property", required=True)
