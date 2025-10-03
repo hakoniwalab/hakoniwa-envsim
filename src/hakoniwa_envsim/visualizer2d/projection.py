@@ -20,17 +20,36 @@ class WebMercatorProjection:
     def xy_to_lonlat(self, x, y):
         return self._to_geo.transform(x, y)
 
+
 @dataclass(frozen=True)
-class GeoProjector:
-    """
-    原点(origin_lat/lon)とoffset_x/yを抱え、ENU<->WGS84を一手に引き受ける。
-    描画側は“横=Y, 縦=X”の座標系に依存してよいが、幾何計算はすべてここに委譲。
-    """
+class LocalENUProjection:
     origin_lat: float
     origin_lon: float
-    offset_x: float = 0.0   # ENU x (east) [m]
-    offset_y: float = 0.0   # ENU y (north) [m]
-    proj: Projection = WebMercatorProjection()
+    def __post_init__(self):
+        from pyproj import Transformer
+        proj_str = f"+proj=aeqd +lat_0={self.origin_lat} +lon_0={self.origin_lon} +datum=WGS84 +units=m +no_defs"
+        object.__setattr__(self, "_to_local",
+            Transformer.from_crs("EPSG:4326", proj_str, always_xy=True))
+        object.__setattr__(self, "_to_geo",
+            Transformer.from_crs(proj_str, "EPSG:4326", always_xy=True))
+    def lonlat_to_xy(self, lon, lat):
+        return self._to_local.transform(lon, lat)
+    def xy_to_lonlat(self, x, y):
+        return self._to_geo.transform(x, y)
+    
+@dataclass(frozen=True)
+class GeoProjector:
+    origin_lat: float
+    origin_lon: float
+    offset_x: float = 0.0
+    offset_y: float = 0.0
+    use_mercator: bool = True   # 切り替え用フラグ
+
+    def __post_init__(self):
+        if self.use_mercator:
+            object.__setattr__(self, "proj", WebMercatorProjection())
+        else:
+            object.__setattr__(self, "proj", LocalENUProjection(self.origin_lat, self.origin_lon))
 
     # ENU(x=east, y=north) -> lon/lat
     def enu_to_lonlat(self, x: float, y: float) -> Tuple[float, float]:

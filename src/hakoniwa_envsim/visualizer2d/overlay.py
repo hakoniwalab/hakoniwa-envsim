@@ -34,10 +34,14 @@ class TileOverlay:
         return zoom
 
     def fetch(self, Xmin, Ymin, Xmax, Ymax, cell_size_m: float | None):
+        xlen = Xmax - Xmin
+        ylen = Ymax - Ymin
+        print(f"bbox size: {xlen:.3f} m x {ylen:.3f} m cell_size={cell_size_m}")
         provider = self._resolve()
         z = self.zoom
         if z is None and cell_size_m is not None:
             z = self.auto_zoom(cell_size_m, 32, provider)
             z = self.cap_zoom(Xmin, Ymin, Xmax, Ymax, z)
+        print(f"Using tile provider: {self.tiles} at zoom level {z}")
         img, extent_wm = ctx.bounds2img(Xmin, Ymin, Xmax, Ymax, source=provider, zoom=z, ll=False)
         return img, extent_wm, z

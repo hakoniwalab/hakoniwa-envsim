@@ -5,7 +5,7 @@
 
   "overlay_map": true,
   "origin_lat": 34.65436065,
-  "origin_lon": 135.17003369,
+  "origin_lon": 135.16060138,
   "offset_x": 0,
   "offset_y": 0,
 
@@ -15,12 +15,12 @@
   "zoom": null,
 
     "markers": [
-    {"lat": 34.65436065, "lon": 135.17003369, "label": "Origin"},
-    {"lat": 34.6804, "lon": 135.1859, "label": "Kobe Port Tower"},
-    {"lat": 34.7056, "lon": 135.1962, "label": "Shin-Kobe Station"},
-    {"lat": 34.6776, "lon": 135.1778, "label": "Meriken Park"},
-    {"lat": 34.6840, "lon": 135.1950, "label": "Kobe City Hall"},
-    {"lat": 34.6964, "lon": 135.2006, "label": "Kitano Ijinkan"}
+    {"lat": 34.65436065, "lon": 135.16060138, "label": "Origin"},
+    {"lat": 34.68205478120882,   "lon": 135.19598640337165, "label": "Arena"},
+    {"lat": 34.66926961650059,  "lon": 135.16165644823897, "label": "Kobe City Hall"},
+    {"lat": 34.680717107810594, "lon": 135.18348161641958, "label": "Kobe Harborland"},
+    {"lat": 34.67253868318153, "lon": 135.18576547285866, "label": "Kawasaki Jukogyo"},
+    {"lat": 34.66990508670224, "lon": 135.20411751817963, "label": "Kobe Univ"}
     ],
 
   "print_latlon": false,

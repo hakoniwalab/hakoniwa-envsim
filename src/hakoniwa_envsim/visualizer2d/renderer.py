@@ -32,17 +32,31 @@ class PlotRenderer:
 
         # 背景地図
         if self.ov:
-            xmin = min(a.aabb2d.xmin for a in areas); xmax = max(a.aabb2d.xmax for a in areas)
-            ymin = min(a.aabb2d.ymin for a in areas); ymax = max(a.aabb2d.ymax for a in areas)
+            ros_xmin = min(a.aabb2d.xmin for a in areas) 
+            ros_xmax = max(a.aabb2d.xmax for a in areas)
+            ros_ymin = min(a.aabb2d.ymin for a in areas)
+            ros_ymax = max(a.aabb2d.ymax for a in areas)
             # ENU->3857 bbox（画像式に合わせ：X=MercXは y 軸起点、Y=MercYは x 軸起点）
+            print(f"ros_xmin={ros_xmin:.3f}, ros_xmax={ros_xmax:.3f}, ros_ymin={ros_ymin:.3f}, ros_ymax={ros_ymax:.3f}")
             X0, Y0 = self.p.proj.lonlat_to_xy(self.p.origin_lon, self.p.origin_lat)
-            Xmin, Ymin = X0 + ymin + self.p.offset_y, Y0 + xmin + self.p.offset_x
-            Xmax, Ymax = X0 + ymax + self.p.offset_y, Y0 + xmax + self.p.offset_x
+            Xmin = X0
+            Ymin = Y0
+            Xmax = X0 + (ros_ymax + self.p.offset_y)
+            Ymax = Y0 + (ros_xmax + self.p.offset_x)
             cell_dx = min(a.aabb2d.xmax - a.aabb2d.xmin for a in areas)
             cell_dy = min(a.aabb2d.ymax - a.aabb2d.ymin for a in areas)
+            print(f"cell_dx={cell_dx:.3f}, cell_dy={cell_dy:.3f}")
             cell_size = max(1e-6, min(cell_dx, cell_dy))
-            img, _, _ = self.ov.fetch(Xmin, Ymin, Xmax, Ymax, cell_size)
-            ax.imshow(img, extent=(ymax, ymin, xmin, xmax), zorder=0, interpolation="bilinear")
+            print(f"cell_size={cell_size:.3f} m")
+            print(f"Fetching map tiles for bbox (MercX,Y) = ({Xmin:.3f},{Ymin:.3f}) - ({Xmax:.3f},{Ymax:.3f}) ...")
+            img, _, _ = self.ov.fetch(Xmin, Ymin, Xmax, Ymax, 100)
+            #ax.imshow(img, extent=(ymax, ymin, xmin, xmax), zorder=0, interpolation="bilinear")
+            ax.imshow(
+                img,
+                extent=(ros_ymin, ros_ymax, ros_xmin, ros_xmax), 
+                zorder=0,
+                interpolation="bilinear"
+        )
 
         # グリッド描画（横=Y, 縦=X）
         for a in areas:
@@ -82,11 +96,16 @@ class PlotRenderer:
 
         # マーカー
         for m in markers or []:
-            x_m, y_m = self.p.lonlat_to_enu(m.lat, m.lon)  # ENU
-            ax.plot(y_m, x_m, marker='o', markersize=6, mec='black', mfc='yellow', zorder=6)
+            x_m, y_m = self.p.lonlat_to_enu(m.lat, m.lon)  # ENU座標 (x: forward, y: left)
+            # そのまま (横=Y, 縦=X) で描画すればOK
+            ax.plot(y_m, x_m, marker='o', markersize=6,
+                    mec='black', mfc='yellow', zorder=6)
             if m.label:
-                ax.annotate(m.label, (y_m, x_m), xytext=(5, 8), textcoords='offset points',
-                            fontsize=12, bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="gray", alpha=0.85),
+                ax.annotate(m.label, (y_m, x_m),
+                            xytext=(5, 8), textcoords='offset points',
+                            fontsize=12,
+                            bbox=dict(boxstyle="round,pad=0.25",
+                                    fc="white", ec="gray", alpha=0.85),
                             zorder=7)
 
         # 軸・凡例
@@ -94,7 +113,7 @@ class PlotRenderer:
         ymin = min(a.aabb2d.ymin for a in areas); ymax = max(a.aabb2d.ymax for a in areas)
         ax.set_xlim(ymin - 1.0, ymax + 1.0)
         ax.set_ylim(xmin - 1.0, xmax + 1.0)
-        ax.invert_xaxis()
+        #ax.invert_xaxis()
         ax.set_aspect("equal", adjustable="box")
         ax.set_xlabel("Y [m] (ROS left is +)")
         ax.set_ylabel("X [m] (ROS forward is +)")
