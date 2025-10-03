@@ -1,7 +1,7 @@
-# plot2d.py  —  2D可視化 + 地図オーバーレイ（完全版）
+# plot2d.py  —  2D可視化 + 地図オーバーレイ（緯度経度出力対応版）
 from __future__ import annotations
 import argparse
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -62,6 +62,33 @@ def _cap_zoom_by_image_size(Xmin: float, Ymin: float, Xmax: float, Ymax: float,
         m_per_px *= 2.0
         img_w_px /= 2.0
     return zoom
+
+
+def _get_transformers() -> Tuple[Transformer, Transformer]:
+    """(to_merc, to_geo) を返す。"""
+    to_merc = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
+    to_geo = Transformer.from_crs("EPSG:3857", "EPSG:4326", always_xy=True)
+    return to_merc, to_geo
+
+
+def _enu_to_lonlat(origin_lat: float, origin_lon: float,
+                   ex: float, ny: float,
+                   offset_x: float, offset_y: float) -> Tuple[float, float]:
+    """
+    ENU(ROS)座標 (x=east, y=north) → 緯度経度
+    plot2d のオーバーレイ実装と同じく WebMercator 上で平行移動する。
+
+    * MercatorX = X0 + (y + offset_y)
+    * MercatorY = Y0 + (x + offset_x)
+    その後 EPSG:4326 へ戻す。
+    戻り値: (lat, lon)
+    """
+    to_merc, to_geo = _get_transformers()
+    X0, Y0 = to_merc.transform(origin_lon, origin_lat)
+    X = X0 + (ny + offset_y)
+    Y = Y0 + (ex + offset_x)
+    lon, lat = to_geo.transform(X, Y)
+    return lat, lon
 
 
 def _overlay_osm_image(
@@ -249,6 +276,53 @@ def plot_areas(
     plt.show()
 
 
+def print_area_latlons(
+    areas: List[VisualArea],
+    origin_lat: float,
+    origin_lon: float,
+    offset_x: float,
+    offset_y: float,
+    which: str = "center",
+) -> None:
+    """
+    標準出力に各エリアの緯度経度を出力。
+    * which="center" で中心点のみ（デフォルト）
+    将来 corners/both を増やす拡張前提で設計。
+    出力形式: CSV  
+      area_id, center_x_m, center_y_m, lat, lon
+    """
+    if not _HAS_MAP:
+        raise RuntimeError("緯度経度出力には pyproj が必要です（pip install pyproj）")
+
+    print("# area_id,center_x_m,center_y_m,lat,lon")
+    for a in areas:
+        cx, cy = a.aabb2d.center()  # (Xcenter, Ycenter) [m]
+        lat, lon = _enu_to_lonlat(origin_lat, origin_lon, cx, cy, offset_x, offset_y)
+        # area_id は a.id が無い場合に備えてフォールバック
+        area_id = getattr(a, 'id', None)
+        if area_id is None:
+            # a.link などに識別子があるなら好みで拡張
+            area_id = f"x{cx:.3f}_y{cy:.3f}"
+        print(f"{area_id},{cx:.3f},{cy:.3f},{lat:.8f},{lon:.8f}")
+
+
+def compute_shifted_origin(origin_lat: float, origin_lon: float, offset_x: float, offset_y: float) -> tuple[float, float]:
+    """
+    offset を 0 にしても同じ見た目になるような「シフト済み原点(緯度経度)」を返す。
+    実装は WebMercator 上で原点を (offset_y, offset_x) だけ平行移動し、WGS84 に戻す。
+      X0' = X0 + offset_y
+      Y0' = Y0 + offset_x
+    戻り値: (lat', lon')
+    """
+    if not _HAS_MAP:
+        raise RuntimeError("shifted origin の計算には pyproj が必要です（pip install pyproj）")
+    to_merc, to_geo = _get_transformers()
+    X0, Y0 = to_merc.transform(origin_lon, origin_lat)
+    Xs, Ys = X0 + offset_y, Y0 + offset_x
+    lon_s, lat_s = to_geo.transform(Xs, Ys)
+    return lat_s, lon_s
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Visualize Hakoniwa Environment Areas in 2D / Map overlay")
     parser.add_argument("--area", required=True)
@@ -268,6 +342,15 @@ if __name__ == "__main__":
     parser.add_argument("--offset-x", type=float, default=0.0, help="原点X方向[m]の補正")
     parser.add_argument("--offset-y", type=float, default=0.0, help="原点Y方向[m]の補正")
 
+    # 追加: 緯度経度の標準出力
+    parser.add_argument("--print-latlon", action="store_true", help="各エリア中心の緯度経度をCSVで標準出力")
+    parser.add_argument("--print-which", choices=["center"], default="center",
+                        help="今はcenterのみ。将来拡張用の指定")
+
+    # 追加: offset を吸収した原点（緯度経度）を出力
+    parser.add_argument("--print-shifted-origin", action="store_true",
+                        help="offset を 0 にしても同じ結果になるシフト済み原点の緯度経度を標準出力")
+
     args = parser.parse_args()
 
     loader = ModelLoader(validate_schema=True)
@@ -275,6 +358,29 @@ if __name__ == "__main__":
     props = loader.load_area_properties(args.property)
     links = loader.load_links(args.link)
     scene = loader.build_visual_areas(areas, props, links)
+
+    # 先に緯度経度出力（必要なら）
+    if args.print_latlon:
+        if args.origin_lat is None or args.origin_lon is None:
+            raise ValueError("--print-latlon には --origin-lat / --origin-lon が必要です")
+        print_area_latlons(
+            scene,
+            origin_lat=args.origin_lat,
+            origin_lon=args.origin_lon,
+            offset_x=args.offset_x,
+            offset_y=args.offset_y,
+            which=args.print_which,
+        )
+
+    # シフト済み原点の出力
+    if args.print_shifted_origin:
+        if args.origin_lat is None or args.origin_lon is None:
+            raise ValueError("--print-shifted-origin には --origin-lat / --origin-lon が必要です")
+        lat_s, lon_s = compute_shifted_origin(args.origin_lat, args.origin_lon, args.offset_x, args.offset_y)
+        # 検証に便利なコマンド例も一緒にコメントで出す
+        print("# shifted_origin_lat,shifted_origin_lon")
+        print(f"{lat_s:.8f},{lon_s:.8f}")
+        print("# 再現コマンド例: --origin-lat {0:.8f} --origin-lon {1:.8f} --offset-x 0 --offset-y 0".format(lat_s, lon_s))
 
     plot_areas(
         scene,
