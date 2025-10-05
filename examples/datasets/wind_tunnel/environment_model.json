@@ -2,7 +2,7 @@
   "version": "0.1",
   "meta": {
     "crs": "local-enu",
-    "origin_latlon": [35.0, 135.0],
+    "origin_latlon": [34.65436065, 135.16060138],
     "axis": "ENU",
     "units": {
       "length": "m",
