@@ -98,7 +98,7 @@ class PlotRenderer:
                             wy * s,   # 横成分 (Y軸方向)
                             wx * s,   # 縦成分 (X軸方向)
                             head_width=0.5*s, head_length=0.25*s,
-                            fc="blue", ec="blue", length_includes_head=True, zorder=4)
+                            fc="yellow", ec="yellow", length_includes_head=True, zorder=4)
 
 
         # マーカー

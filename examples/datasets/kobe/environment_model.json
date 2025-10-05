@@ -12,7 +12,7 @@
     "levels": 1
   },
   "base": {
-    "wind": { "vector_ms": [0.5, 1.5, 0.0] },
+    "wind": { "vector_ms": [4.0, 0.0, 0.0] },
     "temperature_C": 20.0,
     "pressure_atm": 1.0,
     "gps_strength": 1.0
@@ -20,7 +20,17 @@
   "zones": [
     {
       "name": "block1",
-      "shape": { "rect": { "min_m": [0, 0], "size_m": [2200, 3000] } },
+      "shape": { "rect": { "min_m": [0, 0], "size_m": [1600, 3000] } },
+      "effect": {
+        "mode": "absolute",
+        "wind_ms": [3.0, 3.0, 0.0],
+        "gps_abs": 0.8
+      },
+      "priority": 1
+    },
+    {
+      "name": "block2",
+      "shape": { "rect": { "min_m": [1600, 0], "size_m": [1600, 3200] } },
       "effect": {
         "mode": "turbulence",
         "turbulence": { "type": "gauss", "std_ms": 3.0, "seed": 123 },
@@ -29,34 +39,84 @@
       "priority": 1
     },
     {
-      "name": "block2",
-      "shape": { "rect": { "min_m": [2200, 0], "size_m": [2200, 3000] } },
-      "effect": {
-        "mode": "turbulence",
-        "turbulence": { "type": "gauss", "std_ms": 2.0, "seed": 123 },
-        "gps_abs": 0.5
-      },
-      "priority": 1
-    },
-    {
       "name": "block3",
-      "shape": { "rect": { "min_m": [3400, 3000], "size_m": [1000, 1500] } },
-      "effect": {
-        "mode": "turbulence",
-        "turbulence": { "type": "gauss", "std_ms": 1.5, "seed": 123 },
-        "gps_abs": 0.7
-      },
-      "priority": 1
-    },
-    {
-      "name": "block4",
-      "shape": { "rect": { "min_m": [500, 4400], "size_m": [3000, 2000] } },
+      "shape": { "rect": { "min_m": [3200, 0], "size_m": [1200, 1500] } },
       "effect": {
         "mode": "turbulence",
         "turbulence": { "type": "gauss", "std_ms": 2.0, "seed": 123 },
         "gps_abs": 0.6
       },
       "priority": 1
+    },
+    {
+      "name": "block4",
+      "shape": { "rect": { "min_m": [3200, 1200], "size_m": [1200, 1600] } },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": { "type": "gauss", "std_ms": 2.0, "seed": 123 },
+        "gps_abs": 0.8
+      },
+      "priority": 1
+    },
+    {
+      "name": "block5",
+      "shape": { "rect": { "min_m": [3400, 2400], "size_m": [1000, 1600] } },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": { "type": "gauss", "std_ms": 2.0, "seed": 123 },
+        "gps_abs": 0.7
+      },
+      "priority": 1
+    },
+    {
+      "name": "block6",
+      "shape": { "rect": { "min_m": [3600, 3400], "size_m": [800, 1000] } },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": { "type": "gauss", "std_ms": 2.0, "seed": 123 },
+        "gps_abs": 0.8
+      },
+      "priority": 1
+    },
+    {
+      "name": "block7",
+      "shape": { "rect": { "min_m": [4000, 4400], "size_m": [400, 1000] } },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": { "type": "gauss", "std_ms": 2.0, "seed": 123 },
+        "gps_abs": 0.8
+      },
+      "priority": 1
+    },
+    {
+      "name": "block8",
+      "shape": { "rect": { "min_m": [0, 5800], "size_m": [3700, 1000] } },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": { "type": "gauss", "std_ms": 1.0, "seed": 123 },
+        "gps_abs": 0.8
+      },
+      "priority": 1
+    },
+    {
+      "name": "block9",
+      "shape": { "rect": { "min_m": [200, 5000], "size_m": [3300, 800] } },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": { "type": "gauss", "std_ms": 3.0, "seed": 123 },
+        "gps_abs": 0.6
+      },
+      "priority": 1
+    },
+    {
+      "name": "block10",
+      "shape": { "rect": { "min_m": [800, 4400], "size_m": [3200, 600] } },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": { "type": "gauss", "std_ms": 4.0, "seed": 123 },
+        "gps_abs": 0.8
+      },
+      "priority": 2
     }
 
   ]
