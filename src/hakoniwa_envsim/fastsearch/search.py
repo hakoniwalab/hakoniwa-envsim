@@ -35,7 +35,7 @@ def search_point(node, x, y, z, found=None, stats=None, precise=True):
     right_hit = node.right and point_in_aabb(node.right.aabb, x, y, z)
     if left_hit:
         search_point(node.left,  x, y, z, found, stats, precise)
-    if right_hit and (not left_hit or left_hit):  # leftとright両trueなら両方
+    elif right_hit:
         search_point(node.right, x, y, z, found, stats, precise)
     return found
 
