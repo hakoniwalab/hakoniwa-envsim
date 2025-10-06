@@ -1,107 +1,183 @@
-# FastSearcher
+# 🧭 fastsearch 開発メモ
 
-**FastSearcher** は、環境空間（AABB群）を階層的に分割し、  
-高速な位置検索を実現するための空間インデックスライブラリです。  
-
-このモジュールは、**理論モデル・実装構造・実測検証**が一体化しており、  
-シミュレーション環境における空間探索の高速化基盤を提供します。
+*— 未来の自分へ、もう一度このロジックを思い出すために*
 
 ---
 
-## 🌳 構成
+## 🌍 概要
 
-| モジュール | 役割 |
-|-------------|------|
-| `builder.py` | AABBの階層構造（BVH）を構築 |
-| `estimator.py` | 探索コストを理論的に推定 |
-| `analysis.py` | 実際のツリー構造を解析（リーフ数や深さ） |
-| `test.py` | 実データを用いた検証スクリプト |
+**fastsearch** は、箱庭の環境シミュレーションで
+「この座標がどのエリアに属するか？」を高速に判定するための
+**BVH（Bounding Volume Hierarchy）ベースの空間探索ライブラリ**。
 
----
+目的は単純：
 
-## ⚙️ アルゴリズム概要
+* 数百〜数千のAABBから、1点の属するエリアを高速に特定したい。
+* Python実装でも 1 ms レベルの応答を目指す。
 
-### 1. BVH構築 (`build_bvh`)
-- 最も広がりのある軸を選択  
-- その軸でソートして2分割  
-- 再帰的に階層構造を構築  
+そのために、
 
-→ 空間的に近いAABBを同じ枝にまとめることで、探索を最小化。
+* `builder.py` で空間を再帰的に分割してツリー化し
+* `search.py` で葉ノードを効率的に探索する
+* `envbuilder.py` と `envsearch.py` で環境全体（area, link, property）を統合する
+  という構造にした。
 
 ---
 
-### 2. 理論探索コストの推定 (`estimate_cost`)
-理論モデル：
+## 🧩 モジュール構成と役割
 
-$T_{\text{est}} = D \times \left(1 + \frac{\log_2(b)}{4}\right)$
-
-| 記号 | 意味 |
-|------|------|
-| $D$ | 階層の深さ（max_depth） |
-| $b = N^{1/D}$ | 平均分割幅（branch_factor） |
-| $N$ | 総AABB数 |
-
-- 木の深さが深いほど探索階層が増えるが、リーフサイズは減少。
-- $log2(b)/4$ は分岐による軽いオーバーヘッド補正。
+| ファイル              | 役割              | 主な中身                                                            |
+| ----------------- | --------------- | --------------------------------------------------------------- |
+| **builder.py**    | BVHツリーの構築       | `AABB`, `Node`, `build_bvh()`                                   |
+| **search.py**     | 点検索アルゴリズム       | `search_point()`, `point_in_aabb()`                             |
+| **envbuilder.py** | 環境データ統合         | `Environment` クラス、area/link/property結合                          |
+| **envsearch.py**  | 検索CLI           | `python envsearch.py area.json link.json property.json 8 x y z` |
+| **estimator.py**  | 性能試験・depth探索数測定 | BVH深さごとのノード訪問数などを出力                                             |
+| **analysis.py**   | 解析補助            | 結果整理、統計系ユーティリティ                                                 |
+| **test_*.py**     | 検証スクリプト群        | builder・search・envsearchの単体検証                                   |
 
 ---
 
-### 3. 実測探索コストの解析 (`analyze_tree`)
-実際のツリーを走査して、  
-- `max_depth`: 実際の深さ  
-- `avg_leaf_size`: 平均リーフあたりAABB数  
+## 🧮 アルゴリズムの骨格メモ
 
-を算出し、探索コストを次式で評価：
+### 🔹 build_bvh()
 
+* すべてのAABBの中心を取り、**最も広がりの大きい軸(axis)** で分割する。
+* 分割のキーは `"minx"`, `"miny"`, `"minz"` のいずれか。
+* 再帰的に left / right を構築し、
+  `leaf_capacity` 以下になったらリーフノードを生成。
 
-T_real $\approx$ D + avg_leaf_size
+```python
+if len(areas) <= leaf_capacity or depth >= max_depth:
+    return Node(..., is_leaf=True, areas=areas[:])
+```
+
+### 🔹 search_point()
+
+* `point_in_aabb` による包含判定を基本とする。
+* 再帰探索時は `elif` にして、片側命中時に即リターン（探索削減）。
+* `precise=True` のときはリーフ内の全AABBを精査。
+
+```python
+if node.is_leaf:
+    for a in node.areas:
+        if point_in_aabb(a, x, y, z):
+            found.append(a.id)
+            return found
+```
+
+### 🔹 重要な理解メモ
+
+| 疑問                        | 結論                                 |
+| ------------------------- | ---------------------------------- |
+| axis分割してるのに、探索時にaxis見てない？ | `point_in_aabb()` が axis 含むため不要。   |
+| leafでマージして良い？             | leaf_capacityで制御。1個なら単一AABB扱い。     |
+| early returnしても正しい？       | AABBが重ならなければ常に正しい。                 |
+| Pythonで遅くない？              | numpy演算＋C実装部が効く。704AABB規模なら1 ms以下。 |
 
 ---
 
-## 🧪 実行方法
+## 🧭 Environment 構造（envbuilder / envsearch）
+
+`Environment` は 3種類のデータをまとめて扱うクラス：
+
+* `area.json`: 空間定義（min/max座標）
+* `link.json`: areaとpropertyを結ぶマッピング
+* `property.json`: 物理パラメータ（風速・温度など）
+
+```python
+env = Environment(area_json, link_json, prop_json, max_depth=8)
+prop = env.get_property_at(x=4000, y=6000, z=20)
+```
+
+### 主要メソッド
+
+| 関数                         | 概要                            |
+| -------------------------- | ----------------------------- |
+| `get_property_at(x, y, z)` | 座標からエリアを特定し、対応するproperty辞書を返す |
+| `debug_at(x, y, z)`        | 検索経路・ヒットノード・探索数などを出力          |
+| `dump_area_map()`          | area → property のリンクテーブルを表示   |
+| `validate_integrity()`     | area / link / property の整合性検査 |
+
+---
+
+## 🧪 実験結果（探索効率）
+
+| Depth D | 訪問ノード数 | 備考                |
+| ------- | ------ | ----------------- |
+| 1       | 331    | 全探索に近い            |
+| 2       | 162    |                   |
+| 3       | 80     |                   |
+| 4       | 40     |                   |
+| 5       | 21     |                   |
+| 6       | 13     |                   |
+| 7       | 10     | ✅ 最適付近            |
+| 8       | 12     | slight over-split |
+| 9       | 12     | 安定値               |
+
+➡ **D=7前後で探索ノード数が最小化。**
+Pythonでも即応。Numba化不要レベル。
+
+---
+
+## 💻 実行例
 
 ```bash
-python -m fastsearch.test <area.json> [max_depth]
-```
+# エリア単体検索
+python -m fastsearch.test_search ../../examples/datasets/kobe/generated/area.json 8 4000 6000 20
+📦 読み込み: area.json
+🧮 AABB数: 704
+🎯 検索座標: (4000.00, 6000.00, 20.00)
+🔍 含まれるエリア数: 1
+   探索ノード訪問数: 10
+   ヒットエリアID一覧:
+  - area_30_20
 
-例：
+# 環境プロパティ検索
+python fastsearch/envsearch.py area.json link.json property.json 8 4000 6000 20
+✅ Hit area: area_30_20
+🧾 area_property:
+  - wind_velocity: [4.0, 0.0, 0.0]
+  - temperature: 20.0
+  - sea_level_atm: 1.0
+  - gps_strength: 1.0
 ```
-python -m fastsearch.test ../../examples/datasets/kobe/generated/area.json 8
-```
-
-出力例：
-```
-📘 理論推定: {'num_areas': 704, 'max_depth': 8, 'estimated_branch_factor': 2.27, 'estimated_max_search_cost': 10.36}
-🌳 実際のツリー解析: {'max_depth': 8, 'avg_leaf_size': 2.75}
-```
-
 
 ---
 
-## 📈 理論と実測の比較（Kobe Dataset）
+## ⚙️ テストスクリプト対応表
 
-| Depth (D) | Branch Factor (b) | 理論コスト (T_est) | 平均リーフ数 (avg_leaf_size) | 実測コスト (D+avg_leaf_size) |
-| --------- | ----------------- | ------------- | ---------------------- | ----------------------- |
-| 5         | 3.711             | 7.36          | 22.0                   | 27.0                    |
-| 6         | 2.983             | 8.36          | 11.0                   | 17.0                    |
-| 7         | 2.552             | 9.36          | 5.5                    | 12.5                    |
-| 8         | 2.270             | 10.36         | 2.75                   | 10.75                   |
-| 9         | 2.072             | 11.36         | 1.38                   | 10.38                   |
-
-✅ 深さを増やすとリーフ数が指数的に減少し、
-探索コストは ( D + \text{avg_leaf_size} ) で最小点（D≈8付近）を取る。
-→ 理論と実測がほぼ一致。
+| ファイル                | 内容                       |
+| ------------------- | ------------------------ |
+| `test_builder.py`   | BVH構築テスト                 |
+| `test_search.py`    | 点探索の動作確認                 |
+| `test_envsearch.py` | area→link→property統合動作確認 |
 
 ---
 
-## 🔍 数式対応関係
+## 🧠 今後の拡張メモ
 
-| 概念       | たかし式（直感モデル）   | estimator式（近似モデル）                |
-| -------- | ------------- | -------------------------------- |
-| 分割幅      | ( b )         | $num\_areas ** (1.0 / max\_depth)$ |
-| 探索深さ     | ( D )         | $max\_depth$                      |
-| リーフ探索コスト | ( N/b^D )     | $log2(b)/4$（滑らかな近似）              |
-| 総コスト     | ( D + N/b^D ) | $D * (1 + log2(b)/4)$            |
+* Numba or Cython による高速化版（`fastsearch.c`）
+* 並列探索（複数座標の一括クエリ）
+* 可視化モジュール（matplotlib 3D or Unity連携）
+* UAVシミュレーションとの統合 (`envsearch` → DroneSim環境入力)
 
 ---
+
+## ✍️ 開発後記
+
+> 「これ本当にPythonで速いの？」
+> ——そう思ったけど、BVH構造ってシンプルに強い。
+> 軸分割＋早期リターン＋非重複AABB でここまで来る。
+>
+> あのとき悩んだ axis 判定も、結局 `point_in_aabb` が全てを兼ねてた。
+> 数学的には「AABBの包含関数が軸分離検査を内包している」ってこと。
+>
+> 将来的にC実装化するとしても、**このREADMEだけで頭を戻せるように**、
+> 今回は思考の全軌跡を残す。
+
+---
+
+🪴 **記録者:** たかし
+📅 **最終更新:** 2025-10-07
 
