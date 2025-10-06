@@ -54,7 +54,7 @@ $T_{\text{est}} = D \times \left(1 + \frac{\log_2(b)}{4}\right)$
 を算出し、探索コストを次式で評価：
 
 
-$T_{\text{real}} \approx D + \text{avg\_leaf\_size}$
+T_real $\approx$ D + avg_leaf_size
 
 ---
 
