@@ -2,7 +2,7 @@
 import json
 import sys
 from fastsearch.builder import AABB, build_bvh
-from fastsearch.search import search_point, search_primary
+from fastsearch.search import search_point
 
 def load_areas_from_json(filepath):
     """area.jsonを読み込んでAABBリストに変換"""
@@ -37,19 +37,18 @@ def main():
     tree = build_bvh(areas, max_depth=max_depth)
 
     # for test
-    hits = search_point(tree, x, y, z)
+    stats = {"visited": 0}
+    hits = search_point(tree, x, y, z, precise=True, stats=stats)
     print(f"🎯 検索座標: ({x:.2f}, {y:.2f}, {z:.2f})")
     print(f"🔍 含まれるエリア数: {len(hits)}")
+    print(f"   探索ノード訪問数: {stats['visited']}")
+    print("   ヒットエリアID一覧:")
     for h in hits:
         print(f"  - {h}")
+        print(f"    AABB: min({areas_map[h].minx}, {areas_map[h].miny}, {areas_map[h].minz}) "
+              f"max({areas_map[h].maxx}, {areas_map[h].maxy}, {areas_map[h].maxz})")
 
-    # for real data usecase
-    primary_hit = search_primary(tree, x, y, z, areas_map)
-    if primary_hit is not None:
-        print(f"🎯 主ヒット: {primary_hit}")
-        print(f"   AABB: {areas_map[primary_hit]}")
-    else:
-        print("🎯 主ヒットなし")
+
 
 if __name__ == "__main__":
     main()
