@@ -1,6 +1,6 @@
 # envsearch.py
 import sys
-from envbuilder import Environment
+from .envbuilder import Environment
 
 def main():
     if len(sys.argv) < 7:

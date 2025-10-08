@@ -6,7 +6,7 @@ from hakoniwa_pdu.pdu_manager import PduManager
 from hakoniwa_pdu.impl.shm_communication_service import ShmCommunicationService
 
 # fastsearch の Environment
-from fastsearch.envbuilder import Environment
+from hakoniwa_envsim.fastsearch.envbuilder import Environment
 
 
 class EnvRuntime:

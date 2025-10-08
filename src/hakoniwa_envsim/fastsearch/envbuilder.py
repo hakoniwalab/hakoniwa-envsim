@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Tuple, Any, List
 import json
 
-from fastsearch.builder import AABB, build_bvh
-from fastsearch.search import search_point
+from hakoniwa_envsim.fastsearch.builder import AABB, build_bvh
+from hakoniwa_envsim.fastsearch.search import search_point
 
 @dataclass
 class AreaRecord:
@@ -158,7 +158,7 @@ class Environment:
           - link（area_property_id）および properties の有無
         をまとめて返す。
         """
-        from fastsearch.search import search_point  # 循環import回避のためここで
+        from hakoniwa_envsim.fastsearch.search import search_point  # 循環import回避のためここで
         stats = {"visited": 0}
         hits: list[str] = []
         search_point(self.bvh_root, x, y, z, found=hits, stats=stats, precise=precise)

@@ -17,9 +17,9 @@ import sys
 import time
 import hakopy
 
-from asset.drone_manager import DroneManager
-from asset.drone_io import DroneIO
-from asset.env_runtime import EnvRuntime
+from hakoniwa_envsim.asset.drone_manager import DroneManager
+from hakoniwa_envsim.asset.drone_io import DroneIO
+from hakoniwa_envsim.asset.env_runtime import EnvRuntime
 
 
 # === globals ===
@@ -81,6 +81,8 @@ def on_manual_timing_control(context):
 
             x, y, z = float(pose.linear.x), float(pose.linear.y), float(pose.linear.z)
             area_id, props = runtime.env.get_property_at(x, y, z)
+
+            # print(f"[EnvAsset] Drone '{d.name}' at ({x:.2f},{y:.2f},{z:.2f}) in area '{area_id}' with props {props}")
 
             # プロパティ → Disturbance
             disturbance = DroneIO.make_disturbance(props)
