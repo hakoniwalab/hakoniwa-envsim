@@ -83,7 +83,8 @@ class PlotRenderer:
                 face_rgba = (1.0, 0.0, 0.0, alpha)
             else:
                 face_rgba = cmap(norm(val))
-
+            #if weakness > 0.1:
+            #    print(f"  area_id={a.area_id}, weakness={weakness}, aabb={aabb}, rgba={face_rgba}")
             rect = patches.Rectangle(
                 (aabb.xmin, aabb.ymin),  # 左下 (East, North)
                 aabb.xmax - aabb.xmin,   # 横幅 ΔE

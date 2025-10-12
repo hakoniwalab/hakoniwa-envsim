@@ -41,9 +41,9 @@ class LocalENUProjection:
 class GeoProjector:
     origin_lat: float
     origin_lon: float
-    offset_x: float = 0.0
-    offset_y: float = 0.0
-    use_mercator: bool = True   # 切り替え用フラグ
+    offset_x: float = 0.0  # ← East (m)
+    offset_y: float = 0.0  # ← North (m)
+    use_mercator: bool = True
 
     def __post_init__(self):
         if self.use_mercator:
@@ -51,25 +51,27 @@ class GeoProjector:
         else:
             object.__setattr__(self, "proj", LocalENUProjection(self.origin_lat, self.origin_lon))
 
-    # ENU(x=east, y=north) -> lon/lat
+    # ENU (x=east, y=north) -> lon/lat
     def enu_to_lonlat(self, x: float, y: float) -> Tuple[float, float]:
         X0, Y0 = self.proj.lonlat_to_xy(self.origin_lon, self.origin_lat)
-        X = X0 + (y + self.offset_y)   # 画像側の式に厳密一致
-        Y = Y0 + (x + self.offset_x)
+        # ✅ Mercator X=East, Y=North に素直に対応
+        X = X0 + (x + self.offset_x)   # East
+        Y = Y0 + (y + self.offset_y)   # North
         lon, lat = self.proj.xy_to_lonlat(X, Y)
         return lat, lon
 
-    # lon/lat -> ENU(x=east, y=north)
+    # lon/lat -> ENU (x=east, y=north)
     def lonlat_to_enu(self, lat: float, lon: float) -> Tuple[float, float]:
         X0, Y0 = self.proj.lonlat_to_xy(self.origin_lon, self.origin_lat)
         Xp, Yp = self.proj.lonlat_to_xy(lon, lat)
-        y = (Xp - X0) - self.offset_y
-        x = (Yp - Y0) - self.offset_x
+        # ✅ Mercator差分をそのまま ENU に
+        x = (Xp - X0) - self.offset_x   # East
+        y = (Yp - Y0) - self.offset_y   # North
         return x, y
 
     # offsetを吸収した“新しい原点”（オフセット0で同じ見た目）
     def shifted_origin(self) -> Tuple[float, float]:
         X0, Y0 = self.proj.lonlat_to_xy(self.origin_lon, self.origin_lat)
-        Xs, Ys = X0 + self.offset_y, Y0 + self.offset_x
+        Xs, Ys = X0 + self.offset_x, Y0 + self.offset_y  # ✅ 軸を正しく
         lon_s, lat_s = self.proj.xy_to_lonlat(Xs, Ys)
         return lat_s, lon_s
