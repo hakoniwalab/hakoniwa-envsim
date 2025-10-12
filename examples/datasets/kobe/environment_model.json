@@ -28,7 +28,86 @@
         "gps_abs": 0.8
       },
       "priority": 1
+    },
+    {
+      "name": "block2",
+      "shape": { "rect": { "min_m": [1600, -3200], "max_m": [3200, 0] } },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": { "type": "gauss", "std_ms": 3.0, "seed": 123 },
+        "gps_abs": 0.7
+      },
+      "priority": 1
+    },
+    {
+      "name": "block3",
+      "shape": { "rect": { "min_m": [3200, -1000], "max_m": [4400, 3200] } },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": { "type": "gauss", "std_ms": 2.0, "seed": 123 },
+        "gps_abs": 0.6
+      },
+      "priority": 1
+    },
+    {
+      "name": "block4",
+      "shape": { "rect": { "min_m": [3200, -2800], "max_m": [4400, -1000] } },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": { "type": "gauss", "std_ms": 2.0, "seed": 123 },
+        "gps_abs": 0.8
+      },
+      "priority": 1
+    },
+    {
+      "name": "block5",
+      "shape": { "rect": { "min_m": [3400, -4000], "max_m": [4400, -2800] } },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": { "type": "gauss", "std_ms": 2.0, "seed": 123 },
+        "gps_abs": 0.7
+      },
+      "priority": 1
+    },
+    {
+      "name": "block6",
+      "shape": { "rect": { "min_m": [4000, -5800], "max_m": [4400, -4000] } },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": { "type": "gauss", "std_ms": 2.0, "seed": 123 },
+        "gps_abs": 0.8
+      },
+      "priority": 1
+    },
+    {
+      "name": "block7",
+      "shape": { "rect": { "min_m": [0, -6400], "max_m": [3800, -5800] } },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": { "type": "gauss", "std_ms": 2.0, "seed": 123 },
+        "gps_abs": 0.8
+      },
+      "priority": 1
+    },
+    {
+      "name": "block8",
+      "shape": { "rect": { "min_m": [200, -5800], "max_m": [3500, -5000] } },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": { "type": "gauss", "std_ms": 1.0, "seed": 123 },
+        "gps_abs": 0.6
+      },
+      "priority": 1
+    },
+    {
+      "name": "block9",
+      "shape": { "rect": { "min_m": [1000, -5000], "max_m": [4000, -4500] } },
+      "effect": {
+        "mode": "turbulence",
+        "turbulence": { "type": "gauss", "std_ms": 4.0, "seed": 123 },
+        "gps_abs": 0.8
+      },
+      "priority": 2
     }
-
   ]
 }

@@ -4,247 +4,247 @@
       "id": "prop_area_0_0",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.97395380705575,
+          0.9890591818631633,
+          -0.8072842253601603
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_1",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.257304045965483,
+          2.828570529595816,
+          1.6918112514036912
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_2",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.917594410430017,
+          -0.9458085157998778,
+          3.012484577505801
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_3",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.5516585272448795,
+          0.3963458309396633,
+          -0.8485517542398417
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_4",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.881444622453575,
+          0.9741676518849909,
+          1.7424219077628402
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_5",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.07234766492534561,
+          1.7785798736741691,
+          1.4820084084574006
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_6",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.8345626005665148,
+          -2.7823339184714753,
+          2.2129340179208024
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_7",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.622916971872349,
+          -0.7888419989004171,
+          -2.0537709199839407
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.976618863683994,
+          0.548396432111328,
+          -0.10520154205452796
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.7889170908836243,
+          0.13135894323377015,
+          -0.1517946811567598
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.723314852844251,
+          1.8168045555374435,
+          -1.169775426999791
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.263248295932802,
+          -1.666075468901148,
+          -3.756799869019125
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.08736810424236,
+          -1.4401886969014916,
+          -0.17124185261264965
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.8456775090929707,
+          -0.44928652804926983,
+          -1.1570096555067526
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.138478695869975,
+          -1.2703644758522168,
+          1.8106744331939604
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.353435193212889,
+          -0.1332254907203624,
+          1.6484782246252725
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.695445412572158,
+          -2.2987033650007183,
+          -3.061450016235164
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.06431313539765,
+          0.07377860061608103,
+          -1.9991178140197272
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_0_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.6905027988222585,
+          1.0251263038733596,
+          -2.936484836661126
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -290,247 +290,247 @@
       "id": "prop_area_1_0",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.145032901996357,
+          3.9276424709387485,
+          -0.5991234783896036
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_1",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.2331372284414552,
+          -2.003904720548739,
+          -0.42760676322027763
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_2",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.851858043668289,
+          -3.5757311247106287,
+          0.6357814175037061
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_3",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.5491151979106146,
+          -0.8932227773261959,
+          0.5297985854592944
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_4",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.751983755621737,
+          1.4545587005051517,
+          -0.27558034946456517
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_5",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.348211629697272,
+          1.4921730624237526,
+          -0.13879773144574253
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_6",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.038415173461843,
+          3.02298021420408,
+          -0.22308265832084825
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_7",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.8310731402173364,
+          -0.5194807072081722,
+          1.7132104648334214
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.017799219999663,
+          -1.8301793815337162,
+          -0.3006599475151062
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.7697539850060413,
+          -0.8033239623640087,
+          -1.6073541614413087
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.080580342692555,
+          -1.5613954360657223,
+          0.37550538472261347
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.1858943560962345,
+          -0.9701624925932502,
+          3.04598861266294
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.630693063980928,
+          0.3052973327581816,
+          0.3613518488920521
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.956766624944585,
+          0.016526082908078974,
+          2.721689601366815
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.168561556314779,
+          5.106122339303498,
+          2.9728684576896316
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.751735011251882,
+          -1.521165352038704,
+          -0.183649462584374
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.3273570092961355,
+          -1.1850860596481545,
+          1.7346329585901814
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.609301107930189,
+          -2.895080715365788,
+          3.3583314931095694
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_1_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.1046490814306145,
+          -1.745583538052268,
+          -0.17010037574624123
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -576,247 +576,247 @@
       "id": "prop_area_2_0",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.146551870885156,
+          -1.277321488274171,
+          2.6463077097129606
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_1",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -1.2474718130857951,
+          0.48899730647089795,
+          -0.7624786825986705
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_2",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.622805038928277,
+          -1.0033822332591464,
+          0.21644973920231986
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_3",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          8.3134065998291,
+          -0.5415598628004028,
+          -1.8029497049500713
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_4",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.798530139680725,
+          -1.1927736994316436,
+          -1.1135347780487788
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_5",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.49595747630602,
+          5.317222969819025,
+          -2.485251896580611
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_6",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.0829345990252297,
+          2.7947082129638576,
+          -3.6178691976917374
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_7",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.045704060038938,
+          1.2324908831859276,
+          0.9119923410744584
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.6260470999354695,
+          0.3546539924454099,
+          -0.2983685254240676
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.951808619049687,
+          1.204054742552954,
+          0.40186582815970806
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.725167113752401,
+          -4.3292564622997265,
+          0.26755483280030457
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.258496929813806,
+          -0.08042000225833536,
+          1.0277998088359512
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.94020900781124,
+          -1.1998910902329203,
+          -0.5974617085304483
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.9876205015635486,
+          3.357250898728295,
+          -3.874421191171367
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.8948737721085829,
+          -0.5548072578412847,
+          1.1394743291434113
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.992703404480176,
+          -0.24812387253707543,
+          -0.7482266398310282
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.745301945632154,
+          -1.0324119121119826,
+          -1.2684217521927168
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.198415751158445,
+          -1.0914135121704451,
+          1.8304644900558975
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_2_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.2657575507633867,
+          -2.2766658109085967,
+          1.5642477039574791
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -875,221 +875,221 @@
       "id": "prop_area_3_1",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.6935363117343796,
+          -0.0977696187234403,
+          0.9021690266354516
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_2",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.6112498536835536,
+          -0.8134996858032693,
+          -0.7923857999804502
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_3",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.753179612009644,
+          -0.7965581185788627,
+          0.3042264038331291
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_4",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.3751909642044406,
+          1.329068948308667,
+          -0.34876261448444396
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_5",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.256946654741327,
+          -0.10342864836237665,
+          -0.24050679970837924
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_6",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.101518550794428,
+          0.6484037198105905,
+          1.937730331164619
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_7",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.383065788109856,
+          -0.6316556551119711,
+          -0.22931580650178657
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.83702272441215,
+          0.13144484380663898,
+          -0.8079117756629067
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.908873580651437,
+          -0.2131332760153334,
+          -0.8696368705277849
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.5723324812813897,
+          0.9315614083363198,
+          0.20116364304792417
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.8289663833057115,
+          -0.7220127010413656,
+          -1.2156779721901465
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.2163061779391033,
+          0.8432010687363007,
+          -0.5538605312345954
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.382808312438085,
+          0.693770701871711,
+          1.049716373490413
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.982232663389894,
+          -0.08242079107420835,
+          0.4192318247414872
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.636098551662801,
+          -1.402867738316325,
+          -1.509906668983386
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.393848780071247,
+          -0.8422926776267836,
+          1.1083877213629985
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_3_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.114749238653914,
+          -2.0179937754517803,
+          0.2446756531463347
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
@@ -1122,26 +1122,26 @@
       "id": "prop_area_3_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.235423274437887,
+          0.3517313871822101,
+          -0.6606854181993733
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_3_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.101378134329792,
+          -4.924080601697663,
+          -3.649768132001454
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -1161,221 +1161,221 @@
       "id": "prop_area_4_1",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.25052497725577,
+          1.2487831397950964,
+          -0.8970181471025562
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_2",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.9621043265676983,
+          0.7818168413339054,
+          -0.21661945029304483
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_3",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.8836549660615947,
+          0.6981246798351378,
+          0.13470054000442014
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_4",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.1637246759292585,
+          0.5389024422011904,
+          0.3144098808026859
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_5",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.6127061665306623,
+          -0.6430300262561398,
+          -0.11316934844272773
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_6",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.9981299084240547,
+          -1.4519446457019753,
+          1.0108771004623476
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_7",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.2303551108546604,
+          0.8061043870455975,
+          1.833156658826518
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.568184799336017,
+          -0.08311807433568263,
+          -0.4338361436978209
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.108052099845372,
+          -0.3015350239609656,
+          0.34219407657351925
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.395195314585527,
+          1.3369577334642668,
+          -0.7671513399441843
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.391448663754351,
+          0.794199304205071,
+          1.2933050293276969
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.051513903072298,
+          0.0039162089648120645,
+          0.6102033848069534
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.4274429527698187,
+          -0.23356057708917866,
+          0.9727957912465278
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.7491265999206695,
+          2.59870039166557,
+          0.5843831140096672
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.724683709082678,
+          1.1576528063314406,
+          0.07599983775158374
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.906300083551452,
+          -0.14700289316131018,
+          -2.0726700830494487
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_4_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.619380427259913,
+          0.31583455829814155,
+          -0.502191153150285
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
@@ -1408,26 +1408,26 @@
       "id": "prop_area_4_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.602700440659319,
+          -1.5697724588267057,
+          1.605003901221686
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_4_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.056041835470258,
+          1.662653197848861,
+          -4.724625483629339
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -1447,221 +1447,221 @@
       "id": "prop_area_5_1",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.6670363199344775,
+          0.5409765714078503,
+          0.10448425573144016
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_2",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.3579199955070633,
+          -0.48534113294727543,
+          0.7044021874168394
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_3",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.8775067033259676,
+          -0.30454852487148587,
+          0.13450646381967024
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_4",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.587811402676627,
+          -0.16674289334465292,
+          -1.129789816961163
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_5",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.3417218900511165,
+          0.3375470558057392,
+          1.508878474864979
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_6",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.922415481773185,
+          -0.49586822598799235,
+          -1.2215790959141744
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_7",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.688126888597611,
+          -0.10201441154798473,
+          1.3983639046086367
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.6500702720092653,
+          -0.21797131420336813,
+          -1.507513997745587
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.918955215786698,
+          -0.5389174418872679,
+          -1.320220310629307
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.8876113687621876,
+          -0.7183104239662937,
+          1.9591339034691353
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.9525969587362098,
+          -0.24712495402389667,
+          0.15977595762025576
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.5201713609283867,
+          0.00779930762114839,
+          -0.5297526559297279
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.622159512155694,
+          0.31717363864523623,
+          0.41512547887616463
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.135584113283541,
+          -0.20113545570122937,
+          -1.3778396440614629
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.818624846620886,
+          0.030769943774299233,
+          1.4575235286451176
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.326269325476388,
+          -1.7577815063247413,
+          2.466301242418182
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_5_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.723095350805303,
+          -0.527543020696655,
+          -0.12895596549389285
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
@@ -1694,26 +1694,26 @@
       "id": "prop_area_5_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.370919524308432,
+          0.3924939346929768,
+          1.5274832826706164
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_5_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.1340622212956144,
+          -1.8228617037294066,
+          1.344088637898505
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -1733,221 +1733,221 @@
       "id": "prop_area_6_1",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.450214953493377,
+          0.14399994206848626,
+          0.7416995666772433
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_2",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.296476296715931,
+          -0.6472696566650317,
+          -0.15438771215690789
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_3",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.967199607421934,
+          -0.7516472756117105,
+          -0.3412220894127051
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_4",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.7560594551686943,
+          -0.22269241712629517,
+          -0.03233959515854096
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_5",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.240848651316276,
+          0.33205958114120837,
+          0.6469878563301433
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_6",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.809290133841956,
+          -0.885876608204266,
+          0.15588546287685062
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_7",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.759523226451746,
+          1.1510555519706736,
+          -1.1485899771577521
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.213424245132992,
+          -1.579857219999111,
+          0.5361121436653934
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.449029556164408,
+          0.39607308003335157,
+          -0.421749438324813
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.613258385293923,
+          -1.7108503093099274,
+          1.5858452469025615
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.915430930629605,
+          0.9662565295362313,
+          0.4969262175842442
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.9116478958396295,
+          -0.19012831741108374,
+          0.6586953653130564
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.6513023518653887,
+          0.04211489524283222,
+          0.6983266276087153
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.034620428796454,
+          1.9742798045488856,
+          -0.364298560677615
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.5889202069103865,
+          0.8784351516221308,
+          -0.8829834190343286
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.9858226742231437,
+          2.028373161798199,
+          -1.682150503059748
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_6_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.776652562742183,
+          -0.11482562737343673,
+          0.11732407629191183
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
@@ -1980,26 +1980,26 @@
       "id": "prop_area_6_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.389685665984911,
+          -1.6107498883329623,
+          -0.5299394570120799
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_6_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.3708578143238443,
+          1.316248943077774,
+          3.6113018701727686
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -2071,221 +2071,221 @@
       "id": "prop_area_7_5",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.8124609068127522,
+          3.224494125558491,
+          4.894164164123237
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_6",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.5012438792822786,
+          6.301438583394758,
+          -5.666441897481895
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_7",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.46584064870214,
+          -1.7692321787384693,
+          2.773389193782271
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          8.903468459324603,
+          -3.2677517740719555,
+          8.684272267587462
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.288745959132661,
+          -1.4002078315948923,
+          -0.09906868648000895
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.817709970283032,
+          1.6334131947764203,
+          1.079496763034439
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.712052306684866,
+          1.1951917436324588,
+          5.08326609493059
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -1.8706692842583745,
+          -0.028632777737636016,
+          -6.189587644401438
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          13.245454793671973,
+          -2.7970002173859116,
+          4.148210053348241
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.152942398222811,
+          6.440658579787015,
+          2.3252678939836198
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.0038017300998536,
+          5.92084028460322,
+          -1.5357910870105482
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.7486921466922616,
+          0.505965587835512,
+          -3.5101449168245944
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.601808405320227,
+          3.6392454879572407,
+          2.5525338559804887
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -4.867717261569753,
+          6.254531186555306,
+          1.4722510976550456
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.494422341716678,
+          -3.6229717483502695,
+          -0.2627186583466613
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.9840451561058807,
+          -0.2780473969568925,
+          0.5416022167486
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_7_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.2990896631051783,
+          -2.233260594767234,
+          1.4802616583609993
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -2357,221 +2357,221 @@
       "id": "prop_area_8_5",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -2.524077773342734,
+          -5.035176273986204,
+          -3.041483122701418
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_6",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -4.688037696995828,
+          6.463462092709013,
+          3.7212419101106273
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_7",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.819845761196128,
+          -1.5551033879634513,
+          2.7388772155967605
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.8062483711845547,
+          -4.197050914874152,
+          -2.0990789586240965
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.416225357134009,
+          -6.001019562926035,
+          -7.6644474294741345
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.8669894207690354,
+          1.5380027712845559,
+          3.523098812944484
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          8.82168930974667,
+          0.33737388601364826,
+          -11.38433534325894
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.967701657048492,
+          -5.778288555104901,
+          -0.6862763249888547
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.316581919031739,
+          -1.4211650715145072,
+          -8.73177978365135
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.6432312908921487,
+          3.599314666416294,
+          6.412764915065876
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.860898724788577,
+          -2.105620274951717,
+          -11.772955057391641
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.265282551461099,
+          3.46060617470676,
+          0.8699453028878882
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.339635363876154,
+          -2.61494831900054,
+          -2.985928730847524
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.0770306097689066,
+          -5.362916607065274,
+          -5.377251083154259
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.9958136453094317,
+          0.28281623625470287,
+          -7.400253367305701
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.05347664280404,
+          5.146183083151822,
+          0.6652515896838855
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_8_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.649148365577337,
+          3.513947102965856,
+          -1.0137536871441932
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -2643,221 +2643,221 @@
       "id": "prop_area_9_5",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          9.492043494233641,
+          4.086231302373123,
+          2.7803246935128185
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_6",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          11.94094239406948,
+          1.6188386959151178,
+          -0.16328621119030612
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_7",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.287350254559903,
+          7.664224476706083,
+          2.1723124037945616
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          8.280734628430707,
+          7.692874428123087,
+          5.897510196742751
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.1122117793191375,
+          -2.182898921151761,
+          2.8238903581705856
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.8775752781448967,
+          -0.4753116121240896,
+          5.983332882248752
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.700341441809797,
+          -4.584853334206968,
+          1.4440262450697607
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.3681238519761125,
+          5.95849294371732,
+          6.495390397275586
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          10.052584819648603,
+          -4.488421122894007,
+          0.4423617538142666
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.7449835315935007,
+          -0.5131118093728598,
+          4.076565079346547
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.166000681211274,
+          2.150605277036461,
+          -1.990235248242812
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.4268840931558673,
+          -1.866613590519794,
+          2.0219370332012514
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          8.238904058502111,
+          5.808165794494145,
+          2.235014521501773
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.737021726137645,
+          -1.3160514188498376,
+          1.670882811518664
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.3476851172473134,
+          -3.399014886876182,
+          -0.12825038044476966
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.582624614172832,
+          1.6055285989058445,
+          -1.3745527408214284
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_9_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.2992380227260636,
+          1.9587157908233441,
+          -1.3780908196380979
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -3124,26 +3124,26 @@
       "id": "prop_area_10_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.901627894312615,
+          1.3787297349434542,
+          0.11794660955667706
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_10_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.8119548458843275,
+          -2.1550437085843295,
+          3.5307734829665107
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -3410,26 +3410,26 @@
       "id": "prop_area_11_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          8.82537137126215,
+          0.5006998020460425,
+          -1.1053598092897046
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_11_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.555896399322224,
+          -0.36353576598331555,
+          2.3401099640654928
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -3657,65 +3657,65 @@
       "id": "prop_area_12_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.899652632962838,
+          2.762855589680772,
+          0.9441040704202647
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_12_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.828830337023208,
+          2.483608162807874,
+          3.32751417550977
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_12_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.086950250710347,
+          2.1448579285628666,
+          2.2068724335865
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_12_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.265946893363224,
+          -1.260758638318833,
+          -0.4526912352674003
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_12_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.464675516244454,
+          -2.6939793273405876,
+          -1.3938188206100464
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
@@ -3943,65 +3943,65 @@
       "id": "prop_area_13_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.541301069244953,
+          0.7656449019138613,
+          2.040905942606679
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_13_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.9412791516359866,
+          0.8467815468538002,
+          3.8883602687508647
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_13_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.075574730993809,
+          1.0367708525836388,
+          0.09318770051733978
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_13_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.805560358743559,
+          0.7670158786593189,
+          -1.214964481074159
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_13_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.3830226285844818,
+          0.18544089511034348,
+          -0.7124862789803117
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
@@ -4229,65 +4229,65 @@
       "id": "prop_area_14_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.7000947333765275,
+          -0.225075904305931,
+          0.756347714876819
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_14_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.7714649170678602,
+          0.7424678499298437,
+          1.698793943959496
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_14_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.21910634269653,
+          4.093935805161444,
+          -0.6898933806635332
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_14_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.12027674032737,
+          2.636330605826643,
+          -2.2004429759863995
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_14_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.070593483819485,
+          -4.192276508512904,
+          1.1034890956535977
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
@@ -4515,65 +4515,65 @@
       "id": "prop_area_15_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.6237237005695744,
+          1.2307482701152785,
+          -1.5307869892526482
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_15_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.793600487692736,
+          -0.9112828914796189,
+          3.7774664294418048
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_15_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.435226599531881,
+          -0.21211719969969392,
+          2.9590366523112555
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_15_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.995405977452428,
+          0.15112963576904043,
+          -2.763047216010477
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_15_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.729007334570385,
+          -1.9685164954315983,
+          2.098818556372676
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
@@ -4684,104 +4684,104 @@
       "id": "prop_area_16_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.6608210576039575,
+          -1.2514394846572352,
+          0.7876119743289607
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_16_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.2640960566401676,
+          -1.4089826513585166,
+          0.23245378862436716
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_16_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.09449758649405,
+          0.5709302848969338,
+          0.4169750520006382
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_16_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.10166767406442,
+          2.0545959753184198,
+          -0.1229807346476215
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_16_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.005413554393745,
+          3.9190357601406483,
+          -3.271575011622783
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_16_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          8.155158089017414,
+          -2.4577465584367006,
+          -2.062361474246236
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_16_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.8739255328836553,
+          1.514906389150038,
+          -0.8489660547189593
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_16_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.7148937567524323,
+          0.2592129435860913,
+          -3.0562211720649026
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
@@ -4801,65 +4801,65 @@
       "id": "prop_area_16_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.4048987605342234,
+          -0.11356534084207677,
+          -1.2698048878672337
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_16_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.765467246271167,
+          1.9645527962031446,
+          -2.197445902273199
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_16_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.6978414733433596,
+          0.10237069604029163,
+          3.41771699489629
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_16_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.6770818025153797,
+          -1.8260697994827957,
+          -0.7940171348955084
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_16_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.7340380509419444,
+          -1.1372409660507716,
+          -1.953180356350229
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
@@ -4970,104 +4970,104 @@
       "id": "prop_area_17_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.74430663921558,
+          -3.4712440551815407,
+          1.1207448836905276
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_17_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          9.230675388748667,
+          4.112546602870724,
+          0.6794396726345744
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_17_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.7339314160058166,
+          -1.7098405539957244,
+          -0.2861100056203262
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_17_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.6202612666542,
+          2.0810027837609213,
+          -3.0941731837472353
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_17_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.1453478580060334,
+          2.289212689392153,
+          -1.8248257960782532
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_17_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.811440443096271,
+          -1.2712524574758106,
+          1.1672175167688361
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_17_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.955500035959982,
+          -6.8214495385027565,
+          2.48017224690824
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_17_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.9627752992004415,
+          -1.652205551214436,
+          -3.7560588630512397
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
@@ -5087,65 +5087,65 @@
       "id": "prop_area_17_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.858303258311392,
+          0.36781539312519995,
+          -1.1155323956292251
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_17_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.205305946022334,
+          1.0352249069567259,
+          -0.4721633208917972
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_17_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.3436952205948405,
+          3.7761636252619684,
+          -1.3113850508330986
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_17_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.857051334795579,
+          2.7307842131557836,
+          -0.7029592987229629
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_17_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.062679864060425,
+          0.5022156357918179,
+          -0.18453963087518638
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
@@ -5256,182 +5256,182 @@
       "id": "prop_area_18_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.677905079021012,
+          0.5193661081504004,
+          -2.8335581327937835
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_18_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.6655300733144447,
+          3.0324068163928697,
+          -6.0715956739233885
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_18_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.385301562473046,
+          -2.197570403590221,
+          1.1204982675578425
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_18_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.246515975901337,
+          -0.7260235851436241,
+          4.684323393249222
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_18_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          10.496981437681967,
+          -4.722148112602924,
+          3.864097708438651
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_18_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.329420754663432,
+          0.7744633618828027,
+          3.1210312913830367
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_18_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.179927062078999,
+          -1.3700235642769096,
+          3.784937477171172
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_18_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.833951266824862,
+          0.8884829374536727,
+          -2.293280002069941
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_18_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.7147995881643414,
+          -1.854716597327881,
+          0.46026085122123384
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_18_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.759117672115885,
+          2.076036114493443,
+          2.156696093853702
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_18_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.0047312132453383,
+          -0.5155025236755593,
+          -0.6772186696152276
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_18_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.159010093700221,
+          -0.5142672901410432,
+          -0.035673842091170235
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_18_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.8677229320917412,
+          4.374032556423818,
+          0.13830187591696613
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_18_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.794988336016293,
+          -1.7612027900989442,
+          -0.28837542862512505
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -5542,182 +5542,182 @@
       "id": "prop_area_19_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.4678743693588983,
+          0.2994742170663144,
+          0.5926154731664481
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_19_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.443338812039036,
+          -9.79304511971516,
+          -1.7320908172051088
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_19_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.113403547436743,
+          2.9497859518281118,
+          1.7250038709373265
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_19_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.17787164510397346,
+          0.7971458743247053,
+          -4.522387816971064
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_19_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          11.10682622230166,
+          -2.1189932811683234,
+          -1.9342259537142295
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_19_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.2365038735530245,
+          -0.6883571469754637,
+          1.9010090298719213
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_19_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.151191476545415,
+          0.12197354448096617,
+          -3.95895544653733
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_19_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.8155649637934235,
+          1.7784675619123234,
+          2.2355779433582104
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_19_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.921354469605689,
+          -1.2000532908513943,
+          0.27711549120156226
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_19_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.004792924244786,
+          2.350769930008937,
+          -1.068497905546277
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_19_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.165052078874255,
+          -0.9171832729250493,
+          -3.26431542527367
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_19_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.386451476303125,
+          0.12877194857907628,
+          0.8823771751957886
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_19_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.0957822372607113,
+          -1.995982773072929,
+          -0.26022864323795764
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_19_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.341910033300322,
+          -2.779137126619644,
+          -3.9189028755420297
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -5828,182 +5828,182 @@
       "id": "prop_area_20_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -2.059771599606912,
+          2.5441499856411247,
+          0.8417335395855637
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_20_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.636942824394392,
+          2.783143786895824,
+          -1.821939590440163
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_20_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.5581122337525022,
+          0.5520945122689358,
+          3.3282113402881164
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_20_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.994301248553083,
+          0.6137195637887064,
+          -5.677814160762383
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_20_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.7404749179615857,
+          0.6824430692111544,
+          4.404172895334312
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_20_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.909306716979927,
+          0.22157704618265472,
+          2.2618227495371728
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_20_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.99879263529619,
+          -7.36780026060987,
+          -1.7803844618665545
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_20_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.0007073676607234,
+          -1.9627930211720623,
+          -3.419532676271892
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_20_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.5501129101226354,
+          0.18996615366689013,
+          -0.16468057792247276
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_20_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.285652217913409,
+          -2.735054536967714,
+          0.45489249829116224
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_20_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          8.506018605208213,
+          1.1719010431657693,
+          -3.048500235636675
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_20_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.742193969548189,
+          1.160459537468902,
+          1.4012025800471135
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_20_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.948775501856531,
+          -1.1689638850529185,
+          1.2162023110488156
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_20_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.2682846515020385,
+          -2.306070961057688,
+          1.1145496392949374
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -6114,182 +6114,182 @@
       "id": "prop_area_21_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.747476384741933,
+          3.048776970017371,
+          -3.3885766099811527
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_21_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.529368274686301,
+          3.281146192352529,
+          0.6552513084617169
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_21_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          8.729761861061174,
+          -6.719881997279325,
+          2.14748444474059
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_21_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.41305198894329,
+          1.5001247515115166,
+          -0.3025332160899331
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_21_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -2.753053359533241,
+          -4.2971257241250145,
+          3.519895241470633
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_21_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.8651827888550603,
+          -1.8205925229007551,
+          -1.7233348953580285
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_21_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.89359777711865,
+          -2.025346971789576,
+          0.6036421367277528
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_21_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.263425203630318,
+          -1.303928126247818,
+          1.3037649088260592
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_21_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.8928502670935186,
+          -1.4488805396136732,
+          1.3619538224873784
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_21_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.08573016786643795,
+          0.4654892601222262,
+          2.3669615016640555
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_21_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.45327560854742,
+          1.9384658118317941,
+          -2.885970300122836
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_21_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.5206582677409872,
+          0.1562363959114516,
+          1.2625393766088406
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_21_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.107230041546358,
+          0.6961276475377545,
+          -0.6726474392711936
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_21_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.831733688147708,
+          3.506594346136921,
+          -0.35334277041645534
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -6400,182 +6400,182 @@
       "id": "prop_area_22_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.2780797760205775,
+          -4.412595394261093,
+          4.243578305082199
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_22_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.653650106283697,
+          1.1964653105573388,
+          4.881819183390725
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_22_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.8498958639868555,
+          3.6104743478070143,
+          -0.3803988576819449
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_22_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.254461256946629,
+          -0.7782750929191627,
+          -1.265954320480538
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_22_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.661502382608698,
+          -5.036843066002389,
+          4.244517739944229
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_22_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.728152530513325,
+          1.0503999106638156,
+          -2.240737661317829
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_22_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.3064202221553396,
+          0.024395751694724382,
+          -2.1885999935431832
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_22_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -0.8134615344314637,
+          1.970266201852851,
+          -1.6314990756659629
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_22_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.36147428757876,
+          -0.9153454007843526,
+          -2.9896036269195774
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_22_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.17023180973857,
+          -1.573070020183765,
+          -1.4864490265787373
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_22_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.011125636884509,
+          0.3295445725933944,
+          -1.9663628974072973
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_22_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.48864660932031,
+          -1.5368283538662537,
+          -0.03197726471135166
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_22_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.919890537355583,
+          1.1707556753171011,
+          -2.3882211164411746
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_22_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.208593115160594,
+          -0.8462065693741322,
+          0.786819703902553
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -6686,182 +6686,182 @@
       "id": "prop_area_23_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          10.917778308544,
+          3.4513395997830187,
+          -2.344570900250094
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_23_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -3.7110201612060534,
+          -2.1173962029393802,
+          -0.7224552249351034
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_23_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.794190686309685,
+          1.9240699765377554,
+          -0.5839728965508765
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_23_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -0.039932135791874046,
+          -0.667278555286662,
+          1.2408564504870803
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_23_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.114346599215907,
+          0.22333723264318286,
+          3.599530210679376
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_23_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.7921728608839524,
+          -2.252911621648395,
+          -1.6220867589181545
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_23_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.8439136131229188,
+          -0.23428747044310771,
+          2.3557971716468034
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_23_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.6178963413566594,
+          -1.721938317729185,
+          -2.4926470232154294
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_23_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.969589221925549,
+          0.9114882645968609,
+          2.065134999445994
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_23_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.621277066340168,
+          1.1269157907842169,
+          0.3332233145335717
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_23_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.490476254821127,
+          0.9155599756018936,
+          -4.466897897941325
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_23_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.7042569179233467,
+          0.34851360198423936,
+          -2.894527967952315
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_23_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.5018972833978745,
+          1.0472966961423482,
+          -0.5706198947725881
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_23_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.5886956403985564,
+          -0.6394514713022194,
+          -0.754752826111593
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -6972,182 +6972,182 @@
       "id": "prop_area_24_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.5376010475448725,
+          0.8625923914005005,
+          0.7563297417407129
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_24_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.1235504927596787,
+          -0.42362917293234825,
+          1.3399702194341356
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_24_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -1.369037182340767,
+          2.6085738397084066,
+          3.2938089486151645
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_24_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.109563100484269,
+          3.6910819848671097,
+          -2.606053407690882
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_24_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.716275336479528,
+          3.554342323254017,
+          -0.8926176484806043
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_24_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.976495002517465,
+          -2.169206113492715,
+          -0.33308262073507267
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_24_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.4524472637068446,
+          1.8712130457193976,
+          1.652500858163546
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_24_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.6466605152710776,
+          0.7040673031791544,
+          3.6046660301893576
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_24_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.389832888933671,
+          -0.2709654378902848,
+          -0.22386894031062235
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_24_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.830281626169548,
+          -2.134465701082184,
+          -2.020230490727382
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_24_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.6614931661198407,
+          0.06826097259077579,
+          -0.5000641659901475
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_24_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.5296825031290657,
+          -0.1816552720355535,
+          -0.8529762111569894
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_24_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.3506972965935216,
+          -1.3074590525761114,
+          -0.45734797173720115
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_24_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.7421051318852165,
+          -5.632028280930121,
+          -0.853820395351122
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -7258,182 +7258,182 @@
       "id": "prop_area_25_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -3.408376792605673,
+          3.615509383717184,
+          5.266699010797529
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_25_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -1.5883642452773277,
+          1.8389446298018113,
+          1.5800579742089094
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_25_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.791185921669925,
+          0.5097723853497856,
+          -2.4301979352337844
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_25_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.938686125307049,
+          4.6064956589357555,
+          3.6067183068645052
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_25_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -1.6821017017828286,
+          1.3954429481132515,
+          -7.120333244518095
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_25_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.789014023615115,
+          -3.4143983420474564,
+          -2.0562123215887604
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_25_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.5494256722336,
+          2.301391490052472,
+          1.096492967921741
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_25_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.6912769627832986,
+          -0.8656089092752645,
+          -2.2974252230360293
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_25_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.575839559305624,
+          -0.4015909566246551,
+          -0.27447554515031003
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_25_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.44859629171602533,
+          -1.9272685474453208,
+          -0.24776983635216254
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_25_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.81392584374686,
+          -0.3771900371510291,
+          -3.985696663354252
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_25_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.633635859610422,
+          -0.9208548696098134,
+          -3.217145503861578
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_25_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.227679819450277,
+          -4.645841701649066,
+          -1.1459596697332397
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_25_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -0.5090557870071182,
+          -0.16041512307408093,
+          1.187748369216445
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -7544,182 +7544,182 @@
       "id": "prop_area_26_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.64728462099103,
+          -0.1111828547821405,
+          -3.479251107634605
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_26_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.8138053668215948,
+          0.5186715880375169,
+          7.834412286075078
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_26_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.520842134804559,
+          -2.3229901670580078,
+          3.5281515678840822
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_26_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.5577784655320386,
+          0.5941800661053862,
+          -1.243618915532846
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_26_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.176317958956805,
+          -2.368216209554877,
+          0.19270152351280617
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_26_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.039383355926692,
+          -2.1384501671341334,
+          0.5232582313753307
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_26_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.78252902751404,
+          3.4222924138564057,
+          2.4486194197741327
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_26_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.5780843434803042,
+          -1.4414795143170733,
+          -2.7049137271979107
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_26_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.919682279379943,
+          4.003780967738729,
+          -1.3463908863816612
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_26_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.615695835577391,
+          -1.609820947204979,
+          0.7608912903404502
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_26_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.026060730810071,
+          1.376016089043285,
+          -2.920590578694914
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_26_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.7710475638084628,
+          0.940947782825594,
+          0.7102535450881885
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_26_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.008519573562553617,
+          -2.853736185241764,
+          0.6535075593645083
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
       "id": "prop_area_26_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.441474740521782,
+          0.39684006303932945,
+          1.4849942106930316
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.8
       }
     },
     {
@@ -7830,182 +7830,182 @@
       "id": "prop_area_27_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.082172416748802,
+          -1.023075730743793,
+          2.3361270251520927
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_27_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.830379170500896,
+          4.542071341164869,
+          2.1133856908372675
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_27_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.584546111774214,
+          -1.0067666841008909,
+          1.3283832864954632
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_27_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.274534155685633,
+          -0.362322727978611,
+          -4.107279929963594
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_27_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.855223892477733,
+          5.140539825264524,
+          -3.0033843382658576
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_27_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.1525635369944469,
+          0.7877991655247553,
+          1.1615373255248842
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_27_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -0.6589668710507759,
+          2.436622319165116,
+          5.05902358054018
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_27_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.7588392099083565,
+          -2.1936748411914335,
+          -1.0588678514325487
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_27_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.6387613240325,
+          -0.4435848420663859,
+          -0.8570600547557126
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_27_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.9933974918601045,
+          0.5656157061053194,
+          2.583397021177069
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_27_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.826462033800684,
+          -1.518080033504983,
+          0.3494434876770726
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_27_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.3197427902322687,
+          -2.265466042680056,
+          -3.4827557937228715
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_27_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.214952267839173,
+          -3.3250703980039162,
+          -0.8854480938506216
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_27_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.1614260115984285,
+          -0.44482719874996335,
+          1.2561239859509012
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
@@ -8116,182 +8116,182 @@
       "id": "prop_area_28_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.6249141700910226,
+          2.2746708892765963,
+          0.9432877987200746
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_28_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.399035173282622,
+          0.25814889338711944,
+          -2.8422340152300185
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_28_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.084902897145669,
+          -0.8019287048215963,
+          1.0332963864584412
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_28_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.602341777787754,
+          2.184455054426952,
+          0.10021309855426606
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_28_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.1348712760020843,
+          3.066538953147443,
+          -1.6800701684142538
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_28_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.1259755283670425,
+          -3.2905524262741093,
+          4.6450858217793645
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_28_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.506366650057957,
+          1.1646421162171,
+          -0.9899628172468634
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_28_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          8.59664924584852,
+          0.5641757474186274,
+          1.5670968356050454
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_28_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.643233156727806,
+          4.378387724385652,
+          1.1254834640366007
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_28_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.206904712055933,
+          -2.3909707502427655,
+          -0.051640832206514616
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_28_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.7828118850086483,
+          -0.7885429271506168,
+          1.0308414462796007
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_28_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.9706543645745804,
+          -3.3151137595535474,
+          0.27805445221200814
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_28_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.271289147918865,
+          -1.6886864561650559,
+          0.3339627218679197
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_28_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.280600814938526,
+          1.2858937453409633,
+          2.745678214574486
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
@@ -8402,182 +8402,182 @@
       "id": "prop_area_29_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.0516246940432188,
+          -7.508314365794582,
+          -0.7699971292394429
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_29_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -0.12165000377484692,
+          1.078364492112923,
+          1.4709234497498345
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_29_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          9.868146200890138,
+          -0.05201099408654801,
+          -0.4566396898047936
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_29_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          8.905136947808888,
+          -5.557928459118355,
+          4.620498256989358
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_29_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.57900814519744,
+          -6.64369693592427,
+          0.700419921987938
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_29_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.4807685311240375,
+          -3.3091204904403804,
+          -4.609004477293952
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_29_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.622757658440296,
+          0.8124502318266007,
+          -1.68922557546103
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_29_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.7386103286631989,
+          -4.220410597228062,
+          9.037187795776216
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_29_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.556011631660501,
+          0.44521238802991076,
+          1.3874291682240067
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_29_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.936199214417177,
+          -1.472173784405937,
+          0.44270017400979017
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_29_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.890227333977524,
+          -1.193292512305724,
+          1.241407433666741
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_29_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.61731433155806,
+          1.654057389484609,
+          -2.5260245564164023
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_29_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.284875050718271,
+          -0.5442506056643736,
+          -1.4525508602819912
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_29_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.5934994576813297,
+          0.42179284627802166,
+          -0.27388163066662014
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
@@ -8688,182 +8688,182 @@
       "id": "prop_area_30_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.552401362745509,
+          -1.2943818936189728,
+          7.005997558687493
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_30_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.1458715377063946,
+          -5.712990276725483,
+          -6.418474591055709
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_30_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.2889841728384375,
+          1.5320653438799523,
+          -2.0991277734201113
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_30_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.448383394795523,
+          4.729642988368954,
+          4.870171684378054
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_30_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.319522944670263,
+          -0.5087921929740431,
+          -0.7721437982340462
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_30_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -0.8321198219316068,
+          0.3831393818375949,
+          -2.589646664738642
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_30_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          8.119012911361882,
+          5.797692050319764,
+          2.888428833213254
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_30_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.2567725570142336,
+          2.1422745070425737,
+          -1.8958332425456947
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_30_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          7.063625656020063,
+          0.06342817024774815,
+          4.491723777462285
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_30_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.3570199736793098,
+          -2.8837929723352778,
+          2.2789366838565654
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_30_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.1287114915753547,
+          3.2500332038904483,
+          2.149793670598185
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_30_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.8626627394268986,
+          1.4281389267680924,
+          -3.7312270329958643
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_30_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.4451693768599956,
+          -0.8557961143408616,
+          -2.961398685823138
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_30_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.5034282792345235,
+          -0.16685622318088036,
+          4.876613550081786
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
@@ -8974,182 +8974,182 @@
       "id": "prop_area_31_8",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.027751760436209,
+          3.6678448117031763,
+          1.4837323533385096
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_31_9",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          6.429313829351084,
+          -2.460820829088762,
+          0.8064941615348382
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_31_10",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          0.4374885405045448,
+          -1.9117120535116623,
+          0.3345296448217457
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_31_11",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          -1.3964992854041887,
+          0.3859508877345058,
+          -2.31591666941953
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_31_12",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          4.880606272859438,
+          0.659854542235545,
+          -6.268592951029386
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_31_13",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.4186935936046066,
+          1.3461807190558457,
+          5.0396426896607585
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_31_14",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          3.0053252648371807,
+          -2.238011557279007,
+          -0.6107012938286315
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_31_15",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          1.2529757135271282,
+          3.0283441982820456,
+          -2.935535376679314
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.7
       }
     },
     {
       "id": "prop_area_31_16",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.0048497190624275,
+          3.429886790639867,
+          1.5279769560698144
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_31_17",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.501382459704118,
+          2.4322908316068648,
+          -2.3257764006055783
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_31_18",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          10.21756150206506,
+          -1.5023707343544517,
+          2.171101677626075
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_31_19",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          5.130728332502373,
+          0.9826084405979496,
+          1.647483832839134
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_31_20",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          9.756206714733745,
+          -1.8078746283292118,
+          0.8167982279829858
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     },
     {
       "id": "prop_area_31_21",
       "properties": {
         "wind_velocity": [
-          4.0,
-          0.0,
-          0.0
+          2.603729921337985,
+          2.501891485720475,
+          -0.5262831916913344
         ],
         "temperature": 20.0,
         "sea_level_atm": 1.0,
-        "gps_strength": 1.0
+        "gps_strength": 0.6
       }
     }
   ]
