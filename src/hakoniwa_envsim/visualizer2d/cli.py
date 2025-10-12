@@ -5,6 +5,7 @@ from .markers import Marker
 from .projection import GeoProjector
 from .overlay import TileOverlay
 from .renderer import PlotRenderer
+from .map_converter import to_map_frame_scene
 from hakoniwa_envsim.model.loader import ModelLoader
 
 def parse_args():
@@ -55,8 +56,11 @@ def main():
     for mj in cfg.markers or []:
         markers.append(Marker(lat=float(mj["lat"]), lon=float(mj["lon"]), label=mj.get("label")))
 
+    # === ROS → MAP に変換 ===
+    map_scene = to_map_frame_scene(scene)  # 👈 ROS→MAP変換
+
     # 描画
-    PlotRenderer(projector, overlay).draw(scene, cfg.mode, cfg.wind_scale, markers)
+    PlotRenderer(projector, overlay).draw(map_scene, cfg.mode, cfg.wind_scale, markers)
 
 if __name__ == "__main__":
     main()
