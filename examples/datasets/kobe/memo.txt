@@ -1,0 +1,16 @@
+
+
+```json
+      "location": {
+          "latitude": 34.65436065,
+          "longitude": 135.16060138,
+          "altitude": 10,
+          "magneticField": {
+              "intensity_nT": 46257.8,
+              "declination_deg": -4.463,
+              "inclination_deg": 48.429
+          }
+      }
+```
+
+https://wdc.kugi.kyoto-u.ac.jp/igrf/point/index.html
