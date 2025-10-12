@@ -32,31 +32,47 @@ class PlotRenderer:
 
         # 背景地図
         if self.ov:
-            ros_xmin = min(a.aabb2d.xmin for a in areas) 
-            ros_xmax = max(a.aabb2d.xmax for a in areas)
-            ros_ymin = min(a.aabb2d.ymin for a in areas)
-            ros_ymax = max(a.aabb2d.ymax for a in areas)
-            # ENU->3857 bbox（画像式に合わせ：X=MercXは y 軸起点、Y=MercYは x 軸起点）
-            print(f"ros_xmin={ros_xmin:.3f}, ros_xmax={ros_xmax:.3f}, ros_ymin={ros_ymin:.3f}, ros_ymax={ros_ymax:.3f}")
-            X0, Y0 = self.p.proj.lonlat_to_xy(self.p.origin_lon, self.p.origin_lat)
-            Xmin = X0
-            Ymin = Y0
-            Xmax = X0 + (ros_ymax + self.p.offset_y)
-            Ymax = Y0 + (ros_xmax + self.p.offset_x)
-            cell_dx = min(a.aabb2d.xmax - a.aabb2d.xmin for a in areas)
-            cell_dy = min(a.aabb2d.ymax - a.aabb2d.ymin for a in areas)
-            print(f"cell_dx={cell_dx:.3f}, cell_dy={cell_dy:.3f}")
-            cell_size = max(1e-6, min(cell_dx, cell_dy))
-            print(f"cell_size={cell_size:.3f} m")
-            print(f"Fetching map tiles for bbox (MercX,Y) = ({Xmin:.3f},{Ymin:.3f}) - ({Xmax:.3f},{Ymax:.3f}) ...")
-            img, _, _ = self.ov.fetch(Xmin, Ymin, Xmax, Ymax, 100)
-            #ax.imshow(img, extent=(ymax, ymin, xmin, xmax), zorder=0, interpolation="bilinear")
+            # === 1) ROS座標系の範囲（m） ======================================
+            north_min_m = min(a.aabb2d.xmin for a in areas)
+            north_max_m = max(a.aabb2d.xmax for a in areas)
+            west_min_m  = min(a.aabb2d.ymin for a in areas)
+            west_max_m  = max(a.aabb2d.ymax for a in areas)
+
+            print(f"north=[{north_min_m},{north_max_m}], west=[{west_min_m},{west_max_m}]")
+
+            # === 2) 原点をWebMercatorに変換 ====================================
+            merc_origin_x_m, merc_origin_y_m = self.p.proj.lonlat_to_xy(
+                self.p.origin_lon, self.p.origin_lat
+            )
+
+            # === 3) ROS→Mercator変換式（X:北+, Y:西+） ========================
+            merc_x_min_m = merc_origin_x_m - (west_max_m + self.p.offset_y)  # 東方向は負
+            merc_x_max_m = merc_origin_x_m - (west_min_m + self.p.offset_y)
+            merc_y_min_m = merc_origin_y_m + (north_min_m + self.p.offset_x)
+            merc_y_max_m = merc_origin_y_m + (north_max_m + self.p.offset_x)
+
+            print(f"MercX=[{merc_x_min_m:.3f},{merc_x_max_m:.3f}] ΔX={merc_x_max_m-merc_x_min_m:.3f} m")
+            print(f"MercY=[{merc_y_min_m:.3f},{merc_y_max_m:.3f}] ΔY={merc_y_max_m-merc_y_min_m:.3f} m")
+
+            # === 4) 背景地図の取得 =============================================
+            img, _, _ = self.ov.fetch(merc_x_min_m, merc_y_min_m, merc_x_max_m, merc_y_max_m, 100)
+
+            # === 5) プロット（x軸=西(+), y軸=北(+)）=============================
+            extent_west_north = (west_min_m, west_max_m, north_min_m, north_max_m)
             ax.imshow(
                 img,
-                extent=(ros_ymin, ros_ymax, ros_xmin, ros_xmax), 
+                extent=(west_min_m, west_max_m, north_min_m, north_max_m),  # (x_min, x_max, y_min, y_max)
+                origin="upper",
+                interpolation="bilinear",
                 zorder=0,
-                interpolation="bilinear"
-        )
+            )
+
+#            ax.imshow(
+#                img,
+##                extent=(ros_ymin, ros_ymax, ros_xmin, ros_xmax), 
+ ##               zorder=0,
+   #             interpolation="bilinear"
+    #        )
 
         # グリッド描画（横=X, 縦=Y）
         for a in areas:
@@ -73,15 +89,15 @@ class PlotRenderer:
                 aabb.ymax - aabb.ymin,           # 横幅 = ΔY
                 aabb.xmax - aabb.xmin,           # 縦幅 = ΔX
                 linewidth=0, facecolor=face_rgba, zorder=2
-)
+            )
             ax.add_patch(rect)
 
         # 風ベクトルスケール
         mags = []
         for a in areas:
             if a.wind_velocity:
-                wx, wy, wz = a.wind_velocity
-                mags.append((wx**2 + wy**2 + wz**2) ** 0.5)
+                vx, vy, vz = a.wind_velocity  # ROS: North(+), West(+), Up(+)
+                mags.append((vx*vx + vy*vy + vz*vz) ** 0.5)
         max_mag = max(mags) if mags else 1.0
         cell_dx = min(a.aabb2d.xmax - a.aabb2d.xmin for a in areas)
         cell_dy = min(a.aabb2d.ymax - a.aabb2d.ymin for a in areas)
@@ -89,17 +105,18 @@ class PlotRenderer:
 
         for a in areas:
             if a.wind_velocity:
-                wx, wy, wz = a.wind_velocity  # ENU風速 (x=北+, y=西+)
-                mag = (wx**2 + wy**2 + wz**2) ** 0.5
-                if mag > 1e-6:
-                    cx, cy = a.aabb2d.center()  # (x, y) in ENU
-                    # プロット座標系に合わせて (y, x) で配置
-                    ax.arrow(cy, cx,
-                            wy * s,   # 横成分 (Y軸方向)
-                            wx * s,   # 縦成分 (X軸方向)
-                            head_width=0.5*s, head_length=0.25*s,
-                            fc="yellow", ec="yellow", length_includes_head=True, zorder=4)
+                vx, vy, vz = a.wind_velocity           # vx:North, vy:West, vz:Up
+                x_north, y_west = a.aabb2d.center()    # (X_ros, Y_ros)
+                # 描画座標は (x=西, y=北) なので：
+                start_x = y_west
+                start_y = x_north
+                dx = -vy * s     # 西(+)方向
+                dy = vx * s     # 北(+)方向
 
+                ax.arrow(start_x, start_y, dx, dy,
+                        head_width=0.5*s, head_length=0.25*s,
+                        fc="yellow", ec="yellow",
+                        length_includes_head=True, zorder=4)
 
         # マーカー
         for m in markers or []:
@@ -122,8 +139,8 @@ class PlotRenderer:
         ax.set_ylim(xmin - 1.0, xmax + 1.0)
         #ax.invert_xaxis()
         ax.set_aspect("equal", adjustable="box")
-        ax.set_xlabel("N [m]")
-        ax.set_ylabel("E [m]")
+        ax.set_xlabel("E [m]")
+        ax.set_ylabel("N [m]")
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm); sm.set_array([])
         cbar = plt.colorbar(sm, ax=ax, fraction=0.035, pad=0.02); cbar.set_label(cbar_label)
         plt.tight_layout(); plt.show()
