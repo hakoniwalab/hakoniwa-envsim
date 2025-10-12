@@ -39,16 +39,18 @@ class CreatorBuilder:
     # ---- Step2: グリッド → area.json --------------------------------------
     def build_grid(self) -> "CreatorBuilder":
         grid = self.env["grid"]
-        extent_x, extent_y, extent_z = map(float, grid["extent_m"])
+        min_x, min_y, min_z = map(float, grid.get("min", [0.0, 0.0, 0.0]))
+        max_x, max_y, max_z = map(float, grid.get("max", [0.0, 0.0, 0.0]))
         dx, dy, dz = map(float, grid["cell_m"])
-        nx, ny = int(extent_x // dx), int(extent_y // dy)
+        nx, ny = int((max_x - min_x) // dx), int((max_y - min_y) // dy)
 
         for iy in range(ny):
             for ix in range(nx):
                 aid = f"area_{iy}_{ix}"
-                xmin, xmax = ix * dx, (ix + 1) * dx
-                ymin, ymax = iy * dy, (iy + 1) * dy
-                zmin, zmax = 0.0, extent_z
+                xmin, xmax = min_x + ix * dx, min_x + (ix + 1) * dx
+                ymin, ymax = min_y + iy * dy, min_y + (iy + 1) * dy
+                zmin, zmax = min_z, min_z + dz
+                #print(f"minx={xmin} miny={ymin} -> area_id={aid}")
                 self.areas.append({
                     "area_id": aid,
                     "bounds": {
