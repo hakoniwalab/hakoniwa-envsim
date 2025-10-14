@@ -12,7 +12,7 @@
     {
       "id": "prop_area_2",
       "properties": {
-        "wind_velocity": [0.0, -4.0, 0.0],
+        "wind_velocity": [0.0, -1.0, 0.0],
         "temperature": -15.0,
         "sea_level_atm": 1.1,
         "gps_strength": 1.0
@@ -21,7 +21,7 @@
     {
       "id": "prop_area_3",
       "properties": {
-        "wind_velocity": [-4.0, 4.0, 0.0],
+        "wind_velocity": [-1.0, 1.0, 0.0],
         "temperature": 55.0,
         "sea_level_atm": 0.8,
         "gps_strength": 0.9
