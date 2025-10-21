@@ -8,6 +8,7 @@ from hakoniwa_pdu.pdu_msgs.geometry_msgs.pdu_pytype_Twist import Twist
 from hakoniwa_pdu.pdu_msgs.geometry_msgs.pdu_conv_Twist import pdu_to_py_Twist
 from hakoniwa_pdu.pdu_msgs.hako_msgs.pdu_pytype_Disturbance import Disturbance
 from hakoniwa_pdu.pdu_msgs.hako_msgs.pdu_conv_Disturbance import py_to_pdu_Disturbance
+from hakoniwa_pdu.pdu_msgs.hako_msgs.pdu_pytype_DisturbanceUserCustom import DisturbanceUserCustom
 
 POS_ORG = "pos"
 DISTURB_ORG = "disturb"
@@ -92,5 +93,12 @@ class DroneIO:
         atm = props.get("sea_level_atm")
         if atm is not None:
             d.d_atm.sea_level_atm = float(atm)
+
+        gp_strength = props.get("gps_strength")
+        if gp_strength is not None:
+            #print(f"[EnvAsset] Setting gps_strength={gp_strength} for disturbance")
+            user_custom = DisturbanceUserCustom()
+            user_custom.data = [float(gp_strength)]
+            d.d_user_custom = [user_custom]
 
         return d
