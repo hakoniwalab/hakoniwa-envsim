@@ -3,7 +3,7 @@
     {
       "id": "prop_area_1",
       "properties": {
-        "wind_velocity": [-4.0, 0.0, 0.0],
+        "wind_velocity": [0.0, 0.0, 0.0],
         "temperature": 10.5,
         "sea_level_atm": 0.98,
         "gps_strength": 0.9
