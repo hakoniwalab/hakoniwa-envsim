@@ -145,6 +145,8 @@ def extract_buildings_lod1(gml_path, to_epsg=None, src_epsg=4326, base_eps=0.2, 
     tree = ET.parse(gml_path)
     root = tree.getroot()
 
+    print(f"[INFO] Processing GML: {gml_path}")
+    #print("elements of root:", [elem.tag for elem in root])
     results = []
     # CityGMLでは bldg:Building 要素が親。複数棟あればループで拾う
     for bldg in root.findall(".//bldg:Building", NS):
@@ -156,6 +158,7 @@ def extract_buildings_lod1(gml_path, to_epsg=None, src_epsg=4326, base_eps=0.2, 
         pos_texts = bldg.findall(".//bldg:lod1Solid//gml:LinearRing/gml:posList", NS)
         if not pos_texts:
             # LOD1 が無い建物はスキップ
+            #print(f"[WARN] Building {bid} has no LOD1 data, skipped.")
             continue
 
         pts_all = []
@@ -164,6 +167,7 @@ def extract_buildings_lod1(gml_path, to_epsg=None, src_epsg=4326, base_eps=0.2, 
             pts_all.extend(pts)
 
         if not pts_all:
+            #print(f"[WARN] Building {bid} has no position data, skipped.")
             continue
 
         # (lat,lon,z) -> (x,y,z) へ（デフォは (lon,lat) に並べ替え）

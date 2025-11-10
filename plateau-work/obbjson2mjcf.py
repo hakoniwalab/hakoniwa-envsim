@@ -123,6 +123,8 @@ def make_mjcf(
             "pos":  f"{f4(cx)} {f4(cy)} {f4(cz)}",
             "euler": f"0 0 {f4(yaw)}",
             "rgba": " ".join(map(f4, rgba)),
+            "contype": "1",
+            "conaffinity": "0"
         }
         # 衝突設定
         if collide_mode == "none":
