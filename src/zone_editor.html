@@ -3,16 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hakoniwa Env Zone Editor + Compass Wind</title>
+  <title>Hakoniwa Env Zone Editor + FROM/TO Arrow Toggle</title>
 
-  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <!-- Leaflet.draw CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
 
   <style>
     html, body { height: 100%; margin: 0; }
-    #app { display: grid; grid-template-columns: 360px 1fr; height: 100%; }
+    #app { display: grid; grid-template-columns: 400px 1fr; height: 100%; }
     #sidebar {
       padding: 12px; border-right: 1px solid #ddd; overflow:auto; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
     }
@@ -57,6 +55,9 @@
     }
     .compass-info { font-size:12px; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    .toolbar { display:flex; align-items:center; gap:8px; font-size:12px; flex-wrap: wrap; }
+    .toolbar label { display:inline; margin:0; }
+    .sep { flex: 1 0 100%; height: 0; }
   </style>
 </head>
 <body>
@@ -64,6 +65,7 @@
   <div id="sidebar">
     <h1>Hakoniwa Env Zone Editor</h1>
     <div class="hint">矩形/円を描いてゾーン属性（名前・風・GPS・優先度）を設定→JSON出力。</div>
+
     <fieldset>
       <legend>原点（起動点）</legend>
       <label>Origin Lat</label>
@@ -84,9 +86,18 @@
     </fieldset>
 
     <fieldset>
-      <legend>ゾーン設定（描画後に適用）</legend>
+      <legend>ゾーン設定（選択でロード・編集可）</legend>
+      <div class="toolbar">
+        <input type="checkbox" id="auto-apply" checked>
+        <label for="auto-apply">入力変更を自動で適用</label>
+        <span class="sep"></span>
+        <label>地図矢印表示:</label>
+        <label><input type="radio" name="arrowMode" value="from" checked> FROM (コンパスと同じ)</label>
+        <label><input type="radio" name="arrowMode" value="to"> TO（流れる方向）</label>
+      </div>
       <label>名前</label>
       <input id="zone-name" type="text" placeholder="block1">
+
       <div class="row">
         <div>
           <label>優先度 priority</label>
@@ -97,6 +108,7 @@
           <input id="zone-gps" type="number" step="0.05" min="0" max="1" value="0.8">
         </div>
       </div>
+
       <div class="row">
         <div>
           <label>風速 (m/s)</label>
@@ -108,7 +120,6 @@
         </div>
       </div>
 
-      <!-- Compass Control -->
       <div class="compass-wrap">
         <div id="compass" class="compass" title="クリック/ドラッグで風向(気象方位:どこから吹く)を設定">
           <div class="label N">N</div>
@@ -128,8 +139,10 @@
         </div>
       </div>
 
-      <button id="btn-apply">選択図形に適用</button>
-      <button id="btn-delete">選択図形を削除</button>
+      <div style="margin-top:6px;">
+        <button id="btn-apply">選択図形に適用</button>
+        <button id="btn-delete">選択図形を削除</button>
+      </div>
     </fieldset>
 
     <fieldset>
@@ -148,41 +161,38 @@
   <div id="map"></div>
 </div>
 
-<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- Leaflet.draw JS -->
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 
 <script>
-// --- Utility: small-area ENU meters from lat/lon relative to origin ---
 function deg2rad(d){return d*Math.PI/180;}
 function rad2deg(r){return r*180/Math.PI;}
-function metersPerDegLat(){ return 111320.0; } // near-Tokyo is fine
+function metersPerDegLat(){ return 111320.0; }
 function metersPerDegLon(lat){ return 111320.0 * Math.cos(deg2rad(lat)); }
-
 function latlonToENU(originLat, originLon, lat, lon){
   const dLat = lat - originLat;
   const dLon = lon - originLon;
-  const mx = dLon * metersPerDegLon(originLat); // East
-  const my = dLat * metersPerDegLat();          // North
+  const mx = dLon * metersPerDegLon(originLat);
+  const my = dLat * metersPerDegLat();
   return [mx, my];
 }
-
+function ENUToLatLon(originLat, originLon, x, y){
+  const dLat = y / metersPerDegLat();
+  const dLon = x / metersPerDegLon(originLat);
+  return [originLat + dLat, originLon + dLon];
+}
 function windFromDirectionToENU(speed, metDirDeg){
-  // meteorological: coming from 'metDirDeg' (0=N,90=E)
   const flowTo = (metDirDeg + 180.0) % 360.0;
   const r = deg2rad(flowTo);
-  const vx = Math.sin(r) * speed; // East
-  const vy = Math.cos(r) * speed; // North
+  const vx = Math.sin(r) * speed;
+  const vy = Math.cos(r) * speed;
   return [vx, vy, 0.0];
 }
 
-// --- Map init ---
 const map = L.map('map', { preferCanvas: true });
 const originLatInput = document.getElementById('origin-lat');
 const originLonInput = document.getElementById('origin-lon');
 const initZoomInput  = document.getElementById('init-zoom');
-
 function centerMap(){
   const lat = parseFloat(originLatInput.value);
   const lon = parseFloat(originLonInput.value);
@@ -196,7 +206,6 @@ L.control.scale().addTo(map);
 centerMap();
 document.getElementById('btn-center').onclick = centerMap;
 
-// --- Draw controls ---
 const drawnItems = new L.FeatureGroup();
 map.addLayer(drawnItems);
 
@@ -214,19 +223,24 @@ const drawControl = new L.Control.Draw({
 map.addControl(drawControl);
 
 let selectedLayer = null;
+const arrowLayerGroup = L.layerGroup().addTo(map);
 
-// Selection handling
 map.on(L.Draw.Event.CREATED, function (e) {
   const layer = e.layer;
   drawnItems.addLayer(layer);
   selectLayer(layer);
   refreshZoneList();
+  renderArrows();
 });
 map.on('draw:edited', function(e){
   refreshZoneList();
+  renderArrows();
+});
+map.on('draw:deleted', function(e){
+  refreshZoneList();
+  renderArrows();
 });
 map.on('click', function(e){
-  // simple hit-test selection
   let found = null;
   drawnItems.eachLayer(function(layer){
     if (layer.getBounds && layer.getBounds().contains(e.latlng)) {
@@ -240,15 +254,28 @@ function selectLayer(layer){
   clearSelection();
   selectedLayer = layer;
   if (selectedLayer.setStyle) selectedLayer.setStyle({ weight: 4 });
+  const m = selectedLayer._hakoniwa || {};
+  zoneName.value     = m.name     ?? '';
+  zonePriority.value = m.priority ?? 1;
+  zoneGPS.value      = m.gpsAbs   ?? 0.8;
+  zoneWindSpd.value  = m.windSpd  ?? 3.0;
+  setDirectionDeg( Number.isFinite(m.windDir) ? m.windDir : 225 );
+  refreshZoneList();
+  renderArrows();
 }
 function clearSelection(){
   if (selectedLayer && selectedLayer.setStyle) selectedLayer.setStyle({ weight: 2 });
   selectedLayer = null;
 }
 
-// --- Compass Control ---
-const windDirInput = document.getElementById('zone-wind-dir');
-const windSpdInput = document.getElementById('zone-wind-speed');
+const zoneName     = document.getElementById('zone-name');
+const zonePriority = document.getElementById('zone-priority');
+const zoneGPS      = document.getElementById('zone-gps');
+const zoneWindSpd  = document.getElementById('zone-wind-speed');
+const zoneWindDir  = document.getElementById('zone-wind-dir');
+const autoApply    = document.getElementById('auto-apply');
+const arrowModeRadios = document.querySelectorAll('input[name="arrowMode"]');
+
 const needle = document.getElementById('needle');
 const dirDegEl = document.getElementById('dir-deg');
 const vecPreviewEl = document.getElementById('vec-preview');
@@ -258,13 +285,14 @@ const btnSnap45 = document.getElementById('btn-snap-45');
 function updateCompassVisual(deg){
   needle.style.transform = `translate(-50%, -100%) rotate(${deg}deg)`;
   dirDegEl.textContent = Math.round(deg);
-  const v = windFromDirectionToENU(parseFloat(windSpdInput.value||"0"), deg);
+  const v = windFromDirectionToENU(parseFloat(zoneWindSpd.value||"0"), deg);
   vecPreviewEl.textContent = `[${v[0].toFixed(2)}, ${v[1].toFixed(2)}, 0]`;
 }
 function setDirectionDeg(deg){
   deg = (deg%360+360)%360;
-  windDirInput.value = deg.toFixed(0);
+  zoneWindDir.value = deg.toFixed(0);
   updateCompassVisual(deg);
+  if (autoApply.checked) applyToSelected();
 }
 function getCenter(el){
   const r = el.getBoundingClientRect();
@@ -283,36 +311,51 @@ compassEl.addEventListener('pointerdown', e=>{ dragging=true; compassEl.setPoint
 compassEl.addEventListener('pointermove', e=>{ if(dragging) handlePointer(e); });
 compassEl.addEventListener('pointerup',   e=>{ dragging=false; try{compassEl.releasePointerCapture(e.pointerId);}catch{} });
 compassEl.addEventListener('pointerleave',e=>{ dragging=false; });
-windDirInput.addEventListener('input', e=>{ setDirectionDeg(parseFloat(e.target.value||"0")); });
-windSpdInput.addEventListener('input', e=>{ updateCompassVisual(parseFloat(windDirInput.value||"0")); });
+zoneWindDir.addEventListener('input', e=>{ setDirectionDeg(parseFloat(e.target.value||"0")); });
+zoneWindSpd.addEventListener('input', e=>{ updateCompassVisual(parseFloat(zoneWindDir.value||"0")); if (autoApply.checked) applyToSelected(); });
+zoneName.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
+zonePriority.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
+zoneGPS.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
 btnSnap45.addEventListener('click', ()=>{
-  const v = parseFloat(windDirInput.value||"0");
+  const v = parseFloat(zoneWindDir.value||"0");
   const snapped = Math.round(v/45)*45;
   setDirectionDeg(snapped);
 });
-setDirectionDeg(parseFloat(windDirInput.value||"225"));
+arrowModeRadios.forEach(r=>r.addEventListener('change', ()=>renderArrows()));
 
-// --- Apply attributes to selected shape ---
-document.getElementById('btn-apply').onclick = function(){
-  if (!selectedLayer){ alert('図形を選択してください'); return; }
-  const name = document.getElementById('zone-name').value || 'zone';
-  const priority = parseInt(document.getElementById('zone-priority').value || "1", 10);
-  const gpsAbs = parseFloat(document.getElementById('zone-gps').value || "0.8");
-  const windDir = parseFloat(document.getElementById('zone-wind-dir').value || "225");
-  const windSpd = parseFloat(document.getElementById('zone-wind-speed').value || "3.0");
+setDirectionDeg(parseFloat(zoneWindDir.value||"225"));
 
-  selectedLayer._hakoniwa = {
-    name, priority, gpsAbs, windDir, windSpd
-  };
-  refreshZoneList();
-};
-
+document.getElementById('btn-apply').onclick = function(){ applyToSelected(true); };
 document.getElementById('btn-delete').onclick = function(){
   if (!selectedLayer){ alert('図形を選択してください'); return; }
   drawnItems.removeLayer(selectedLayer);
   selectedLayer = null;
   refreshZoneList();
+  renderArrows();
 };
+
+function applyToSelected(force=false){
+  if (!selectedLayer) return;
+  selectedLayer._hakoniwa = {
+    name: zoneName.value || 'zone',
+    priority: parseInt(zonePriority.value || "1", 10),
+    gpsAbs: parseFloat(zoneGPS.value || "0.8"),
+    windDir: parseFloat(zoneWindDir.value || "225"),
+    windSpd: parseFloat(zoneWindSpd.value || "3.0")
+  };
+  refreshZoneList();
+  renderArrows();
+}
+
+function layerCenterLatLng(layer){
+  if (layer instanceof L.Rectangle){
+    return layer.getBounds().getCenter();
+  } else if (layer instanceof L.Circle){
+    return layer.getLatLng();
+  } else {
+    return null;
+  }
+}
 
 function layerToZoneJSON(layer){
   const originLat = parseFloat(originLatInput.value);
@@ -321,10 +364,7 @@ function layerToZoneJSON(layer){
   const base = {
     name: meta.name || 'zone',
     priority: (meta.priority != null ? meta.priority : 1),
-    effect: {
-      mode: "absolute",
-      gps_abs: (meta.gpsAbs != null ? meta.gpsAbs : 0.8)
-    }
+    effect: { mode: "absolute", gps_abs: (meta.gpsAbs != null ? meta.gpsAbs : 0.8) }
   };
   const v = windFromDirectionToENU((meta.windSpd||3.0), (meta.windDir||225));
   base.effect.wind_ms = [ Number(v[0].toFixed(3)), Number(v[1].toFixed(3)), 0.0 ];
@@ -342,9 +382,7 @@ function layerToZoneJSON(layer){
     const r = layer.getRadius();
     const enuC = latlonToENU(originLat, originLon, c.lat, c.lng);
     base.shape = { circle: { center_m: [round(enuC[0]), round(enuC[1])], radius_m: round(r) } };
-  } else {
-    return null;
-  }
+  } else { return null; }
   return base;
 }
 
@@ -375,7 +413,6 @@ function exportJSON(){
 document.getElementById('btn-export').onclick = function(){
   document.getElementById('output').value = exportJSON();
 };
-
 document.getElementById('btn-download').onclick = function(){
   const blob = new Blob([exportJSON()], {type: "application/json"});
   const url = URL.createObjectURL(blob);
@@ -403,6 +440,36 @@ function refreshZoneList(){
     idx++;
   });
   list.innerHTML = html || "<i>なし</i>";
+}
+
+function renderArrows(){
+  arrowLayerGroup.clearLayers();
+  const originLat = parseFloat(originLatInput.value);
+  const originLon = parseFloat(originLonInput.value);
+  const mode = document.querySelector('input[name="arrowMode"]:checked').value; // 'from' | 'to'
+
+  drawnItems.eachLayer(function(layer){
+    if (!layer._hakoniwa) return;
+    const m = layer._hakoniwa;
+    const v_to = windFromDirectionToENU((m.windSpd||0), (m.windDir||0)); // ENU (to)
+    const v = (mode === 'from') ? [-v_to[0], -v_to[1], 0] : v_to; // FROMは反転
+    const scale = 10;
+    const center = layerCenterLatLng(layer);
+    if (!center) return;
+
+    const enuStart = latlonToENU(originLat, originLon, center.lat, center.lng);
+    const enuEnd = [ enuStart[0] + v[0]*scale, enuStart[1] + v[1]*scale ];
+    const [endLat, endLon] = ENUToLatLon(originLat, originLon, enuEnd[0], enuEnd[1]);
+
+    L.polyline([[center.lat, center.lng], [endLat, endLon]], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
+
+    const angle = Math.atan2(endLon - center.lng, endLat - center.lat);
+    const headLen = 0.0001;
+    const left = [ endLat - headLen*Math.cos(angle - Math.PI/6), endLon - headLen*Math.sin(angle - Math.PI/6) ];
+    const right= [ endLat - headLen*Math.cos(angle + Math.PI/6), endLon - headLen*Math.sin(angle + Math.PI/6) ];
+    L.polyline([[endLat, endLon], left], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
+    L.polyline([[endLat, endLon], right], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
+  });
 }
 </script>
 </body>
