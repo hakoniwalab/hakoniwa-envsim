@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hakoniwa Env Zone Editor (Rect/Circle → JSON)</title>
+  <title>Hakoniwa Env Zone Editor + Compass Wind</title>
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -12,7 +12,7 @@
 
   <style>
     html, body { height: 100%; margin: 0; }
-    #app { display: grid; grid-template-columns: 320px 1fr; height: 100%; }
+    #app { display: grid; grid-template-columns: 360px 1fr; height: 100%; }
     #sidebar {
       padding: 12px; border-right: 1px solid #ddd; overflow:auto; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
     }
@@ -28,13 +28,42 @@
     .hint { color:#666; font-size:12px; }
     textarea { width:100%; height:160px; }
     .zone-list { font-size: 12px; }
+    .compass-wrap { display:flex; align-items:center; gap:12px; }
+    .compass {
+      width: 120px; height: 120px;
+      border-radius: 50%; position: relative; user-select: none;
+      border: 1px solid #bbb; background: radial-gradient(#fff, #f5f5f5);
+      box-shadow: inset 0 0 8px rgba(0,0,0,0.08);
+      touch-action: none;
+    }
+    .compass .label { position:absolute; font-size:10px; color:#666; }
+    .compass .N { top:2px; left:50%; transform:translateX(-50%); }
+    .compass .S { bottom:2px; left:50%; transform:translateX(-50%); }
+    .compass .E { right:2px; top:50%; transform:translateY(-50%); }
+    .compass .W { left:2px; top:50%; transform:translateY(-50%); }
+    .needle {
+      position:absolute; left:50%; top:50%;
+      width: 2px; height: 42%;
+      background:#d35400; transform-origin: center calc(100%);
+      transform: translate(-50%, -100%) rotate(0deg);
+      border-radius: 2px;
+      box-shadow: 0 0 2px rgba(0,0,0,0.3);
+    }
+    .center-dot {
+      position:absolute; left:50%; top:50%;
+      width:8px; height:8px; background:#d35400; border-radius:50%;
+      transform: translate(-50%,-50%);
+      box-shadow: 0 0 2px rgba(0,0,0,0.3);
+    }
+    .compass-info { font-size:12px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
   </style>
 </head>
 <body>
 <div id="app">
   <div id="sidebar">
     <h1>Hakoniwa Env Zone Editor</h1>
-    <div class="hint">矩形/円を描いて、ゾーン属性（名前・風・GPS・優先度）を設定→JSON出力。</div>
+    <div class="hint">矩形/円を描いてゾーン属性（名前・風・GPS・優先度）を設定→JSON出力。</div>
     <fieldset>
       <legend>原点（起動点）</legend>
       <label>Origin Lat</label>
@@ -70,15 +99,35 @@
       </div>
       <div class="row">
         <div>
-          <label>風向 (気象方位, 度)</label>
-          <input id="zone-wind-dir" type="number" step="1" value="225">
-        </div>
-        <div>
           <label>風速 (m/s)</label>
           <input id="zone-wind-speed" type="number" step="0.1" value="3.0">
         </div>
+        <div>
+          <label>風向 (気象方位, °)</label>
+          <input id="zone-wind-dir" class="mono" type="number" step="1" value="225">
+        </div>
       </div>
-      <div class="hint">※気象方位=どこから吹く。ベクトルは自動計算（ENU）。</div>
+
+      <!-- Compass Control -->
+      <div class="compass-wrap">
+        <div id="compass" class="compass" title="クリック/ドラッグで風向(気象方位:どこから吹く)を設定">
+          <div class="label N">N</div>
+          <div class="label E">E</div>
+          <div class="label S">S</div>
+          <div class="label W">W</div>
+          <div class="needle" id="needle"></div>
+          <div class="center-dot"></div>
+        </div>
+        <div class="compass-info">
+          <div>気象方位（FROM）: <span id="dir-deg" class="mono">225</span>°</div>
+          <div>ENUベクトル (to): <span id="vec-preview" class="mono">[?, ?, 0]</span></div>
+          <div class="hint">※北=0°, 東=90°。FROM→TOへ自動変換</div>
+          <div style="margin-top:6px;">
+            <button id="btn-snap-45">45°刻みにスナップ</button>
+          </div>
+        </div>
+      </div>
+
       <button id="btn-apply">選択図形に適用</button>
       <button id="btn-delete">選択図形を削除</button>
     </fieldset>
@@ -107,6 +156,7 @@
 <script>
 // --- Utility: small-area ENU meters from lat/lon relative to origin ---
 function deg2rad(d){return d*Math.PI/180;}
+function rad2deg(r){return r*180/Math.PI;}
 function metersPerDegLat(){ return 111320.0; } // near-Tokyo is fine
 function metersPerDegLon(lat){ return 111320.0 * Math.cos(deg2rad(lat)); }
 
@@ -196,6 +246,52 @@ function clearSelection(){
   selectedLayer = null;
 }
 
+// --- Compass Control ---
+const windDirInput = document.getElementById('zone-wind-dir');
+const windSpdInput = document.getElementById('zone-wind-speed');
+const needle = document.getElementById('needle');
+const dirDegEl = document.getElementById('dir-deg');
+const vecPreviewEl = document.getElementById('vec-preview');
+const compassEl = document.getElementById('compass');
+const btnSnap45 = document.getElementById('btn-snap-45');
+
+function updateCompassVisual(deg){
+  needle.style.transform = `translate(-50%, -100%) rotate(${deg}deg)`;
+  dirDegEl.textContent = Math.round(deg);
+  const v = windFromDirectionToENU(parseFloat(windSpdInput.value||"0"), deg);
+  vecPreviewEl.textContent = `[${v[0].toFixed(2)}, ${v[1].toFixed(2)}, 0]`;
+}
+function setDirectionDeg(deg){
+  deg = (deg%360+360)%360;
+  windDirInput.value = deg.toFixed(0);
+  updateCompassVisual(deg);
+}
+function getCenter(el){
+  const r = el.getBoundingClientRect();
+  return { cx: r.left + r.width/2, cy: r.top + r.height/2 };
+}
+function handlePointer(e){
+  const { cx, cy } = getCenter(compassEl);
+  const x = ('clientX' in e) ? e.clientX : (e.touches?.[0]?.clientX||0);
+  const y = ('clientY' in e) ? e.clientY : (e.touches?.[0]?.clientY||0);
+  const ang = Math.atan2(x - cx, cy - y); // 0 at North, CW positive
+  const deg = (rad2deg(ang)+360)%360;
+  setDirectionDeg(deg);
+}
+let dragging = false;
+compassEl.addEventListener('pointerdown', e=>{ dragging=true; compassEl.setPointerCapture(e.pointerId); handlePointer(e); });
+compassEl.addEventListener('pointermove', e=>{ if(dragging) handlePointer(e); });
+compassEl.addEventListener('pointerup',   e=>{ dragging=false; try{compassEl.releasePointerCapture(e.pointerId);}catch{} });
+compassEl.addEventListener('pointerleave',e=>{ dragging=false; });
+windDirInput.addEventListener('input', e=>{ setDirectionDeg(parseFloat(e.target.value||"0")); });
+windSpdInput.addEventListener('input', e=>{ updateCompassVisual(parseFloat(windDirInput.value||"0")); });
+btnSnap45.addEventListener('click', ()=>{
+  const v = parseFloat(windDirInput.value||"0");
+  const snapped = Math.round(v/45)*45;
+  setDirectionDeg(snapped);
+});
+setDirectionDeg(parseFloat(windDirInput.value||"225"));
+
 // --- Apply attributes to selected shape ---
 document.getElementById('btn-apply').onclick = function(){
   if (!selectedLayer){ alert('図形を選択してください'); return; }
@@ -230,27 +326,23 @@ function layerToZoneJSON(layer){
       gps_abs: (meta.gpsAbs != null ? meta.gpsAbs : 0.8)
     }
   };
-  // wind
   const v = windFromDirectionToENU((meta.windSpd||3.0), (meta.windDir||225));
   base.effect.wind_ms = [ Number(v[0].toFixed(3)), Number(v[1].toFixed(3)), 0.0 ];
 
   if (layer instanceof L.Rectangle){
     const b = layer.getBounds();
-    // Convert SW/NE corners to ENU meters
     const sw = b.getSouthWest(), ne = b.getNorthEast();
     const enuSW = latlonToENU(originLat, originLon, sw.lat, sw.lng);
     const enuNE = latlonToENU(originLat, originLon, ne.lat, ne.lng);
-    // Normalize to min/max
     const minx = Math.min(enuSW[0], enuNE[0]), maxx = Math.max(enuSW[0], enuNE[0]);
     const miny = Math.min(enuSW[1], enuNE[1]), maxy = Math.max(enuSW[1], enuNE[1]);
     base.shape = { rect: { min_m: [round(minx), round(miny)], max_m: [round(maxx), round(maxy)] } };
   } else if (layer instanceof L.Circle){
     const c = layer.getLatLng();
-    const r = layer.getRadius(); // meters
+    const r = layer.getRadius();
     const enuC = latlonToENU(originLat, originLon, c.lat, c.lng);
     base.shape = { circle: { center_m: [round(enuC[0]), round(enuC[1])], radius_m: round(r) } };
   } else {
-    // unsupported
     return null;
   }
   return base;
