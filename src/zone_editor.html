@@ -201,22 +201,26 @@
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script>
 // ---------- Math & Conversion ----------
+// Web Mercator (EPSG:3857) projection, compatible with python's pyproj implementation.
+const proj = L.CRS.EPSG3857;
 function deg2rad(d){return d*Math.PI/180;}
 function rad2deg(r){return r*180/Math.PI;}
-function metersPerDegLat(){ return 111320.0; }
-function metersPerDegLon(lat){ return 111320.0 * Math.cos(deg2rad(lat)); }
-function latlonToENU(originLat, originLon, lat, lon){
-  const dLat = lat - originLat;
-  const dLon = lon - originLon;
-  const mx = dLon * metersPerDegLon(originLat);
-  const my = dLat * metersPerDegLat();
+
+function latlonToENU(originLat, originLon, lat, lon) {
+  const originPt = proj.project(L.latLng(originLat, originLon));
+  const targetPt = proj.project(L.latLng(lat, lon));
+  const mx = targetPt.x - originPt.x; // East
+  const my = targetPt.y - originPt.y; // North
   return [mx, my];
 }
-function ENUToLatLon(originLat, originLon, x, y){
-  const dLat = y / metersPerDegLat();
-  const dLon = x / metersPerDegLon(originLat);
-  return [originLat + dLat, originLon + dLon];
+
+function ENUToLatLon(originLat, originLon, x, y) {
+  const originPt = proj.project(L.latLng(originLat, originLon));
+  const targetPt = L.point(originPt.x + x, originPt.y + y);
+  const latlng = proj.unproject(targetPt);
+  return [latlng.lat, latlng.lng];
 }
+
 // ENU -> ROS
 function enuToRosFrame(enu_x, enu_y, enu_z) {
   // ENU (East, North, Up) -> ROS (X forward, Y left, Z up)
@@ -275,11 +279,19 @@ const map = L.map('map', { preferCanvas: true });
 const originLatInput = document.getElementById('origin-lat');
 const originLonInput = document.getElementById('origin-lon');
 const initZoomInput  = document.getElementById('init-zoom');
+let originMarker = null;
+
 function centerMap(){
   const lat = parseFloat(originLatInput.value);
   const lon = parseFloat(originLonInput.value);
   const zoom = parseInt(initZoomInput.value || "15", 10);
   map.setView([lat, lon], zoom);
+  if (!originMarker) {
+    originMarker = L.marker([lat, lon]).addTo(map)
+      .bindTooltip("Origin", { permanent: false, direction: 'top' });
+  } else {
+    originMarker.setLatLng([lat, lon]);
+  }
 }
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
@@ -287,6 +299,8 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 L.control.scale().addTo(map);
 centerMap();
 document.getElementById('btn-center').onclick = centerMap;
+originLatInput.addEventListener('input', centerMap);
+originLonInput.addEventListener('input', centerMap);
 
 // ---------- Draw controls ----------
 const drawnItems = new L.FeatureGroup();
