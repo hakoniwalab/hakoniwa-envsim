@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hakoniwa Env Zone Editor + FROM/TO Arrow Toggle</title>
+  <title>Hakoniwa Env Zone Editor — ROS JSON Export (TO-consistent)</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
@@ -64,7 +64,7 @@
 <div id="app">
   <div id="sidebar">
     <h1>Hakoniwa Env Zone Editor</h1>
-    <div class="hint">矩形/円を描いてゾーン属性（名前・風・GPS・優先度）を設定→JSON出力。</div>
+    <div class="hint">UIは気象方位（FROM）。描画はTO方向（ENU）。JSONはROS座標・TOベクトルで出力。</div>
 
     <fieldset>
       <legend>原点（起動点）</legend>
@@ -90,10 +90,6 @@
       <div class="toolbar">
         <input type="checkbox" id="auto-apply" checked>
         <label for="auto-apply">入力変更を自動で適用</label>
-        <span class="sep"></span>
-        <label>地図矢印表示:</label>
-        <label><input type="radio" name="arrowMode" value="from" checked> FROM (コンパスと同じ)</label>
-        <label><input type="radio" name="arrowMode" value="to"> TO（流れる方向）</label>
       </div>
       <label>名前</label>
       <input id="zone-name" type="text" placeholder="block1">
@@ -131,7 +127,7 @@
         </div>
         <div class="compass-info">
           <div>気象方位（FROM）: <span id="dir-deg" class="mono">225</span>°</div>
-          <div>ENUベクトル (to): <span id="vec-preview" class="mono">[?, ?, 0]</span></div>
+          <div>ENUベクトル (TO): <span id="vec-preview" class="mono">[?, ?, 0]</span></div>
           <div class="hint">※北=0°, 東=90°。FROM→TOへ自動変換</div>
           <div style="margin-top:6px;">
             <button id="btn-snap-45">45°刻みにスナップ</button>
@@ -147,10 +143,10 @@
 
     <fieldset>
       <legend>エクスポート</legend>
-      <button id="btn-export">JSONを生成</button>
+      <button id="btn-export">JSONを生成（ROS座標）</button>
       <button id="btn-download">ダウンロード</button>
-      <div class="hint">rectは origin を (0,0) とした ENU[m] で min/max を出力。</div>
-      <textarea id="output" placeholder="ここにJSONが出ます"></textarea>
+      <div class="hint">rect/circle も ROS へ座標変換して出力します（meta.axis="ROS"）。</div>
+      <textarea id="output" placeholder="ここにROS座標のJSONが出ます"></textarea>
     </fieldset>
 
     <fieldset>
@@ -181,11 +177,18 @@ function ENUToLatLon(originLat, originLon, x, y){
   const dLon = x / metersPerDegLon(originLat);
   return [originLat + dLat, originLon + dLon];
 }
+function enuToRos3(enu_x, enu_y, enu_z) {
+  return [enu_y, -enu_x, enu_z]; // ENU -> ROS
+}
+function enuToRos2(enu_x, enu_y) {
+  return [ enu_y, -enu_x ];
+}
 function windFromDirectionToENU(speed, metDirDeg){
+  // FROM(deg) -> TO(deg) then ENU vector
   const flowTo = (metDirDeg + 180.0) % 360.0;
   const r = deg2rad(flowTo);
-  const vx = Math.sin(r) * speed;
-  const vy = Math.cos(r) * speed;
+  const vx = Math.sin(r) * speed; // +E
+  const vy = Math.cos(r) * speed; // +N
   return [vx, vy, 0.0];
 }
 
@@ -255,10 +258,10 @@ function selectLayer(layer){
   selectedLayer = layer;
   if (selectedLayer.setStyle) selectedLayer.setStyle({ weight: 4 });
   const m = selectedLayer._hakoniwa || {};
-  zoneName.value     = m.name     ?? '';
-  zonePriority.value = m.priority ?? 1;
-  zoneGPS.value      = m.gpsAbs   ?? 0.8;
-  zoneWindSpd.value  = m.windSpd  ?? 3.0;
+  document.getElementById('zone-name').value     = m.name     ?? '';
+  document.getElementById('zone-priority').value = m.priority ?? 1;
+  document.getElementById('zone-gps').value      = m.gpsAbs   ?? 0.8;
+  document.getElementById('zone-wind-speed').value  = m.windSpd  ?? 3.0;
   setDirectionDeg( Number.isFinite(m.windDir) ? m.windDir : 225 );
   refreshZoneList();
   renderArrows();
@@ -274,7 +277,6 @@ const zoneGPS      = document.getElementById('zone-gps');
 const zoneWindSpd  = document.getElementById('zone-wind-speed');
 const zoneWindDir  = document.getElementById('zone-wind-dir');
 const autoApply    = document.getElementById('auto-apply');
-const arrowModeRadios = document.querySelectorAll('input[name="arrowMode"]');
 
 const needle = document.getElementById('needle');
 const dirDegEl = document.getElementById('dir-deg');
@@ -321,7 +323,6 @@ btnSnap45.addEventListener('click', ()=>{
   const snapped = Math.round(v/45)*45;
   setDirectionDeg(snapped);
 });
-arrowModeRadios.forEach(r=>r.addEventListener('change', ()=>renderArrows()));
 
 setDirectionDeg(parseFloat(zoneWindDir.value||"225"));
 
@@ -366,22 +367,29 @@ function layerToZoneJSON(layer){
     priority: (meta.priority != null ? meta.priority : 1),
     effect: { mode: "absolute", gps_abs: (meta.gpsAbs != null ? meta.gpsAbs : 0.8) }
   };
+
+  // wind: ENU (TO) -> ROS
   const v = windFromDirectionToENU((meta.windSpd||3.0), (meta.windDir||225));
-  base.effect.wind_ms = [ Number(v[0].toFixed(3)), Number(v[1].toFixed(3)), 0.0 ];
+  const ros_v = enuToRos3(v[0], v[1], v[2]);
+  base.effect.wind_ms = [ Number(ros_v[0].toFixed(3)), Number(ros_v[1].toFixed(3)), Number(ros_v[2].toFixed(3)) ];
 
   if (layer instanceof L.Rectangle){
     const b = layer.getBounds();
     const sw = b.getSouthWest(), ne = b.getNorthEast();
     const enuSW = latlonToENU(originLat, originLon, sw.lat, sw.lng);
     const enuNE = latlonToENU(originLat, originLon, ne.lat, ne.lng);
-    const minx = Math.min(enuSW[0], enuNE[0]), maxx = Math.max(enuSW[0], enuNE[0]);
-    const miny = Math.min(enuSW[1], enuNE[1]), maxy = Math.max(enuSW[1], enuNE[1]);
+    // ENU → ROS
+    const [rosSWx, rosSWy] = enuToRos2(enuSW[0], enuSW[1]);
+    const [rosNEx, rosNEy] = enuToRos2(enuNE[0], enuNE[1]);
+    const minx = Math.min(rosSWx, rosNEx), maxx = Math.max(rosSWx, rosNEx);
+    const miny = Math.min(rosSWy, rosNEy), maxy = Math.max(rosSWy, rosNEy);
     base.shape = { rect: { min_m: [round(minx), round(miny)], max_m: [round(maxx), round(maxy)] } };
   } else if (layer instanceof L.Circle){
     const c = layer.getLatLng();
     const r = layer.getRadius();
     const enuC = latlonToENU(originLat, originLon, c.lat, c.lng);
-    base.shape = { circle: { center_m: [round(enuC[0]), round(enuC[1])], radius_m: round(r) } };
+    const [rosCx, rosCy] = enuToRos2(enuC[0], enuC[1]);
+    base.shape = { circle: { center_m: [round(rosCx), round(rosCy)], radius_m: round(r) } };
   } else { return null; }
   return base;
 }
@@ -397,12 +405,12 @@ function exportJSON(){
   const out = {
     version: "0.1",
     meta: {
-      crs: "local-enu",
+      crs: "local-ros",
       origin_latlon: [
         parseFloat(originLatInput.value),
         parseFloat(originLonInput.value)
       ],
-      axis: "ENU",
+      axis: "ROS",
       units: { length: "m", speed: "m/s", temp: "C" }
     },
     zones: zones
@@ -418,7 +426,7 @@ document.getElementById('btn-download').onclick = function(){
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = "env_zones.json";
+  a.download = "env_zones_ros.json";
   a.click();
   URL.revokeObjectURL(url);
 };
@@ -443,22 +451,21 @@ function refreshZoneList(){
 }
 
 function renderArrows(){
+  // Always draw TO direction in ENU
   arrowLayerGroup.clearLayers();
   const originLat = parseFloat(originLatInput.value);
   const originLon = parseFloat(originLonInput.value);
-  const mode = document.querySelector('input[name="arrowMode"]:checked').value; // 'from' | 'to'
 
   drawnItems.eachLayer(function(layer){
     if (!layer._hakoniwa) return;
     const m = layer._hakoniwa;
-    const v_to = windFromDirectionToENU((m.windSpd||0), (m.windDir||0)); // ENU (to)
-    const v = (mode === 'from') ? [-v_to[0], -v_to[1], 0] : v_to; // FROMは反転
-    const scale = 10;
+    const v_to = windFromDirectionToENU((m.windSpd||0), (m.windDir||0)); // ENU (TO)
+    const scale = 50;
     const center = layerCenterLatLng(layer);
     if (!center) return;
 
     const enuStart = latlonToENU(originLat, originLon, center.lat, center.lng);
-    const enuEnd = [ enuStart[0] + v[0]*scale, enuStart[1] + v[1]*scale ];
+    const enuEnd = [ enuStart[0] + v_to[0]*scale, enuStart[1] + v_to[1]*scale ];
     const [endLat, endLon] = ENUToLatLon(originLat, originLon, enuEnd[0], enuEnd[1]);
 
     L.polyline([[center.lat, center.lng], [endLat, endLon]], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
