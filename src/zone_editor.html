@@ -178,10 +178,10 @@
 
       <div style="margin-top:10px;">
         <div class="row" style="align-items:center;">
-          <div><button id="btn-import-text">上のテキストからインポート</button></div>
+          <div><button id="btn-import-text">TextImport</button></div>
           <div style="text-align:right;">
             <input id="file-input" type="file" accept=".json">
-            <button id="btn-import-file">ファイルからインポート</button>
+            <button id="btn-import-file">FileImport</button>
           </div>
         </div>
         <div class="hint">インポート時は meta.axis を見て ROS/ENU のどちらでも復元します。</div>
@@ -636,7 +636,7 @@ function importFromText(){
 
 async function importFromFile(){
   const fi = document.getElementById('file-input');
-  if (!fi.files || fi.files.length === 0){ alert('JSONファイルを選択してください'); return; }
+  if (!fi.files || fi.files.length === 0){ alert('Select'); return; }
   const file = fi.files[0];
   const text = await file.text();
   document.getElementById('output').value = text; // ついでに表示
