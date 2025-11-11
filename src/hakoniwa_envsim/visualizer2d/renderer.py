@@ -63,11 +63,24 @@ class PlotRenderer:
                 f"MercY=[{merc_y_min_m:.3f},{merc_y_max_m:.3f}] ΔY={merc_y_max_m - merc_y_min_m:.3f} m"
             )
 
-            img, _, _ = self.ov.fetch(merc_x_min_m, merc_y_min_m, merc_x_max_m, merc_y_max_m, 100)
+            cell_dx = min(a.aabb2d.xmax - a.aabb2d.xmin for a in areas)
+            cell_dy = min(a.aabb2d.ymax - a.aabb2d.ymin for a in areas)
+            cell_size = min(cell_dx, cell_dy)
+
+            img, extent_wm, _ = self.ov.fetch(
+                merc_x_min_m, merc_y_min_m, merc_x_max_m, merc_y_max_m, cell_size_m=cell_size
+            )
+
+            # Convert Mercator extent back to local ENU coordinates
+            merc_xmin, merc_xmax, merc_ymin, merc_ymax = extent_wm
+            east_min_extent = merc_xmin - merc_origin_x_m - self.p.offset_x
+            east_max_extent = merc_xmax - merc_origin_x_m - self.p.offset_x
+            north_min_extent = merc_ymin - merc_origin_y_m - self.p.offset_y
+            north_max_extent = merc_ymax - merc_origin_y_m - self.p.offset_y
 
             ax.imshow(
                 img,
-                extent=(east_min_m, east_max_m, north_min_m, north_max_m),
+                extent=(east_min_extent, east_max_extent, north_min_extent, north_max_extent),
                 origin="upper",
                 interpolation="bilinear",
                 zorder=0,
