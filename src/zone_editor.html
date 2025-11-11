@@ -1,76 +1,64 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hakoniwa Env Zone Editor — Import/Export(ROS) + Bidirectional Sync</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hakoniwa Env Zone Editor — Sync + Turbulence</title>
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
 
-  <style>
-    html, body { height: 100%; margin: 0; }
-    #app { display: grid; grid-template-columns: 460px 1fr; height: 100%; }
-    #sidebar {
-      padding: 12px; border-right: 1px solid #ddd; overflow:auto; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
-    }
-    #map { width: 100%; height: 100%; }
-    h1 { font-size: 16px; margin: 0 0 8px 0; }
-    fieldset { margin-bottom: 10px; }
-    label { display:block; font-size: 12px; margin: 6px 0 2px; }
-    input[type="text"], input[type="number"], input[type="file"] { width: 100%; padding: 6px; box-sizing: border-box; }
-    .row { display:flex; gap:8px; }
-    .row > div { flex:1; }
-    button { padding: 8px 10px; margin-right: 6px; }
-    .badge { display:inline-block; padding:2px 6px; background:#eee; border-radius: 6px; margin-right: 4px; }
-    .hint { color:#666; font-size:12px; }
-    textarea { width:100%; height:160px; }
-    .zone-list { font-size: 12px; }
-    .compass-wrap { display:flex; align-items:center; gap:12px; }
-    .compass {
-      width: 120px; height: 120px;
-      border-radius: 50%; position: relative; user-select: none;
-      border: 1px solid #bbb; background: radial-gradient(#fff, #f5f5f5);
-      box-shadow: inset 0 0 8px rgba(0,0,0,0.08);
-      touch-action: none;
-    }
-    .compass .label { position:absolute; font-size:10px; color:#666; }
-    .compass .N { top:2px; left:50%; transform:translateX(-50%); }
-    .compass .S { bottom:2px; left:50%; transform:translateX(-50%); }
-    .compass .E { right:2px; top:50%; transform:translateY(-50%); }
-    .compass .W { left:2px; top:50%; transform:translateY(-50%); }
-    .needle {
-      position:absolute; left:50%; top:50%;
-      width: 2px; height: 42%;
-      background:#d35400; transform-origin: center calc(100%);
-      transform: translate(-50%, -100%) rotate(0deg);
-      border-radius: 2px;
-      box-shadow: 0 0 2px rgba(0,0,0,0.3);
-    }
-    .center-dot {
-      position:absolute; left:50%; top:50%;
-      width:8px; height:8px; background:#d35400; border-radius:50%;
-      transform: translate(-50%,-50%);
-      box-shadow: 0 0 2px rgba(0,0,0,0.3);
-    }
-    .compass-info { font-size:12px; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
-    .toolbar { display:flex; align-items:center; gap:8px; font-size:12px; flex-wrap: wrap; }
-    .toolbar label { display:inline; margin:0; }
-    .sep { flex: 1 0 100%; height: 0; }
-    .dropzone {
-      border: 2px dashed #bbb; border-radius: 8px; padding: 10px; text-align: center; color:#666; font-size:12px;
-      margin-top: 6px;
-    }
-    .dropzone.dragover { border-color:#2e86de; color:#2e86de; background:#f0f8ff; }
-    .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  </style>
+<style>
+  html, body { height: 100%; margin: 0; }
+  #app { display: grid; grid-template-columns: 400px 1fr; height: 100%; }
+  #sidebar { padding: 12px; border-right: 1px solid #ddd; overflow: auto;
+             font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif; }
+  #map { height: 100%; width: 100%; }
+  fieldset { margin-bottom: 12px; }
+  label { display:block; font-size: 12px; margin: 6px 0 2px; }
+  input[type="text"], input[type="number"], select { width: 100%; padding: 6px; box-sizing: border-box; }
+  button { padding: 8px 10px; margin-right: 6px; }
+  .row { display:flex; gap:8px; }
+  .row > div { flex:1; }
+  .hint { color:#666; font-size:12px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+  .badge { display:inline-block; padding:2px 6px; background:#eee; border-radius: 6px; margin-right: 4px; }
+  .toolbar { display:flex; align-items:center; gap:8px; font-size:12px; flex-wrap: wrap; }
+  .toolbar label { display:inline; margin:0; }
+  .sep { flex: 1 0 100%; height: 0; }
+
+  /* Compass */
+  .compass-wrap { display:flex; align-items:center; gap:12px; }
+  .compass {
+    width: 120px; height: 120px; border-radius: 50%; position: relative; user-select: none;
+    border: 1px solid #bbb; background: radial-gradient(#fff, #f5f5f5);
+    box-shadow: inset 0 0 8px rgba(0,0,0,0.08); touch-action: none;
+    transition: opacity .15s ease;
+  }
+  .compass .label { position:absolute; font-size:10px; color:#666; }
+  .compass .N { top:2px; left:50%; transform:translateX(-50%); }
+  .compass .S { bottom:2px; left:50%; transform:translateX(-50%); }
+  .compass .E { right:2px; top:50%; transform:translateY(-50%); }
+  .compass .W { left:2px; top:50%; transform:translateY(-50%); }
+  .needle {
+    position:absolute; left:50%; top:50%; width: 2px; height: 42%;
+    background:#d35400; transform-origin: center calc(100%);
+    transform: translate(-50%, -100%) rotate(0deg);
+    border-radius: 2px; box-shadow: 0 0 2px rgba(0,0,0,0.3);
+  }
+  .center-dot { position:absolute; left:50%; top:50%; width:8px; height:8px; background:#d35400;
+                border-radius:50%; transform: translate(-50%,-50%); box-shadow: 0 0 2px rgba(0,0,0,0.3); }
+  .compass-info { font-size:12px; }
+
+  .disabled-note { font-size: 11px; color:#777; margin-top: 4px; }
+</style>
 </head>
 <body>
 <div id="app">
   <div id="sidebar">
     <h1>Hakoniwa Env Zone Editor</h1>
-    <div class="hint">UI=気象FROM / 矢印=TO(ENU) / JSON=ROS(TO)。双方向同期ON。</div>
+    <div class="hint">矩形/円を描いてゾーン属性（名前・風 or 乱流・GPS・優先度）を設定→JSON出力。</div>
 
     <fieldset>
       <legend>原点（起動点）</legend>
@@ -92,18 +80,17 @@
     </fieldset>
 
     <fieldset>
-      <legend>インポート（既存JSON）</legend>
-      <input id="file-input" type="file" accept=".json,application/json">
-      <div id="dropzone" class="dropzone">JSONファイルをドラッグ＆ドロップ</div>
-      <div class="hint">meta.axis: "ROS" or "ENU"（欠落は ENU）</div>
-    </fieldset>
-
-    <fieldset>
       <legend>ゾーン設定（選択でロード・編集可）</legend>
+
       <div class="toolbar">
         <input type="checkbox" id="auto-apply" checked>
         <label for="auto-apply">入力変更を自動で適用</label>
+        <span class="sep"></span>
+        <label>地図矢印表示:</label>
+        <label><input type="radio" name="arrowMode" value="from" checked> FROM (コンパスと同じ)</label>
+        <label><input type="radio" name="arrowMode" value="to"> TO（流れる方向）</label>
       </div>
+
       <label>名前</label>
       <input id="zone-name" type="text" placeholder="block1">
 
@@ -118,34 +105,61 @@
         </div>
       </div>
 
-      <div class="row">
-        <div>
-          <label>風速 (m/s)</label>
-          <input id="zone-wind-speed" type="number" step="0.1" value="3.0">
+      <label>モード</label>
+      <select id="zone-mode">
+        <option value="absolute" selected>absolute（一定風）</option>
+        <option value="turbulence">turbulence（乱流）</option>
+      </select>
+
+      <!-- absolute fields -->
+      <div id="absolute-fields">
+        <div class="row">
+          <div>
+            <label>風速 (m/s)</label>
+            <input id="zone-wind-speed" type="number" step="0.1" value="3.0">
+          </div>
+          <div>
+            <label>風向 (気象方位, °)</label>
+            <input id="zone-wind-dir" class="mono" type="number" step="1" value="225">
+          </div>
         </div>
-        <div>
-          <label>風向 (気象方位, °)</label>
-          <input id="zone-wind-dir" class="mono" type="number" step="1" value="225">
+
+        <div class="compass-wrap">
+          <div id="compass" class="compass" title="クリック/ドラッグで風向(気象方位:どこから吹く)を設定">
+            <div class="label N">N</div>
+            <div class="label E">E</div>
+            <div class="label S">S</div>
+            <div class="label W">W</div>
+            <div class="needle" id="needle"></div>
+            <div class="center-dot"></div>
+          </div>
+          <div class="compass-info">
+            <div>気象方位（FROM）: <span id="dir-deg" class="mono">225</span>°</div>
+            <div>ENUベクトル (to): <span id="vec-preview" class="mono">[?, ?, 0]</span></div>
+            <div class="hint">※北=0°, 東=90°。FROM→TOへ自動変換</div>
+            <div style="margin-top:6px;">
+              <button id="btn-snap-45">45°刻みにスナップ</button>
+            </div>
+            <div id="abs-disabled-note" class="disabled-note" style="display:none;">
+              乱流モードでは一定風の設定は無効です（表示のみ）。
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="compass-wrap">
-        <div id="compass" class="compass" title="クリック/ドラッグで風向(気象方位:どこから吹く)を設定">
-          <div class="label N">N</div>
-          <div class="label E">E</div>
-          <div class="label S">S</div>
-          <div class="label W">W</div>
-          <div class="needle" id="needle"></div>
-          <div class="center-dot"></div>
-        </div>
-        <div class="compass-info">
-          <div>気象方位（FROM）: <span id="dir-deg" class="mono">225</span>°</div>
-          <div>ENUベクトル (TO): <span id="vec-preview" class="mono">[?, ?, 0]</span></div>
-          <div class="hint">※北=0°, 東=90°。FROM→TOへ自動変換</div>
-          <div style="margin-top:6px;">
-            <button id="btn-snap-45">45°刻みにスナップ</button>
+      <!-- turbulence fields -->
+      <div id="turbulence-fields" style="display:none;">
+        <div class="row">
+          <div>
+            <label>標準偏差 std_ms (m/s)</label>
+            <input id="turb-std" type="number" step="0.1" value="3.0">
+          </div>
+          <div>
+            <label>乱数シード</label>
+            <input id="turb-seed" type="number" value="123">
           </div>
         </div>
+        <div class="hint">※ 可視化として中心に「ゆらぎ円」を描画（半透明の青、半径 = std_ms × 30 m）。</div>
       </div>
 
       <div style="margin-top:6px;">
@@ -155,53 +169,13 @@
     </fieldset>
 
     <fieldset>
-      <legend>座標編集（m）— 双方向同期</legend>
-      <div id="rect-fields" style="display:none;">
-        <div class="grid-2">
-          <div>
-            <label>Xmin</label>
-            <input id="rect-min-x" type="number" step="0.1">
-          </div>
-          <div>
-            <label>Ymin</label>
-            <input id="rect-min-y" type="number" step="0.1">
-          </div>
-          <div>
-            <label>Xmax</label>
-            <input id="rect-max-x" type="number" step="0.1">
-          </div>
-          <div>
-            <label>Ymax</label>
-            <input id="rect-max-y" type="number" step="0.1">
-          </div>
-        </div>
-        <div class="hint">矩形：原点(0,0)を基準にした ENU[m]。入力変更で即 setBounds()</div>
+      <legend>インポート / エクスポート</legend>
+      <div class="row">
+        <div><button id="btn-export">JSONを生成</button></div>
+        <div><button id="btn-download">ダウンロード</button></div>
       </div>
-      <div id="circle-fields" style="display:none;">
-        <div class="grid-2">
-          <div>
-            <label>中心 X</label>
-            <input id="circle-x" type="number" step="0.1">
-          </div>
-          <div>
-            <label>中心 Y</label>
-            <input id="circle-y" type="number" step="0.1">
-          </div>
-        </div>
-        <div>
-          <label>半径 [m]</label>
-          <input id="circle-radius" type="number" step="0.1">
-        </div>
-        <div class="hint">円：中心 ENU[m] と 半径[m]。入力変更で即 setLatLng()/setRadius()</div>
-      </div>
-    </fieldset>
-
-    <fieldset>
-      <legend>エクスポート</legend>
-      <button id="btn-export">JSONを生成（ROS座標）</button>
-      <button id="btn-download">ダウンロード</button>
-      <div class="hint">rect/circle も ROS へ座標変換して出力します（meta.axis="ROS"）。</div>
-      <textarea id="output" placeholder="ここにROS座標のJSONが出ます"></textarea>
+      <div class="hint">rect は origin を (0,0) とした ENU[m] で min/max を出力。JSONは meta.axis="ROS" で風ベクトルを出力。</div>
+      <textarea id="output" placeholder="ここにJSONが出ます" style="width:100%;height:160px;"></textarea>
     </fieldset>
 
     <fieldset>
@@ -209,20 +183,18 @@
       <div id="zone-list" class="zone-list"></div>
     </fieldset>
   </div>
+
   <div id="map"></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-
 <script>
-// --- Math helpers ---
+// ---------- Math & Conversion ----------
 function deg2rad(d){return d*Math.PI/180;}
 function rad2deg(r){return r*180/Math.PI;}
 function metersPerDegLat(){ return 111320.0; }
 function metersPerDegLon(lat){ return 111320.0 * Math.cos(deg2rad(lat)); }
-
-// --- ENU <-> LatLon ---
 function latlonToENU(originLat, originLon, lat, lon){
   const dLat = lat - originLat;
   const dLon = lon - originLon;
@@ -235,31 +207,20 @@ function ENUToLatLon(originLat, originLon, x, y){
   const dLon = x / metersPerDegLon(originLat);
   return [originLat + dLat, originLon + dLon];
 }
-
-// --- ENU <-> ROS ---
-function enuToRos3(enu_x, enu_y, enu_z){ return [enu_y, -enu_x, enu_z]; }
-function enuToRos2(enu_x, enu_y){ return [enu_y, -enu_x]; }
-function rosToEnu3(x_ros, y_ros, z_ros){ return [-y_ros, x_ros, z_ros]; }
-function rosToEnu2(x_ros, y_ros){ return [-y_ros, x_ros]; }
-
-// --- Wind conversions ---
-// FROM(deg) -> TO(ENU) vector
+function enuToRosFrame(enu_x, enu_y, enu_z) {
+  // ENU (East, North, Up) -> ROS (X forward, Y left, Z up)
+  return [enu_y, -enu_x, enu_z];
+}
 function windFromDirectionToENU(speed, metDirDeg){
-  const flowTo = (metDirDeg + 180.0) % 360.0;
+  const flowTo = (metDirDeg + 180.0) % 360.0; // FROM→TO
   const r = deg2rad(flowTo);
-  const vx = Math.sin(r) * speed; // +E
-  const vy = Math.cos(r) * speed; // +N
+  const vx = Math.sin(r) * speed; // ENU x=East
+  const vy = Math.cos(r) * speed; // ENU y=North
   return [vx, vy, 0.0];
 }
-// ENU(TO) vector -> speed, FROM(deg)
-function enuToSpeedAndFromDeg(vx, vy){
-  const speed = Math.sqrt(vx*vx + vy*vy);
-  const toDeg = (rad2deg(Math.atan2(vx, vy)) + 360) % 360;
-  const fromDeg = (toDeg + 180) % 360;
-  return [speed, fromDeg];
-}
+function round1(v){ return Math.round(v*10)/10; }
 
-// --- Map setup ---
+// ---------- Map init ----------
 const map = L.map('map', { preferCanvas: true });
 const originLatInput = document.getElementById('origin-lat');
 const originLonInput = document.getElementById('origin-lon');
@@ -277,16 +238,13 @@ L.control.scale().addTo(map);
 centerMap();
 document.getElementById('btn-center').onclick = centerMap;
 
+// ---------- Draw controls ----------
 const drawnItems = new L.FeatureGroup();
 map.addLayer(drawnItems);
-
 const drawControl = new L.Control.Draw({
   edit: { featureGroup: drawnItems, edit: true, remove: true },
   draw: {
-    polygon: false,
-    polyline: false,
-    marker: false,
-    circlemarker: false,
+    polygon: false, polyline: false, marker: false, circlemarker: false,
     rectangle: { shapeOptions: { color: '#e67e22', weight: 2 } },
     circle:    { shapeOptions: { color: '#27ae60', weight: 2 } }
   }
@@ -294,36 +252,68 @@ const drawControl = new L.Control.Draw({
 map.addControl(drawControl);
 
 let selectedLayer = null;
-const arrowLayerGroup = L.layerGroup().addTo(map);
+const arrowLayerGroup = L.layerGroup().addTo(map); // arrows / turbulence circles
 
-// --- UI inputs (zone meta) ---
+map.on(L.Draw.Event.CREATED, function (e) {
+  const layer = e.layer;
+  drawnItems.addLayer(layer);
+  selectLayer(layer);
+  refreshZoneList();
+  renderOverlays();
+});
+map.on('draw:edited', function(e){
+  refreshZoneList();
+  renderOverlays();
+});
+map.on('draw:deleted', function(e){
+  refreshZoneList();
+  renderOverlays();
+});
+map.on('click', function(e){
+  let found = null;
+  drawnItems.eachLayer(function(layer){
+    if (layer.getBounds && layer.getBounds().contains(e.latlng)) {
+      found = layer;
+    } else if (layer.getLatLng && layer.getLatLng().distanceTo(e.latlng) <= layer.getRadius()) {
+      found = layer;
+    }
+  });
+  if (found) selectLayer(found); else clearSelection();
+});
+
+function layerCenterLatLng(layer){
+  if (layer instanceof L.Rectangle){
+    return layer.getBounds().getCenter();
+  } else if (layer instanceof L.Circle){
+    return layer.getLatLng();
+  } else {
+    return null;
+  }
+}
+
+// ---------- UI refs ----------
 const zoneName     = document.getElementById('zone-name');
 const zonePriority = document.getElementById('zone-priority');
 const zoneGPS      = document.getElementById('zone-gps');
+const zoneMode     = document.getElementById('zone-mode');
+
 const zoneWindSpd  = document.getElementById('zone-wind-speed');
 const zoneWindDir  = document.getElementById('zone-wind-dir');
-const autoApply    = document.getElementById('auto-apply');
-
-// --- Compass and preview ---
-const needle = document.getElementById('needle');
-const dirDegEl = document.getElementById('dir-deg');
+const compassEl    = document.getElementById('compass');
+const needle       = document.getElementById('needle');
+const dirDegEl     = document.getElementById('dir-deg');
 const vecPreviewEl = document.getElementById('vec-preview');
-const compassEl = document.getElementById('compass');
-const btnSnap45 = document.getElementById('btn-snap-45');
+const btnSnap45    = document.getElementById('btn-snap-45');
+const absDisabledNote = document.getElementById('abs-disabled-note');
 
-// --- Coord fields ---
-const rectFields = document.getElementById('rect-fields');
-const circleFields = document.getElementById('circle-fields');
-const rectMinX = document.getElementById('rect-min-x');
-const rectMinY = document.getElementById('rect-min-y');
-const rectMaxX = document.getElementById('rect-max-x');
-const rectMaxY = document.getElementById('rect-max-y');
-const circleX = document.getElementById('circle-x');
-const circleY = document.getElementById('circle-y');
-const circleR = document.getElementById('circle-radius');
+const turbFields = document.getElementById('turbulence-fields');
+const turbStd    = document.getElementById('turb-std');
+const turbSeed   = document.getElementById('turb-seed');
 
-let isProgrammaticUpdate = false; // prevent feedback loops
+const autoApply  = document.getElementById('auto-apply');
+const arrowModeRadios = document.querySelectorAll('input[name="arrowMode"]');
 
+// ---------- Compass interactions ----------
 function updateCompassVisual(deg){
   needle.style.transform = `translate(-50%, -100%) rotate(${deg}deg)`;
   dirDegEl.textContent = Math.round(deg);
@@ -349,15 +339,13 @@ function handlePointer(e){
   setDirectionDeg(deg);
 }
 let dragging = false;
-compassEl.addEventListener('pointerdown', e=>{ dragging=true; compassEl.setPointerCapture(e.pointerId); handlePointer(e); });
-compassEl.addEventListener('pointermove', e=>{ if(dragging) handlePointer(e); });
+compassEl.addEventListener('pointerdown', e=>{ if(compassEl.dataset.disabled==="1") return; dragging=true; compassEl.setPointerCapture(e.pointerId); handlePointer(e); });
+compassEl.addEventListener('pointermove', e=>{ if(dragging && compassEl.dataset.disabled!=="1") handlePointer(e); });
 compassEl.addEventListener('pointerup',   e=>{ dragging=false; try{compassEl.releasePointerCapture(e.pointerId);}catch{} });
 compassEl.addEventListener('pointerleave',e=>{ dragging=false; });
+
 zoneWindDir.addEventListener('input', e=>{ setDirectionDeg(parseFloat(e.target.value||"0")); });
 zoneWindSpd.addEventListener('input', e=>{ updateCompassVisual(parseFloat(zoneWindDir.value||"0")); if (autoApply.checked) applyToSelected(); });
-zoneName.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
-zonePriority.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
-zoneGPS.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
 btnSnap45.addEventListener('click', ()=>{
   const v = parseFloat(zoneWindDir.value||"0");
   const snapped = Math.round(v/45)*45;
@@ -366,43 +354,24 @@ btnSnap45.addEventListener('click', ()=>{
 
 setDirectionDeg(parseFloat(zoneWindDir.value||"225"));
 
-// --- Layer selection & hooks ---
-map.on(L.Draw.Event.CREATED, function (e) {
-  const layer = e.layer;
-  drawnItems.addLayer(layer);
-  selectLayer(layer);
-  refreshZoneList();
-  renderArrows();
-});
-map.on('draw:edited', function(e){
-  // after edit (drag/resize), reflect to fields
-  if (selectedLayer) {
-    updateCoordFieldsFromLayer(selectedLayer);
-  }
-  refreshZoneList();
-  renderArrows();
-});
-map.on('draw:editmove', function(e){
-  if (selectedLayer) updateCoordFieldsFromLayer(selectedLayer);
-});
-map.on('draw:editresize', function(e){
-  if (selectedLayer) updateCoordFieldsFromLayer(selectedLayer);
-});
-map.on('draw:deleted', function(e){
-  if (selectedLayer && !drawnItems.hasLayer(selectedLayer)) selectedLayer = null;
-  refreshZoneList();
-  renderArrows();
-});
-map.on('click', function(e){
-  let found = null;
-  drawnItems.eachLayer(function(layer){
-    if (layer.getBounds && layer.getBounds().contains(e.latlng)) {
-      found = layer;
-    }
-  });
-  if (found) selectLayer(found); else clearSelection();
-});
+// ---------- Mode UI enable/disable ----------
+function updateModeUI(){
+  const isTurb = (zoneMode.value === 'turbulence');
+  // show/hide turbulence fields
+  turbFields.style.display = isTurb ? 'block' : 'none';
+  // enable/disable absolute fields
+  zoneWindSpd.disabled = isTurb;
+  zoneWindDir.disabled = isTurb;
+  compassEl.style.opacity = isTurb ? 0.35 : 1.0;
+  absDisabledNote.style.display = isTurb ? 'block' : 'none';
+  compassEl.dataset.disabled = isTurb ? "1" : "0";
+  if (autoApply.checked) applyToSelected();
+  renderOverlays();
+}
+zoneMode.addEventListener('change', updateModeUI);
+updateModeUI();
 
+// ---------- Selection & metadata ----------
 function selectLayer(layer){
   clearSelection();
   selectedLayer = layer;
@@ -411,166 +380,54 @@ function selectLayer(layer){
   zoneName.value     = m.name     ?? '';
   zonePriority.value = m.priority ?? 1;
   zoneGPS.value      = m.gpsAbs   ?? 0.8;
+  zoneMode.value     = m.mode     ?? 'absolute';
   zoneWindSpd.value  = m.windSpd  ?? 3.0;
   setDirectionDeg( Number.isFinite(m.windDir) ? m.windDir : 225 );
-  // show proper coord fields
-  if (selectedLayer instanceof L.Rectangle){
-    rectFields.style.display = '';
-    circleFields.style.display = 'none';
-  } else if (selectedLayer instanceof L.Circle){
-    rectFields.style.display = 'none';
-    circleFields.style.display = '';
-  } else {
-    rectFields.style.display = 'none';
-    circleFields.style.display = 'none';
-  }
-  updateCoordFieldsFromLayer(selectedLayer);
+  turbStd.value      = m.turbStd  ?? 3.0;
+  turbSeed.value     = m.turbSeed ?? 123;
+  updateModeUI();
   refreshZoneList();
-  renderArrows();
+  renderOverlays();
 }
 function clearSelection(){
   if (selectedLayer && selectedLayer.setStyle) selectedLayer.setStyle({ weight: 2 });
   selectedLayer = null;
-  rectFields.style.display = 'none';
-  circleFields.style.display = 'none';
 }
 
-function applyToSelected(){
+document.getElementById('btn-apply').onclick = function(){ applyToSelected(true); };
+document.getElementById('btn-delete').onclick = function(){
+  if (!selectedLayer){ alert('図形を選択してください'); return; }
+  drawnItems.removeLayer(selectedLayer);
+  selectedLayer = null;
+  refreshZoneList();
+  renderOverlays();
+};
+
+function applyToSelected(force=false){
   if (!selectedLayer) return;
   selectedLayer._hakoniwa = {
     name: zoneName.value || 'zone',
     priority: parseInt(zonePriority.value || "1", 10),
     gpsAbs: parseFloat(zoneGPS.value || "0.8"),
+    mode: zoneMode.value,
     windDir: parseFloat(zoneWindDir.value || "225"),
-    windSpd: parseFloat(zoneWindSpd.value || "3.0")
+    windSpd: parseFloat(zoneWindSpd.value || "3.0"),
+    turbStd: parseFloat(turbStd.value || "3.0"),
+    turbSeed: parseInt(turbSeed.value || "123")
   };
   refreshZoneList();
-  renderArrows();
+  renderOverlays();
 }
 
-// --- Coord fields <-> layer sync ---
-function updateCoordFieldsFromLayer(layer){
-  const originLat = parseFloat(originLatInput.value);
-  const originLon = parseFloat(originLonInput.value);
-  isProgrammaticUpdate = true;
-  try{
-    if (layer instanceof L.Rectangle){
-      const b = layer.getBounds();
-      const sw = b.getSouthWest(), ne = b.getNorthEast();
-      const enuSW = latlonToENU(originLat, originLon, sw.lat, sw.lng);
-      const enuNE = latlonToENU(originLat, originLon, ne.lat, ne.lng);
-      const minx = Math.min(enuSW[0], enuNE[0]), maxx = Math.max(enuSW[0], enuNE[0]);
-      const miny = Math.min(enuSW[1], enuNE[1]), maxy = Math.max(enuSW[1], enuNE[1]);
-      rectMinX.value = minx.toFixed(1);
-      rectMinY.value = miny.toFixed(1);
-      rectMaxX.value = maxx.toFixed(1);
-      rectMaxY.value = maxy.toFixed(1);
-    } else if (layer instanceof L.Circle){
-      const c = layer.getLatLng();
-      const r = layer.getRadius();
-      const enuC = latlonToENU(originLat, originLon, c.lat, c.lng);
-      circleX.value = enuC[0].toFixed(1);
-      circleY.value = enuC[1].toFixed(1);
-      circleR.value = r.toFixed(1);
-    }
-  } finally {
-    isProgrammaticUpdate = false;
-  }
-}
+// auto-apply on changes
+zoneName.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
+zonePriority.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
+zoneGPS.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
+turbStd.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
+turbSeed.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
+arrowModeRadios.forEach(r=>r.addEventListener('change', ()=>renderOverlays()));
 
-function updateLayerFromCoordFields(){
-  if (!selectedLayer) return;
-  const originLat = parseFloat(originLatInput.value);
-  const originLon = parseFloat(originLonInput.value);
-  if (selectedLayer instanceof L.Rectangle){
-    const minx = parseFloat(rectMinX.value||"0");
-    const miny = parseFloat(rectMinY.value||"0");
-    const maxx = parseFloat(rectMaxX.value||"0");
-    const maxy = parseFloat(rectMaxY.value||"0");
-    const sw = ENUToLatLon(originLat, originLon, Math.min(minx,maxx), Math.min(miny,maxy));
-    const ne = ENUToLatLon(originLat, originLon, Math.max(minx,maxx), Math.max(miny,maxy));
-    selectedLayer.setBounds([ [sw[0], sw[1]], [ne[0], ne[1]] ]);
-  } else if (selectedLayer instanceof L.Circle){
-    const cx = parseFloat(circleX.value||"0");
-    const cy = parseFloat(circleY.value||"0");
-    const r  = parseFloat(circleR.value||"0");
-    const [lat, lon] = ENUToLatLon(originLat, originLon, cx, cy);
-    selectedLayer.setLatLng([lat, lon]);
-    selectedLayer.setRadius(Math.max(0, r));
-  }
-  renderArrows();
-}
-
-// Inputs handlers for coord fields (debounced immediate apply)
-;[rectMinX, rectMinY, rectMaxX, rectMaxY].forEach(inp=>{
-  inp.addEventListener('input', ()=>{ if(!isProgrammaticUpdate) updateLayerFromCoordFields(); });
-});
-;[circleX, circleY, circleR].forEach(inp=>{
-  inp.addEventListener('input', ()=>{ if(!isProgrammaticUpdate) updateLayerFromCoordFields(); });
-});
-
-// --- Zone list & arrows ---
-function refreshZoneList(){
-  const list = document.getElementById('zone-list');
-  let html = "";
-  let idx = 1;
-  drawnItems.eachLayer(function(layer){
-    const meta = layer._hakoniwa || {};
-    let label = meta.name || ('zone'+idx);
-    const type = (layer instanceof L.Rectangle) ? 'rect' :
-                 (layer instanceof L.Circle) ? 'circle' : 'shape';
-    html += `<div><span class="badge">${type}</span>${label}`;
-    if (meta.windSpd != null) html += ` <span class="badge">wind ${meta.windSpd} m/s @${meta.windDir}°</span>`;
-    if (meta.gpsAbs != null) html += ` <span class="badge">gps ${meta.gpsAbs}</span>`;
-    if (meta.priority != null) html += ` <span class="badge">prio ${meta.priority}</span>`;
-    html += `</div>`;
-    idx++;
-  });
-  list.innerHTML = html || "<i>なし</i>";
-}
-
-function layerCenterLatLng(layer){
-  if (layer instanceof L.Rectangle){
-    return layer.getBounds().getCenter();
-  } else if (layer instanceof L.Circle){
-    return layer.getLatLng();
-  } else {
-    return null;
-  }
-}
-
-function renderArrows(){
-  // Always draw TO direction in ENU
-  arrowLayerGroup.clearLayers();
-  const originLat = parseFloat(originLatInput.value);
-  const originLon = parseFloat(originLonInput.value);
-
-  drawnItems.eachLayer(function(layer){
-    if (!layer._hakoniwa) return;
-    const m = layer._hakoniwa;
-    const v_to = windFromDirectionToENU((m.windSpd||0), (m.windDir||0)); // ENU (TO)
-    const scale = 50;
-    const center = layerCenterLatLng(layer);
-    if (!center) return;
-
-    const enuStart = latlonToENU(originLat, originLon, center.lat, center.lng);
-    const enuEnd = [ enuStart[0] + v_to[0]*scale, enuStart[1] + v_to[1]*scale ];
-    const [endLat, endLon] = ENUToLatLon(originLat, originLon, enuEnd[0], enuEnd[1]);
-
-    L.polyline([[center.lat, center.lng], [endLat, endLon]], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
-
-    const angle = Math.atan2(endLon - center.lng, endLat - center.lat);
-    const headLen = 0.0001;
-    const left = [ endLat - headLen*Math.cos(angle - Math.PI/6), endLon - headLen*Math.sin(angle - Math.PI/6) ];
-    const right= [ endLat - headLen*Math.cos(angle + Math.PI/6), endLon - headLen*Math.sin(angle + Math.PI/6) ];
-    L.polyline([[endLat, endLon], left], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
-    L.polyline([[endLat, endLon], right], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
-  });
-}
-
-// --- Export (always ROS, TO) ---
-function round(v){ return Math.round(v*10)/10; }
-
+// ---------- Export JSON ----------
 function layerToZoneJSON(layer){
   const originLat = parseFloat(originLatInput.value);
   const originLon = parseFloat(originLonInput.value);
@@ -578,30 +435,34 @@ function layerToZoneJSON(layer){
   const base = {
     name: meta.name || 'zone',
     priority: (meta.priority != null ? meta.priority : 1),
-    effect: { mode: "absolute", gps_abs: (meta.gpsAbs != null ? meta.gpsAbs : 0.8) }
+    effect: { mode: meta.mode || "absolute", gps_abs: (meta.gpsAbs != null ? meta.gpsAbs : 0.8) }
   };
-  // wind ENU(TO) -> ROS
-  const v = windFromDirectionToENU((meta.windSpd||3.0), (meta.windDir||225));
-  const ros_v = enuToRos3(v[0], v[1], v[2]);
-  base.effect.wind_ms = [ Number(ros_v[0].toFixed(3)), Number(ros_v[1].toFixed(3)), Number(ros_v[2].toFixed(3)) ];
+
+  if (meta.mode === 'absolute'){
+    const v = windFromDirectionToENU((meta.windSpd||3.0), (meta.windDir||225)); // ENU to-vector
+    const ros_v = enuToRosFrame(v[0], v[1], v[2]);
+    base.effect.wind_ms = [ Number(ros_v[0].toFixed(3)), Number(ros_v[1].toFixed(3)), 0.0 ];
+  } else if (meta.mode === 'turbulence'){
+    base.effect.turbulence = {
+      type: "gauss",
+      std_ms: meta.turbStd || 3.0,
+      seed: Math.floor(meta.turbSeed || 0)
+    };
+  }
 
   if (layer instanceof L.Rectangle){
     const b = layer.getBounds();
     const sw = b.getSouthWest(), ne = b.getNorthEast();
     const enuSW = latlonToENU(originLat, originLon, sw.lat, sw.lng);
     const enuNE = latlonToENU(originLat, originLon, ne.lat, ne.lng);
-    // ENU -> ROS
-    const [rosSWx, rosSWy] = enuToRos2(enuSW[0], enuSW[1]);
-    const [rosNEx, rosNEy] = enuToRos2(enuNE[0], enuNE[1]);
-    const minx = Math.min(rosSWx, rosNEx), maxx = Math.max(rosSWx, rosNEx);
-    const miny = Math.min(rosSWy, rosNEy), maxy = Math.max(rosSWy, rosNEy);
-    base.shape = { rect: { min_m: [round(minx), round(miny)], max_m: [round(maxx), round(maxy)] } };
+    const minx = Math.min(enuSW[0], enuNE[0]), maxx = Math.max(enuSW[0], enuNE[0]);
+    const miny = Math.min(enuSW[1], enuNE[1]), maxy = Math.max(enuSW[1], enuNE[1]);
+    base.shape = { rect: { min_m: [round1(minx), round1(miny)], max_m: [round1(maxx), round1(maxy)] } };
   } else if (layer instanceof L.Circle){
     const c = layer.getLatLng();
     const r = layer.getRadius();
     const enuC = latlonToENU(originLat, originLon, c.lat, c.lng);
-    const [rosCx, rosCy] = enuToRos2(enuC[0], enuC[1]);
-    base.shape = { circle: { center_m: [round(rosCx), round(rosCy)], radius_m: round(r) } };
+    base.shape = { circle: { center_m: [round1(enuC[0]), round1(enuC[1])], radius_m: round1(r) } };
   } else { return null; }
   return base;
 }
@@ -615,11 +476,8 @@ function exportJSON(){
   const out = {
     version: "0.1",
     meta: {
-      crs: "local-ros",
-      origin_latlon: [
-        parseFloat(originLatInput.value),
-        parseFloat(originLonInput.value)
-      ],
+      crs: "local-enu",
+      origin_latlon: [ parseFloat(originLatInput.value), parseFloat(originLonInput.value) ],
       axis: "ROS",
       units: { length: "m", speed: "m/s", temp: "C" }
     },
@@ -636,113 +494,81 @@ document.getElementById('btn-download').onclick = function(){
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = "env_zones_ros.json";
+  a.download = "env_zones.json";
   a.click();
   URL.revokeObjectURL(url);
 };
 
-// --- Import (ROS or ENU axis) ---
-function loadZonesFromJSON(obj){
-  try{
-    const meta = obj.meta || {};
-    const axis = (meta.axis || "ENU").toUpperCase();
-    const [origLat, origLon] = meta.origin_latlon || [parseFloat(originLatInput.value), parseFloat(originLonInput.value)];
-    // 原点がJSON側にあればUIへ反映
-    if (Array.isArray(meta.origin_latlon)){
-      originLatInput.value = Number(origLat).toFixed(6);
-      originLonInput.value = Number(origLon).toFixed(6);
-      centerMap();
+function refreshZoneList(){
+  const list = document.getElementById('zone-list');
+  let html = "";
+  let idx = 1;
+  drawnItems.eachLayer(function(layer){
+    const meta = layer._hakoniwa || {};
+    let label = meta.name || ('zone'+idx);
+    const type = (layer instanceof L.Rectangle) ? 'rect' :
+                 (layer instanceof L.Circle) ? 'circle' : 'shape';
+    html += `<div><span class="badge">${type}</span>${label}`;
+    if (meta.mode === 'absolute'){
+      if (meta.windSpd != null) html += ` <span class="badge">wind ${meta.windSpd} m/s @${meta.windDir}°</span>`;
+    } else if (meta.mode === 'turbulence'){
+      html += ` <span class="badge">turb σ=${meta.turbStd ?? 3.0} m/s seed=${meta.turbSeed ?? 0}</span>`;
     }
-    const zones = obj.zones || [];
-    zones.forEach(z => {
-      const name = z.name || "zone";
-      const prio = (z.priority != null) ? z.priority : 1;
-      const gps  = (z.effect && z.effect.gps_abs != null) ? z.effect.gps_abs : 0.8;
-      // 風ベクトル
-      let vENU = [0,0,0];
-      if (z.effect && Array.isArray(z.effect.wind_ms)){
-        const w = z.effect.wind_ms;
-        if (axis === "ROS"){
-          const e = rosToEnu3(w[0]||0, w[1]||0, w[2]||0);
-          vENU = [e[0], e[1], e[2]];
-        } else { // ENU
-          vENU = [w[0]||0, w[1]||0, w[2]||0];
-        }
-      }
-      const [spd, fromDeg] = enuToSpeedAndFromDeg(vENU[0], vENU[1]);
-
-      // shape
-      let layer = null;
-      if (z.shape && z.shape.rect){
-        const r = z.shape.rect;
-        let minx = r.min_m[0], miny = r.min_m[1], maxx = r.max_m[0], maxy = r.max_m[1];
-        if (axis === "ROS"){
-          // ROS -> ENU
-          const enuMin = rosToEnu2(minx, miny);
-          const enuMax = rosToEnu2(maxx, maxy);
-          minx = Math.min(enuMin[0], enuMax[0]);
-          maxx = Math.max(enuMin[0], enuMax[0]);
-          miny = Math.min(enuMin[1], enuMax[1]);
-          maxy = Math.max(enuMin[1], enuMax[1]);
-        }
-        const sw = ENUToLatLon(origLat, origLon, minx, miny);
-        const ne = ENUToLatLon(origLat, origLon, maxx, maxy);
-        layer = L.rectangle([ [sw[0], sw[1]], [ne[0], ne[1]] ], { color:'#e67e22', weight:2 });
-      } else if (z.shape && z.shape.circle){
-        const c = z.shape.circle;
-        let cx = c.center_m[0], cy = c.center_m[1];
-        if (axis === "ROS"){
-          const enuC = rosToEnu2(cx, cy);
-          cx = enuC[0]; cy = enuC[1];
-        }
-        const [clat, clon] = ENUToLatLon(origLat, origLon, cx, cy);
-        layer = L.circle([clat, clon], { radius: c.radius_m || c.radius || 50, color:'#27ae60', weight:2 });
-      }
-
-      if (layer){
-        drawnItems.addLayer(layer);
-        layer._hakoniwa = {
-          name: name,
-          priority: prio,
-          gpsAbs: gps,
-          windDir: fromDeg,
-          windSpd: spd
-        };
-      }
-    });
-
-    refreshZoneList();
-    renderArrows();
-  }catch(err){
-    alert("読み込みに失敗しました: " + err);
-    console.error(err);
-  }
+    if (meta.gpsAbs != null) html += ` <span class="badge">gps ${meta.gpsAbs}</span>`;
+    if (meta.priority != null) html += ` <span class="badge">prio ${meta.priority}</span>`;
+    html += `</div>`;
+    idx++;
+  });
+  list.innerHTML = html || "<i>なし</i>";
 }
 
-// File input & DnD
-const fileInput = document.getElementById('file-input');
-const dropzone = document.getElementById('dropzone');
+// ---------- Overlays (arrows / turbulence circles) ----------
+function renderOverlays(){
+  arrowLayerGroup.clearLayers();
+  const originLat = parseFloat(originLatInput.value);
+  const originLon = parseFloat(originLonInput.value);
+  const modeArrow = document.querySelector('input[name="arrowMode"]:checked').value; // 'from' | 'to'
 
-fileInput.addEventListener('change', async (e)=>{
-  const file = e.target.files?.[0];
-  if (!file) return;
-  const text = await file.text();
-  const obj = JSON.parse(text);
-  loadZonesFromJSON(obj);
-});
+  drawnItems.eachLayer(function(layer){
+    if (!layer._hakoniwa) return;
+    const m = layer._hakoniwa;
+    const center = layerCenterLatLng(layer);
+    if (!center) return;
 
-;['dragenter','dragover'].forEach(ev=>dropzone.addEventListener(ev, (e)=>{
-  e.preventDefault(); e.stopPropagation(); dropzone.classList.add('dragover');
-}));
-;['dragleave','drop'].forEach(ev=>dropzone.addEventListener(ev, (e)=>{
-  e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('dragover');
-}));
-dropzone.addEventListener('drop', async (e)=>{
-  const file = e.dataTransfer.files?.[0];
-  if (!file) return;
-  const text = await file.text();
-  const obj = JSON.parse(text);
-  loadZonesFromJSON(obj);
+    if (m.mode === 'absolute'){
+      const v_to = windFromDirectionToENU((m.windSpd||0), (m.windDir||0)); // ENU (to)
+      const v = (modeArrow === 'from') ? [-v_to[0], -v_to[1], 0] : v_to; // FROMは反転
+
+      const scale = 50;
+      const enuStart = latlonToENU(originLat, originLon, center.lat, center.lng);
+      const enuEnd = [ enuStart[0] + v[0]*scale, enuStart[1] + v[1]*scale ];
+      const [endLat, endLon] = ENUToLatLon(originLat, originLon, enuEnd[0], enuEnd[1]);
+
+      L.polyline([[center.lat, center.lng], [endLat, endLon]], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
+
+      const angle = Math.atan2(endLon - center.lng, endLat - center.lat);
+      const headLen = 0.0001;
+      const left = [ endLat - headLen*Math.cos(angle - Math.PI/6), endLon - headLen*Math.sin(angle - Math.PI/6) ];
+      const right= [ endLat - headLen*Math.cos(angle + Math.PI/6), endLon - headLen*Math.sin(angle + Math.PI/6) ];
+      L.polyline([[endLat, endLon], left], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
+      L.polyline([[endLat, endLon], right], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
+    } else if (m.mode === 'turbulence'){
+      // draw turbulence circle only (no arrow)
+      const radiusMeters = (m.turbStd ?? 3.0) * 30.0;
+      L.circle(center, {
+        radius: radiusMeters,
+        color: '#3498db',
+        fillColor: '#3498db',
+        fillOpacity: 0.15,
+        weight: 1
+      }).addTo(arrowLayerGroup);
+    }
+  });
+}
+
+// ---------- Import existing layer selection by click (optional) ----------
+map.on('layeradd', function(e){
+  // nothing extra
 });
 
 </script>
