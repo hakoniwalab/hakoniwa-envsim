@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hakoniwa Env Zone Editor — ROS JSON Export (TO-consistent)</title>
+  <title>Hakoniwa Env Zone Editor — Import & ROS Export</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
 
   <style>
     html, body { height: 100%; margin: 0; }
-    #app { display: grid; grid-template-columns: 400px 1fr; height: 100%; }
+    #app { display: grid; grid-template-columns: 420px 1fr; height: 100%; }
     #sidebar {
       padding: 12px; border-right: 1px solid #ddd; overflow:auto; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
     }
@@ -18,7 +18,7 @@
     h1 { font-size: 16px; margin: 0 0 8px 0; }
     fieldset { margin-bottom: 10px; }
     label { display:block; font-size: 12px; margin: 6px 0 2px; }
-    input[type="text"], input[type="number"] { width: 100%; padding: 6px; box-sizing: border-box; }
+    input[type="text"], input[type="number"], input[type="file"] { width: 100%; padding: 6px; box-sizing: border-box; }
     .row { display:flex; gap:8px; }
     .row > div { flex:1; }
     button { padding: 8px 10px; margin-right: 6px; }
@@ -58,13 +58,18 @@
     .toolbar { display:flex; align-items:center; gap:8px; font-size:12px; flex-wrap: wrap; }
     .toolbar label { display:inline; margin:0; }
     .sep { flex: 1 0 100%; height: 0; }
+    .dropzone {
+      border: 2px dashed #bbb; border-radius: 8px; padding: 10px; text-align: center; color:#666; font-size:12px;
+      margin-top: 6px;
+    }
+    .dropzone.dragover { border-color:#2e86de; color:#2e86de; background:#f0f8ff; }
   </style>
 </head>
 <body>
 <div id="app">
   <div id="sidebar">
     <h1>Hakoniwa Env Zone Editor</h1>
-    <div class="hint">UIは気象方位（FROM）。描画はTO方向（ENU）。JSONはROS座標・TOベクトルで出力。</div>
+    <div class="hint">UIは気象方位（FROM）。地図矢印はTO（ENU）。JSON出力はROS(TO)。</div>
 
     <fieldset>
       <legend>原点（起動点）</legend>
@@ -83,6 +88,13 @@
         </div>
       </div>
       <button id="btn-center">原点へ移動</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>インポート（既存JSON）</legend>
+      <input id="file-input" type="file" accept=".json,application/json">
+      <div id="dropzone" class="dropzone">JSONファイルをドラッグ＆ドロップ</div>
+      <div class="hint">meta.axis が "ROS" または "ENU" を解釈（未指定は ENU と見なす）。</div>
     </fieldset>
 
     <fieldset>
@@ -161,10 +173,13 @@
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 
 <script>
+// --- Math helpers ---
 function deg2rad(d){return d*Math.PI/180;}
 function rad2deg(r){return r*180/Math.PI;}
 function metersPerDegLat(){ return 111320.0; }
 function metersPerDegLon(lat){ return 111320.0 * Math.cos(deg2rad(lat)); }
+
+// --- ENU <-> LatLon ---
 function latlonToENU(originLat, originLon, lat, lon){
   const dLat = lat - originLat;
   const dLon = lon - originLon;
@@ -177,21 +192,31 @@ function ENUToLatLon(originLat, originLon, x, y){
   const dLon = x / metersPerDegLon(originLat);
   return [originLat + dLat, originLon + dLon];
 }
-function enuToRos3(enu_x, enu_y, enu_z) {
-  return [enu_y, -enu_x, enu_z]; // ENU -> ROS
-}
-function enuToRos2(enu_x, enu_y) {
-  return [ enu_y, -enu_x ];
-}
+
+// --- ENU <-> ROS ---
+function enuToRos3(enu_x, enu_y, enu_z){ return [enu_y, -enu_x, enu_z]; }
+function enuToRos2(enu_x, enu_y){ return [enu_y, -enu_x]; }
+function rosToEnu3(x_ros, y_ros, z_ros){ return [-y_ros, x_ros, z_ros]; }
+function rosToEnu2(x_ros, y_ros){ return [-y_ros, x_ros]; }
+
+// --- Wind conversions ---
+// FROM(deg) -> TO(ENU) vector
 function windFromDirectionToENU(speed, metDirDeg){
-  // FROM(deg) -> TO(deg) then ENU vector
   const flowTo = (metDirDeg + 180.0) % 360.0;
   const r = deg2rad(flowTo);
   const vx = Math.sin(r) * speed; // +E
   const vy = Math.cos(r) * speed; // +N
   return [vx, vy, 0.0];
 }
+// ENU(TO) vector -> speed, FROM(deg)
+function enuToSpeedAndFromDeg(vx, vy){
+  const speed = Math.sqrt(vx*vx + vy*vy);
+  const toDeg = (rad2deg(Math.atan2(vx, vy)) + 360) % 360;
+  const fromDeg = (toDeg + 180) % 360;
+  return [speed, fromDeg];
+}
 
+// --- Map setup ---
 const map = L.map('map', { preferCanvas: true });
 const originLatInput = document.getElementById('origin-lat');
 const originLonInput = document.getElementById('origin-lon');
@@ -258,10 +283,10 @@ function selectLayer(layer){
   selectedLayer = layer;
   if (selectedLayer.setStyle) selectedLayer.setStyle({ weight: 4 });
   const m = selectedLayer._hakoniwa || {};
-  document.getElementById('zone-name').value     = m.name     ?? '';
-  document.getElementById('zone-priority').value = m.priority ?? 1;
-  document.getElementById('zone-gps').value      = m.gpsAbs   ?? 0.8;
-  document.getElementById('zone-wind-speed').value  = m.windSpd  ?? 3.0;
+  zoneName.value     = m.name     ?? '';
+  zonePriority.value = m.priority ?? 1;
+  zoneGPS.value      = m.gpsAbs   ?? 0.8;
+  zoneWindSpd.value  = m.windSpd  ?? 3.0;
   setDirectionDeg( Number.isFinite(m.windDir) ? m.windDir : 225 );
   refreshZoneList();
   renderArrows();
@@ -358,6 +383,7 @@ function layerCenterLatLng(layer){
   }
 }
 
+// --- Export (always ROS, TO) ---
 function layerToZoneJSON(layer){
   const originLat = parseFloat(originLatInput.value);
   const originLon = parseFloat(originLonInput.value);
@@ -367,8 +393,7 @@ function layerToZoneJSON(layer){
     priority: (meta.priority != null ? meta.priority : 1),
     effect: { mode: "absolute", gps_abs: (meta.gpsAbs != null ? meta.gpsAbs : 0.8) }
   };
-
-  // wind: ENU (TO) -> ROS
+  // wind ENU(TO) -> ROS
   const v = windFromDirectionToENU((meta.windSpd||3.0), (meta.windDir||225));
   const ros_v = enuToRos3(v[0], v[1], v[2]);
   base.effect.wind_ms = [ Number(ros_v[0].toFixed(3)), Number(ros_v[1].toFixed(3)), Number(ros_v[2].toFixed(3)) ];
@@ -378,7 +403,7 @@ function layerToZoneJSON(layer){
     const sw = b.getSouthWest(), ne = b.getNorthEast();
     const enuSW = latlonToENU(originLat, originLon, sw.lat, sw.lng);
     const enuNE = latlonToENU(originLat, originLon, ne.lat, ne.lng);
-    // ENU → ROS
+    // ENU -> ROS
     const [rosSWx, rosSWy] = enuToRos2(enuSW[0], enuSW[1]);
     const [rosNEx, rosNEy] = enuToRos2(enuNE[0], enuNE[1]);
     const minx = Math.min(rosSWx, rosNEx), maxx = Math.max(rosSWx, rosNEx);
@@ -478,6 +503,128 @@ function renderArrows(){
     L.polyline([[endLat, endLon], right], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
   });
 }
+
+// --- Import (ROS or ENU axis) ---
+function loadZonesFromJSON(obj){
+  try{
+    const meta = obj.meta || {};
+    const axis = (meta.axis || "ENU").toUpperCase();
+    const [origLat, origLon] = meta.origin_latlon || [parseFloat(originLatInput.value), parseFloat(originLonInput.value)];
+    // 原点がJSON側にあればUIへ反映
+    if (Array.isArray(meta.origin_latlon)){
+      originLatInput.value = Number(origLat).toFixed(6);
+      originLonInput.value = Number(origLon).toFixed(6);
+      centerMap();
+    }
+    const zones = obj.zones || [];
+    zones.forEach(z => {
+      const name = z.name || "zone";
+      const prio = (z.priority != null) ? z.priority : 1;
+      const gps  = (z.effect && z.effect.gps_abs != null) ? z.effect.gps_abs : 0.8;
+      // 風ベクトル
+      let vENU = [0,0,0];
+      if (z.effect && Array.isArray(z.effect.wind_ms)){
+        const w = z.effect.wind_ms;
+        if (axis === "ROS"){
+          const e = rosToEnu3(w[0]||0, w[1]||0, w[2]||0);
+          vENU = [e[0], e[1], e[2]];
+        } else { // ENU
+          vENU = [w[0]||0, w[1]||0, w[2]||0];
+        }
+      }
+      const [spd, fromDeg] = enuToSpeedAndFromDeg(vENU[0], vENU[1]);
+
+      // shape
+      let layer = null;
+      if (z.shape && z.shape.rect){
+        const r = z.shape.rect;
+        let minx = r.min_m[0], miny = r.min_m[1], maxx = r.max_m[0], maxy = r.max_m[1];
+        if (axis === "ROS"){
+          // ROS -> ENU
+          const enuMin = rosToEnu2(minx, miny);
+          const enuMax = rosToEnu2(maxx, maxy);
+          minx = Math.min(enuMin[0], enuMax[0]);
+          maxx = Math.max(enuMin[0], enuMax[0]);
+          miny = Math.min(enuMin[1], enuMax[1]);
+          maxy = Math.max(enuMin[1], enuMax[1]);
+        }
+        const sw = ENUToLatLon(origLat, origLon, minx, miny);
+        const ne = ENUToLatLon(origLat, origLon, maxx, maxy);
+        layer = L.rectangle([ [sw[0], sw[1]], [ne[0], ne[1]] ], { color:'#e67e22', weight:2 });
+      } else if (z.shape && z.shape.circle){
+        const c = z.shape.circle;
+        let cx = c.center_m[0], cy = c.center_m[1];
+        if (axis === "ROS"){
+          const enuC = rosToEnu2(cx, cy);
+          cx = enuC[0]; cy = enuC[1];
+        }
+        const [clat, clon] = ENUToLatLon(origLat, origLon, cx, cy);
+        layer = L.circle([clat, clon], { radius: c.radius_m || c.radius || 50, color:'#27ae60', weight:2 });
+      }
+
+      if (layer){
+        drawnItems.addLayer(layer);
+        layer._hakoniwa = {
+          name: name,
+          priority: prio,
+          gpsAbs: gps,
+          windDir: fromDeg,
+          windSpd: spd
+        };
+      }
+    });
+
+    refreshZoneList();
+    renderArrows();
+  }catch(err){
+    alert("読み込みに失敗しました: " + err);
+    console.error(err);
+  }
+}
+
+// File input & DnD
+const fileInput = document.getElementById('file-input');
+const dropzone = document.getElementById('dropzone');
+
+fileInput.addEventListener('change', async (e)=>{
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const text = await file.text();
+  const obj = JSON.parse(text);
+  loadZonesFromJSON(obj);
+});
+
+;['dragenter','dragover'].forEach(ev=>dropzone.addEventListener(ev, (e)=>{
+  e.preventDefault(); e.stopPropagation(); dropzone.classList.add('dragover');
+}));
+;['dragleave','drop'].forEach(ev=>dropzone.addEventListener(ev, (e)=>{
+  e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('dragover');
+}));
+dropzone.addEventListener('drop', async (e)=>{
+  const file = e.dataTransfer.files?.[0];
+  if (!file) return;
+  const text = await file.text();
+  const obj = JSON.parse(text);
+  loadZonesFromJSON(obj);
+});
+
+// --- Export container ---
+function buildExport(){
+  const out = exportJSON();
+  document.getElementById('output').value = out;
+}
+
+document.getElementById('btn-export').onclick = buildExport;
+document.getElementById('btn-download').onclick = function(){
+  buildExport();
+  const blob = new Blob([document.getElementById('output').value], {type: "application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = "env_zones_ros.json";
+  a.click();
+  URL.revokeObjectURL(url);
+};
 </script>
 </body>
 </html>
