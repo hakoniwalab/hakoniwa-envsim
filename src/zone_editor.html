@@ -3,20 +3,20 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hakoniwa Env Zone Editor — Sync + Turbulence</title>
+<title>Hakoniwa Env Zone Editor — Sync + Turbulence + Import</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
 
 <style>
   html, body { height: 100%; margin: 0; }
-  #app { display: grid; grid-template-columns: 400px 1fr; height: 100%; }
+  #app { display: grid; grid-template-columns: 420px 1fr; height: 100%; }
   #sidebar { padding: 12px; border-right: 1px solid #ddd; overflow: auto;
              font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif; }
   #map { height: 100%; width: 100%; }
   fieldset { margin-bottom: 12px; }
   label { display:block; font-size: 12px; margin: 6px 0 2px; }
-  input[type="text"], input[type="number"], select { width: 100%; padding: 6px; box-sizing: border-box; }
+  input[type="text"], input[type="number"], select, textarea { width: 100%; padding: 6px; box-sizing: border-box; }
   button { padding: 8px 10px; margin-right: 6px; }
   .row { display:flex; gap:8px; }
   .row > div { flex:1; }
@@ -57,7 +57,7 @@
 <div id="app">
   <div id="sidebar">
     <h1>Hakoniwa Env Zone Editor</h1>
-    <div class="hint">矩形/円を描いてゾーン属性（名前・風 or 乱流・GPS・優先度）を設定→JSON出力。</div>
+    <div class="hint">矩形/円を描いてゾーン属性（名前・風 or 乱流・GPS・優先度）を設定→JSON出力／インポート。</div>
 
     <fieldset>
       <legend>原点（起動点）</legend>
@@ -169,12 +169,23 @@
 
     <fieldset>
       <legend>インポート / エクスポート</legend>
-      <div class="row">
+      <div class="row" style="align-items:center;">
         <div><button id="btn-export">JSONを生成</button></div>
         <div><button id="btn-download">ダウンロード</button></div>
       </div>
-      <div class="hint">rect は origin を (0,0) とした ENU[m] で min/max を出力。JSONは meta.axis="ROS" で風ベクトルを出力。</div>
-      <textarea id="output" placeholder="ここにJSONが出ます" style="width:100%;height:160px;"></textarea>
+      <div class="hint">出力は meta.axis="ROS"。rect/circle とも座標はROSで保存。</div>
+      <textarea id="output" placeholder="ここにJSONが出ます" style="width:100%;height:140px;"></textarea>
+
+      <div style="margin-top:10px;">
+        <div class="row" style="align-items:center;">
+          <div><button id="btn-import-text">上のテキストからインポート</button></div>
+          <div style="text-align:right;">
+            <input id="file-input" type="file" accept=".json">
+            <button id="btn-import-file">ファイルからインポート</button>
+          </div>
+        </div>
+        <div class="hint">インポート時は meta.axis を見て ROS/ENU のどちらでも復元します。</div>
+      </div>
     </fieldset>
 
     <fieldset>
@@ -206,9 +217,15 @@ function ENUToLatLon(originLat, originLon, x, y){
   const dLon = x / metersPerDegLon(originLat);
   return [originLat + dLat, originLon + dLon];
 }
+// ENU -> ROS
 function enuToRosFrame(enu_x, enu_y, enu_z) {
   // ENU (East, North, Up) -> ROS (X forward, Y left, Z up)
   return [enu_y, -enu_x, enu_z];
+}
+// ROS -> ENU
+function rosToEnuFrame(x_ros, y_ros, z_ros){
+  // 逆変換：X_ros = Y_enu, Y_ros = -X_enu → X_enu = -Y_ros, Y_enu = X_ros
+  return [-y_ros, x_ros, z_ros];
 }
 function windFromDirectionToENU(speed, metDirDeg){
   const flowTo = (metDirDeg + 180.0) % 360.0; // FROM→TO
@@ -234,18 +251,17 @@ function computeAabbForLeafletRect(bounds, originLat, originLon) {
     return [x, y, 0];
   });
 
-  // ★ ENU→ROS変換
-  const cornersROS = cornersENU.map(([xe, ye, ze]) => [ye, -xe, ze]);
+  // ENU→ROS
+  const cornersROS = cornersENU.map(([xe, ye, ze]) => enuToRosFrame(xe, ye, ze));
 
-  // 軸ごとの配列抽出
+  // 軸配列
   const xs = cornersROS.map(p => p[0]);  // ROS X
   const ys = cornersROS.map(p => p[1]);  // ROS Y
 
-  // min/max算出
+  // min/max
   const minx = Math.min(...xs), maxx = Math.max(...xs);
   const miny = Math.min(...ys), maxy = Math.max(...ys);
 
-  // 🔹この関数では shape データだけを返す
   return {
     rect: {
       min_m: [round1(minx), round1(miny)],
@@ -391,9 +407,7 @@ setDirectionDeg(parseFloat(zoneWindDir.value||"225"));
 // ---------- Mode UI enable/disable ----------
 function updateModeUI(){
   const isTurb = (zoneMode.value === 'turbulence');
-  // show/hide turbulence fields
   turbFields.style.display = isTurb ? 'block' : 'none';
-  // enable/disable absolute fields
   zoneWindSpd.disabled = isTurb;
   zoneWindDir.disabled = isTurb;
   compassEl.style.opacity = isTurb ? 0.35 : 1.0;
@@ -485,15 +499,16 @@ function layerToZoneJSON(layer){
   }
 
   if (layer instanceof L.Rectangle){
-    // --- AABB FIX: 四隅をENUへ→min/max取り直し ---
     const b = layer.getBounds();
     const shape = computeAabbForLeafletRect(b, originLat, originLon);
-    base.shape = shape;
+    base.shape = shape; // rect (ROS座標のmin/max)
   } else if (layer instanceof L.Circle){
     const c = layer.getLatLng();
     const r = layer.getRadius();
+    // ENU中心→ROS中心で保存
     const enuC = latlonToENU(originLat, originLon, c.lat, c.lng);
-    base.shape = { circle: { center_m: [round1(enuC[0]), round1(enuC[1])], radius_m: round1(r) } };
+    const rosC = enuToRosFrame(enuC[0], enuC[1], 0);
+    base.shape = { circle: { center_m: [round1(rosC[0]), round1(rosC[1])], radius_m: round1(r) } };
   } else { return null; }
   return base;
 }
@@ -530,6 +545,114 @@ document.getElementById('btn-download').onclick = function(){
   URL.revokeObjectURL(url);
 };
 
+// ---------- Import JSON ----------
+function importFromObject(obj){
+  // 1) 原点・ズームを適用
+  if (obj?.meta?.origin_latlon?.length >= 2){
+    originLatInput.value = obj.meta.origin_latlon[0];
+    originLonInput.value = obj.meta.origin_latlon[1];
+    centerMap();
+  }
+  const originLat = parseFloat(originLatInput.value);
+  const originLon = parseFloat(originLonInput.value);
+
+  // 2) 軸（ROS/ENU）に応じた変換関数
+  const axis = (obj?.meta?.axis || "ENU").toUpperCase();
+  const toENU = (axis === "ROS")
+    ? (x,y,z)=>rosToEnuFrame(x,y,z)
+    : (x,y,z)=>[x,y,z];
+
+  // 3) 既存をクリア
+  drawnItems.clearLayers();
+  arrowLayerGroup.clearLayers();
+
+  // 4) 各ゾーンを復元
+  (obj.zones || []).forEach(z=>{
+    let layer = null;
+
+    if (z.shape?.rect?.min_m && z.shape?.rect?.max_m){
+      const min = z.shape.rect.min_m;
+      const max = z.shape.rect.max_m;
+      // JSON座標→ENU
+      const [ex1, ey1] = toENU(min[0], min[1], 0);
+      const [ex2, ey2] = toENU(max[0], max[1], 0);
+      // ENU→LatLon
+      const [swLat, swLon] = ENUToLatLon(originLat, originLon, Math.min(ex1,ex2), Math.min(ey1,ey2));
+      const [neLat, neLon] = ENUToLatLon(originLat, originLon, Math.max(ex1,ex2), Math.max(ey1,ey2));
+      layer = L.rectangle([[swLat, swLon], [neLat, neLon]], { color:'#e67e22', weight:2 });
+    } else if (z.shape?.circle?.center_m && z.shape?.circle?.radius_m != null){
+      const c = z.shape.circle.center_m;
+      const r = z.shape.circle.radius_m;
+      const [ex, ey] = toENU(c[0], c[1], 0);
+      const [lat, lon] = ENUToLatLon(originLat, originLon, ex, ey);
+      layer = L.circle([lat, lon], { radius: r, color:'#27ae60', weight:2 });
+    }
+
+    if (layer){
+      drawnItems.addLayer(layer);
+      // メタ（UI同期用）
+      const eff = z.effect || {};
+      layer._hakoniwa = {
+        name: z.name || 'zone',
+        priority: z.priority ?? 1,
+        gpsAbs: (eff.gps_abs != null ? eff.gps_abs : 0.8),
+        mode: eff.mode || 'absolute',
+        // absolute
+        windDir: 225, windSpd: 3.0,
+        // turbulence
+        turbStd: (eff.turbulence?.std_ms ?? 3.0),
+        turbSeed: (eff.turbulence?.seed ?? 123)
+      };
+      if (eff.mode === 'absolute' && Array.isArray(eff.wind_ms)){
+        // wind_ms は ROS ベクトル想定 → ENUへ戻して方位/速さを推定しUI表示用に再計算
+        const ros = eff.wind_ms;
+        const enu = rosToEnuFrame(ros[0], ros[1], ros[2] || 0);
+        const spd = Math.hypot(enu[0], enu[1]);
+        // ENU “to” ベクトル → 気象FROM角度 = (to+180)
+        const toAngleRad = Math.atan2(enu[0], enu[1]); // x=East=sin, y=North=cos に整合 (draw側と同じ)
+        let metDir = (rad2deg(toAngleRad) + 180.0) % 360.0;
+        if (metDir < 0) metDir += 360;
+        layer._hakoniwa.windSpd = Number(spd.toFixed(1));
+        layer._hakoniwa.windDir = Math.round(metDir);
+      }
+    }
+  });
+
+  refreshZoneList();
+  renderOverlays();
+}
+
+function importFromText(){
+  try{
+    const txt = document.getElementById('output').value.trim();
+    if (!txt){ alert('上のテキストにJSONを貼り付けてください'); return; }
+    const obj = JSON.parse(txt);
+    importFromObject(obj);
+  }catch(e){
+    console.error(e);
+    alert('JSONの解析に失敗しました: ' + e.message);
+  }
+}
+
+async function importFromFile(){
+  const fi = document.getElementById('file-input');
+  if (!fi.files || fi.files.length === 0){ alert('JSONファイルを選択してください'); return; }
+  const file = fi.files[0];
+  const text = await file.text();
+  document.getElementById('output').value = text; // ついでに表示
+  try{
+    const obj = JSON.parse(text);
+    importFromObject(obj);
+  }catch(e){
+    console.error(e);
+    alert('JSONの解析に失敗しました: ' + e.message);
+  }
+}
+
+document.getElementById('btn-import-text').onclick = importFromText;
+document.getElementById('btn-import-file').onclick = importFromFile;
+
+// ---------- List & Overlays ----------
 function refreshZoneList(){
   const list = document.getElementById('zone-list');
   let html = "";
@@ -553,7 +676,6 @@ function refreshZoneList(){
   list.innerHTML = html || "<i>なし</i>";
 }
 
-// ---------- Overlays (arrows / turbulence circles) ----------
 function renderOverlays(){
   arrowLayerGroup.clearLayers();
   const originLat = parseFloat(originLatInput.value);
@@ -584,7 +706,6 @@ function renderOverlays(){
       L.polyline([[endLat, endLon], left], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
       L.polyline([[endLat, endLon], right], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
     } else if (m.mode === 'turbulence'){
-      // draw turbulence circle only (no arrow)
       const radiusMeters = (m.turbStd ?? 3.0) * 30.0;
       L.circle(center, {
         radius: radiusMeters,
@@ -596,12 +717,6 @@ function renderOverlays(){
     }
   });
 }
-
-// ---------- Import existing layer selection by click (optional) ----------
-map.on('layeradd', function(e){
-  // nothing extra
-});
-
 </script>
 </body>
 </html>
