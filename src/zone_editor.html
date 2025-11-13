@@ -60,6 +60,53 @@
     <div class="hint">矩形/円を描いてゾーン属性（名前・風 or 乱流・GPS・優先度）を設定→JSON出力／インポート。</div>
 
     <fieldset>
+      <legend>全体設定 (Grid & Base)</legend>
+      <div class="hint">シミュレーション全体の環境設定。</div>
+      
+      <label style="margin-top:10px; font-weight:bold;">Grid 設定</label>
+      <label>Min (x, y, z)</label>
+      <div class="row">
+        <div><input id="grid-min-x" type="number" value="-1000.0" step="10"></div>
+        <div><input id="grid-min-y" type="number" value="-1000.0" step="10"></div>
+        <div><input id="grid-min-z" type="number" value="0.0" step="10"></div>
+      </div>
+      <label>Max (x, y, z)</label>
+      <div class="row">
+        <div><input id="grid-max-x" type="number" value="1000.0" step="10"></div>
+        <div><input id="grid-max-y" type="number" value="1000.0" step="10"></div>
+        <div><input id="grid-max-z" type="number" value="100.0" step="10"></div>
+      </div>
+      <label>Cell Size (m)</label>
+      <div class="row">
+        <div><input id="grid-cell-x" type="number" value="100.0" step="10"></div>
+        <div><input id="grid-cell-y" type="number" value="100.0" step="10"></div>
+        <div><input id="grid-cell-z" type="number" value="100.0" step="10"></div>
+      </div>
+      <label>Levels</label>
+      <input id="grid-levels" type="number" value="1">
+
+      <label style="margin-top:10px; font-weight:bold;">Base 環境</label>
+      <label>基本風 (vector_ms x,y,z)</label>
+      <div class="row">
+        <div><input id="base-wind-x" type="number" step="0.1" value="4.0"></div>
+        <div><input id="base-wind-y" type="number" step="0.1" value="0.0"></div>
+        <div><input id="base-wind-z" type="number" step="0.1" value="0.0"></div>
+      </div>
+      <div class="row">
+        <div>
+          <label>気温 (°C)</label>
+          <input id="base-temp" type="number" step="0.1" value="20.0">
+        </div>
+        <div>
+          <label>気圧 (atm)</label>
+          <input id="base-pressure" type="number" step="0.01" value="1.0">
+        </div>
+      </div>
+      <label>基本GPS強度 (0..1)</label>
+      <input id="base-gps" type="number" step="0.05" min="0" max="1" value="1.0">
+    </fieldset>
+
+    <fieldset>
       <legend>原点（起動点）</legend>
       <label>Origin Lat</label>
       <input id="origin-lat" type="number" step="0.000001" value="35.666862">
@@ -533,6 +580,39 @@ function exportJSON(){
     const z = layerToZoneJSON(layer);
     if (z) zones.push(z);
   });
+
+  const grid = {
+    min: [
+      parseFloat(document.getElementById('grid-min-x').value),
+      parseFloat(document.getElementById('grid-min-y').value),
+      parseFloat(document.getElementById('grid-min-z').value)
+    ],
+    max: [
+      parseFloat(document.getElementById('grid-max-x').value),
+      parseFloat(document.getElementById('grid-max-y').value),
+      parseFloat(document.getElementById('grid-max-z').value)
+    ],
+    cell_m: [
+      parseFloat(document.getElementById('grid-cell-x').value),
+      parseFloat(document.getElementById('grid-cell-y').value),
+      parseFloat(document.getElementById('grid-cell-z').value)
+    ],
+    levels: parseInt(document.getElementById('grid-levels').value, 10)
+  };
+
+  const base = {
+    wind: {
+      vector_ms: [
+        parseFloat(document.getElementById('base-wind-x').value),
+        parseFloat(document.getElementById('base-wind-y').value),
+        parseFloat(document.getElementById('base-wind-z').value)
+      ]
+    },
+    temperature_C: parseFloat(document.getElementById('base-temp').value),
+    pressure_atm: parseFloat(document.getElementById('base-pressure').value),
+    gps_strength: parseFloat(document.getElementById('base-gps').value)
+  };
+
   const out = {
     version: "0.1",
     meta: {
@@ -541,6 +621,8 @@ function exportJSON(){
       axis: "ROS",
       units: { length: "m", speed: "m/s", temp: "C" }
     },
+    grid: grid,
+    base: base,
     zones: zones
   };
   return JSON.stringify(out, null, 2);
@@ -569,6 +651,28 @@ function importFromObject(obj){
   }
   const originLat = parseFloat(originLatInput.value);
   const originLon = parseFloat(originLonInput.value);
+
+  // -- Grid & Base のインポート --
+  if (obj.grid) {
+    document.getElementById('grid-min-x').value = obj.grid.min?.[0] ?? -1000.0;
+    document.getElementById('grid-min-y').value = obj.grid.min?.[1] ?? -1000.0;
+    document.getElementById('grid-min-z').value = obj.grid.min?.[2] ?? 0.0;
+    document.getElementById('grid-max-x').value = obj.grid.max?.[0] ?? 1000.0;
+    document.getElementById('grid-max-y').value = obj.grid.max?.[1] ?? 1000.0;
+    document.getElementById('grid-max-z').value = obj.grid.max?.[2] ?? 100.0;
+    document.getElementById('grid-cell-x').value = obj.grid.cell_m?.[0] ?? 100.0;
+    document.getElementById('grid-cell-y').value = obj.grid.cell_m?.[1] ?? 100.0;
+    document.getElementById('grid-cell-z').value = obj.grid.cell_m?.[2] ?? 100.0;
+    document.getElementById('grid-levels').value = obj.grid.levels ?? 1;
+  }
+  if (obj.base) {
+    document.getElementById('base-wind-x').value = obj.base.wind?.vector_ms?.[0] ?? 4.0;
+    document.getElementById('base-wind-y').value = obj.base.wind?.vector_ms?.[1] ?? 0.0;
+    document.getElementById('base-wind-z').value = obj.base.wind?.vector_ms?.[2] ?? 0.0;
+    document.getElementById('base-temp').value = obj.base.temperature_C ?? 20.0;
+    document.getElementById('base-pressure').value = obj.base.pressure_atm ?? 1.0;
+    document.getElementById('base-gps').value = obj.base.gps_strength ?? 1.0;
+  }
 
   // 2) 軸（ROS/ENU）に応じた変換関数
   const axis = (obj?.meta?.axis || "ENU").toUpperCase();
