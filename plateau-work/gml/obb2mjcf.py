@@ -109,6 +109,7 @@ def make_mjcf(
         elif "zmin" in it and "zmax" in it:
             zmin = float(it["zmin"]); zmax = float(it["zmax"])
             height = zmax - zmin
+            #print(f"[DEBUG] zmin = {zmin}, zmax = {zmax} for id={gid}")
         else:
             zmin = float(fallback_zmin)
             height = float(fallback_height)
@@ -202,6 +203,28 @@ def main():
             elif "height" in ref and ("zmin" not in it and "zmax" not in it):
                 it["height"] = ref["height"]; hit += 1
         print(f"[INFO] height merged for {hit}/{len(items)} items from --zsrc")
+
+    # --- 全体の zmin を 0 にそろえるためのオフセット計算 ---
+    all_zmin = []
+    for it in items:
+        if "zmin" in it:
+            all_zmin.append(float(it["zmin"]))
+        else:
+            all_zmin.append(float(args.zmin))
+
+    if all_zmin:
+        z_offset = min(all_zmin)
+        print(f"[INFO] Global z-offset = {-z_offset} (min z = {z_offset})")
+
+        # 全オブジェクトの zmin/zmax をオフセットして 0 基準にそろえる
+        for it in items:
+            #print(f"[INFO] Adjusting zmin {it.get('zmin', args.zmin)} to {it.get('zmin', args.zmin)-z_offset}...")
+            if "zmin" in it:
+                it["zmin"] = float(it["zmin"]) - z_offset
+            if "zmax" in it:
+                it["zmax"] = float(it["zmax"]) - z_offset
+            # height は変更不要（差分に基づくため）
+
 
     default_rgba = tuple(args.rgba) if args.rgba else (0.82, 0.82, 0.86, 1.0)
 
