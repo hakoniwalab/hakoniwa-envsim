@@ -9,18 +9,10 @@ OBB JSON (center, half_size, yaw) -> MJCF (MuJoCo XML)
 - --collide {all,drone,none} で接触設定を一括付与
 - --floor で z=0 の無限平面を追加
 - 高さ情報が無い場合は --height / --zmin をフォールバックに使用
-- 座標系は入力JSONのまま（相対座標 or 絶対座標）
-
-使い方例:
-  python obb2mjcf.py \
-    --inp shibuya_2km_obb.json \
-    --zsrc shibuya_2km_lod1.json \
-    --out shibuya_2km_buildings.xml \
-    --collide drone \
-    --floor
+- 入力が ENU 座標系の場合、MJCF 座標系 (X=North, Y=East, Z=Up) に変換して出力
 """
 
-import argparse, json
+import argparse, json, math
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -74,9 +66,21 @@ def make_mjcf(
     floor_rgba=(0.7, 0.7, 0.7, 1.0),
     model_name="obb_world",
     collide_mode="all",  # "all" | "drone" | "none"
+    pos_fn=lambda x, y, z: (x, y, z),
+    yaw_fn=lambda a: a,
 ):
+    """
+    pos_fn: (cx, cy, cz) -> (x_mj, y_mj, z_mj)
+    yaw_fn: yaw_in -> yaw_for_mjcf
+    """
     mujoco = ET.Element("mujoco", {"model": model_name})
+    size_tag = ET.SubElement(mujoco, "size")
+    size_tag.attrib.update({
+        "nstack": "40000000",
+        "nconmax": "500000",
+    })
     world = ET.SubElement(mujoco, "worldbody")
+
 
     if add_floor:
         ET.SubElement(world, "geom", {
@@ -90,11 +94,11 @@ def make_mjcf(
     for i, it in enumerate(items):
         gid = str(it.get("id", f"bldg_{i}"))
 
-        # center は入力座標系のまま（相対 or 絶対）
+        # center は入力座標系の値
         cx, cy = it["center"]
 
         sx, sy = it["half_size"]
-        yaw = float(it.get("yaw_rad", it.get("yaw", 0.0)))
+        yaw_in = float(it.get("yaw_rad", it.get("yaw", 0.0)))
 
         # --- 高さ決定（優先順位: it.height / it.zmin,zmax / fallback） ---
         if "height" in it:
@@ -112,6 +116,10 @@ def make_mjcf(
         cz = 0.5 * (zmin + zmax)
         sz = 0.5 * height
 
+        # --- 座標系変換（ENU -> MJCFなど） ---
+        px, py, pz = pos_fn(cx, cy, cz)
+        yaw = yaw_fn(yaw_in)
+
         density = it.get("density", default_density)
         rgba = tuple(it.get("rgba", default_rgba))
 
@@ -120,7 +128,7 @@ def make_mjcf(
             "name": f"geom_{gid}",
             "type": "box",
             "size": f"{f4(sx)} {f4(sy)} {f4(sz)}",   # MuJoCoは半サイズ
-            "pos": f"{f4(cx)} {f4(cy)} {f4(cz)}",
+            "pos": f"{f4(px)} {f4(py)} {f4(pz)}",
             "euler": f"0 0 {f4(yaw)}",
             "rgba": " ".join(map(f4, rgba)),
             "contype": "1",
@@ -167,7 +175,7 @@ def main():
         raise SystemExit("[ERR] No items found in --inp (expects key 'results' or 'polygons').")
 
     # 座標系情報を表示
-    coordinate_system = data.get("coordinate_system", "unknown")
+    coordinate_system = "enu"
     origin = data.get("origin")
     bounds = data.get("bounds")
     
@@ -196,6 +204,32 @@ def main():
 
     default_rgba = tuple(args.rgba) if args.rgba else (0.82, 0.82, 0.86, 1.0)
 
+    # === 座標変換関数を定義 ===
+    if coordinate_system.startswith("enu"):
+        # OBB: (x=East, y=North, z=Up)
+        # MJCF: (x=North, y=East, z=Up)
+        def pos_fn(cx, cy, cz):
+            # ENU -> MJCF
+            return cy, cx, cz
+
+        def yaw_fn(yaw_enu):
+            # ENUの yaw(東基準) -> MJCFの yaw(北基準)
+            # 方向ベクトル一致条件より: yaw_mj = π/2 - yaw_enu
+            rad = math.pi / 2.0 - yaw_enu
+            deg = math.degrees(rad)
+            return deg
+
+        print("[INFO] Using ENU -> MJCF (X=North, Y=East, Z=Up) transform.")
+    else:
+        # 何も知らない座標系なら、とりあえず素通し
+        def pos_fn(cx, cy, cz):
+            return cx, cy, cz
+
+        def yaw_fn(a):
+            return a
+
+        print("[INFO] Unknown coordinate system: no axis transform applied.")
+
     root = make_mjcf(
         items=items,
         default_density=args.density,
@@ -205,6 +239,8 @@ def main():
         add_floor=args.floor,
         model_name=args.model_name,
         collide_mode=args.collide,
+        pos_fn=pos_fn,
+        yaw_fn=yaw_fn,
     )
 
     indent(root)
