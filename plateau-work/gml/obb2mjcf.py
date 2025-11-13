@@ -9,11 +9,7 @@ OBB JSON (center, half_size, yaw) -> MJCF (MuJoCo XML)
 - --collide {all,drone,none} で接触設定を一括付与
 - --floor で z=0 の無限平面を追加
 - 高さ情報が無い場合は --height / --zmin をフォールバックに使用
-- 【追加】--filter-ns / --filter-ew で XY座標の矩形範囲フィルタ
-    * gml2oob.py で原点(0,0)にした位置から見て、
-      x(EW方向) ∈ [-filter_ew, +filter_ew]
-      y(NS方向) ∈ [-filter_ns, +filter_ns]
-      に入る建物だけを MJCF に出力
+- 座標系は入力JSONのまま（相対座標 or 絶対座標）
 
 使い方例:
   python obb2mjcf.py \
@@ -21,8 +17,7 @@ OBB JSON (center, half_size, yaw) -> MJCF (MuJoCo XML)
     --zsrc shibuya_2km_lod1.json \
     --out shibuya_2km_buildings.xml \
     --collide drone \
-    --floor \
-    --filter-ns 800 --filter-ew 800
+    --floor
 """
 
 import argparse, json
@@ -95,7 +90,7 @@ def make_mjcf(
     for i, it in enumerate(items):
         gid = str(it.get("id", f"bldg_{i}"))
 
-        # center はすでに gml2oob.py で原点からの相対XY[m] になっている前提
+        # center は入力座標系のまま（相対 or 絶対）
         cx, cy = it["center"]
 
         sx, sy = it["half_size"]
@@ -163,13 +158,6 @@ def main():
     ap.add_argument("--collide", choices=["all", "drone", "none"], default="all",
                     help="Contact setting for buildings")
 
-    # 新しいフィルタ機能: XY 範囲 [m]
-    ap.add_argument("--filter-ns", type=float, default=None,
-                    help="北南方向の半幅[m]。y ∈ [-filter_ns, +filter_ns] の建物だけ出力。非指定なら無制限。")
-
-    ap.add_argument("--filter-ew", type=float, default=None,
-                    help="東西方向の半幅[m]。x ∈ [-filter_ew, +filter_ew] の建物だけ出力。非指定なら無制限。")
-
     args = ap.parse_args()
 
     # 読み込み
@@ -178,20 +166,17 @@ def main():
     if not items:
         raise SystemExit("[ERR] No items found in --inp (expects key 'results' or 'polygons').")
 
-    # XY 範囲フィルタ（原点 = gml2oob で指定した lat/lon の位置）
-    if args.filter_ns is not None or args.filter_ew is not None:
-        ns = args.filter_ns
-        ew = args.filter_ew
-        filtered = []
-        for it in items:
-            cx, cy = it["center"]
-            if ew is not None and (cx < -ew or cx > ew):
-                continue
-            if ns is not None and (cy < -ns or cy > ns):
-                continue
-            filtered.append(it)
-        print(f"[INFO] XY filter: {len(items)} -> {len(filtered)} (ns={ns}, ew={ew})")
-        items = filtered
+    # 座標系情報を表示
+    coordinate_system = data.get("coordinate_system", "unknown")
+    origin = data.get("origin")
+    bounds = data.get("bounds")
+    
+    print(f"[INFO] Coordinate system: {coordinate_system}")
+    if origin:
+        print(f"[INFO] Origin: lat={origin.get('lat')}, lon={origin.get('lon')}")
+    if bounds:
+        print(f"[INFO] Bounds: ±{bounds.get('ns_m')}m (NS), ±{bounds.get('ew_m')}m (EW)")
+    print(f"[INFO] Total buildings: {len(items)}")
 
     # 高さ突合
     zmap = load_zmap(args.zsrc) if args.zsrc else {}

@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-gml2oob_min.py
+gml2obb.py
   - 入力: polygon JSON (gml_lod1_extract.py が出すような形式)
   - 出力: 各ポリゴンの OBB(外接最小矩形) を計算した JSON
   - 機能:
       * グラフ描画なし
       * "after"（変換後 OBB）だけ出力
       * --in / --out は必須引数
-      * --origin-lat, --origin-lon で原点を指定
-      * 原点 lat/lon をポリゴンと同じ EPSG に変換し、
-        その点からの相対位置 [m] として center / rect_corners を保存
+      * 入力JSONに origin 情報があればそのまま引き継ぐ
+      * 相対座標の場合はそのまま処理、絶対座標の場合もそのまま処理
 
   依存:
-    pip install numpy pyproj
+    pip install numpy
 """
 
 import json
@@ -21,11 +20,6 @@ import argparse
 from pathlib import Path
 
 import numpy as np
-
-try:
-    from pyproj import Transformer
-except ImportError as e:
-    raise SystemExit("pyproj が必要です: pip install pyproj") from e
 
 
 # ---------- geometry utils (元スクリプトから必要分だけ) ----------
@@ -146,12 +140,6 @@ def main():
                     help="入力 polygon JSON (gml_lod1_extract の出力など)")
     ap.add_argument("--out", dest="out_path", type=str, required=True,
                     help="OBB(after) の出力 JSON パス")
-    ap.add_argument("--origin-lat", type=float, required=True,
-                    help="原点となる緯度（deg, EPSG:4326）")
-    ap.add_argument("--origin-lon", type=float, required=True,
-                    help="原点となる経度（deg, EPSG:4326）")
-    ap.add_argument("--crs-epsg", type=int, default=None,
-                    help="ポリゴンXYのEPSG。省略時は input JSON の `crs` を参照し、無ければ 4326 とみなす。")
     args = ap.parse_args()
 
     in_path  = Path(args.in_path)
@@ -162,33 +150,11 @@ def main():
 
     polys_in = list(data["polygons"])
 
-    # CRS を決定
-    epsg = args.crs_epsg
-    if epsg is None:
-        crs_str = data.get("crs")
-        if isinstance(crs_str, str) and crs_str.upper().startswith("EPSG:"):
-            try:
-                epsg = int(crs_str.split(":")[1])
-            except Exception:
-                epsg = None
-    if epsg is None:
-        epsg = 4326  # fallback
-
-    # 原点 lat/lon → XY(ポリゴンと同じEPSG)
-    if epsg == 4326:
-        origin_x = args.origin_lon
-        origin_y = args.origin_lat
-    else:
-        tf = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg}", always_xy=True)
-        origin_x, origin_y = tf.transform(args.origin_lon, args.origin_lat)
-
-    origin = {
-        "lat": args.origin_lat,
-        "lon": args.origin_lon,
-        "x": float(origin_x),
-        "y": float(origin_y),
-        "epsg": epsg,
-    }
+    # メタ情報を引き継ぐ
+    crs = data.get("crs", "unknown")
+    coordinate_system = data.get("coordinate_system", "unknown")
+    origin = data.get("origin")
+    bounds = data.get("bounds")
 
     results_after = []
 
@@ -205,22 +171,16 @@ def main():
         height = poly.get("height")
         source = poly.get("source_gml")
 
-        # OBB 計算（絶対座標系）
+        # OBB 計算（入力座標系のまま）
         center, halfsize, yaw, rect, area = min_area_rect_calipers(pts)
-
-        # 原点からの相対位置に変換
-        center_rel = np.array([center[0] - origin_x, center[1] - origin_y], dtype=float)
-        rect_rel   = rect.copy()
-        rect_rel[:,0] -= origin_x
-        rect_rel[:,1] -= origin_y
 
         rec = {
             "id": pid,
-            "center": [float(center_rel[0]), float(center_rel[1])],
+            "center": [float(center[0]), float(center[1])],
             "half_size": [float(halfsize[0]), float(halfsize[1])],
             "yaw_rad": float(yaw),
             "yaw_deg": float(np.degrees(yaw)),
-            "rect_corners": rect_rel.tolist(),
+            "rect_corners": rect.tolist(),
             "area": float(area),
         }
         if zmin   is not None: rec["zmin"]   = float(zmin)
@@ -231,16 +191,27 @@ def main():
         results_after.append(rec)
 
     out = {
-        "version": "0.3",
+        "version": "0.4",
         "mode": "after",
         "source": str(in_path),
-        "origin": origin,
+        "crs": crs,
+        "coordinate_system": coordinate_system,
         "results": results_after,
     }
+    
+    # origin と bounds があれば引き継ぐ
+    if origin is not None:
+        out["origin"] = origin
+    if bounds is not None:
+        out["bounds"] = bounds
+
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
 
     print(f"[OK] OBB count: {len(results_after)}  → {out_path}")
+    print(f"[INFO] CRS: {crs}, Coordinate system: {coordinate_system}")
+    if origin:
+        print(f"[INFO] Origin: lat={origin.get('lat')}, lon={origin.get('lon')}")
 
 
 if __name__ == "__main__":

@@ -7,6 +7,10 @@ CityGML (PLATEAU) GML から LOD1 のフットプリントと高さを抽出し�
   * --in にファイルを渡した場合: その1ファイルだけ処理
   * --in にディレクトリを渡した場合: 再帰的に *_bldg_*_op.gml を全部処理
 
+- query_meta.json がある場合、center_lat/center_lon を原点として相対座標に変換
+  * --in がディレクトリの場合: そのディレクトリ直下の query_meta.json を探す
+  * --in がファイルの場合: その親ディレクトリの query_meta.json を探す
+
 - 取得対象:
   * bldg:Building ごとの bldg:lod1Solid / gml:Solid / gml:CompositeSurface / gml:Polygon / gml:LinearRing / gml:posList
   * posList は (lat lon z) or (lon lat z) など GML依存だが、PLATEAUの例では (lat lon z) が多い。
@@ -24,7 +28,7 @@ CityGML (PLATEAU) GML から LOD1 のフットプリントと高さを抽出し�
     --out poly_from_gml.json \
     --to-epsg 6677
 
-  # ディレクトリ配下の *_bldg_*_op.gml を全部処理
+  # ディレクトリ配下の *_bldg_*_op.gml を全部処理（query_meta.jsonで相対座標化）
   python gml_lod1_extract.py \
     --in ./udx/bldg \
     --out shibuya_lod1.json \
@@ -103,6 +107,19 @@ def project_xy(points_xy, src_epsg=4326, dst_epsg=None):
     return out
 
 
+def to_relative_coords(points_xy, origin_xy):
+    """
+    絶対座標を原点からの相対座標に変換。
+    points_xy: [(x,y,z), ...]
+    origin_xy: (origin_x, origin_y)
+    """
+    ox, oy = origin_xy
+    out = []
+    for (x, y, z) in points_xy:
+        out.append((x - ox, y - oy, z))
+    return out
+
+
 def convex_hull_xy(points_xy, min_points=3):
     """
     XY の凸包 (shapely) → 頂点列（反時計回り）。
@@ -150,11 +167,69 @@ def convex_hull_xy(points_xy, min_points=3):
         return hull
 
 
+def load_query_meta(meta_path):
+    """query_meta.json を読み込み、center_lat/center_lon と範囲 (ns_m, ew_m) を返す。"""
+    if not meta_path.exists():
+        return None
+    
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        center_lat = data.get("center_lat")
+        center_lon = data.get("center_lon")
+        ns_m = data.get("ns_m")
+        ew_m = data.get("ew_m")
+        
+        if center_lat is None or center_lon is None:
+            print(f"[WARN] query_meta.json にcenter_lat/center_lonがありません: {meta_path}")
+            return None
+        
+        print(f"[INFO] 原点座標: lat={center_lat}, lon={center_lon}")
+        if ns_m is not None and ew_m is not None:
+            print(f"[INFO] フィルタ範囲: ±{ns_m}m (NS), ±{ew_m}m (EW)")
+        
+        return {
+            "center_lat": center_lat,
+            "center_lon": center_lon,
+            "ns_m": ns_m,
+            "ew_m": ew_m
+        }
+    except Exception as e:
+        print(f"[WARN] query_meta.json の読み込みに失敗: {e}")
+        return None
+
+
+def is_within_bounds(footprint, bounds):
+    """
+    建物のフットプリント（相対座標）が指定範囲内にあるかチェック。
+    footprint: [(x, y), ...] の頂点リスト（相対座標）
+    bounds: {"ns_m": float, "ew_m": float} or None
+    
+    建物の重心が範囲内にあればTrue。
+    """
+    if bounds is None or bounds.get("ns_m") is None or bounds.get("ew_m") is None:
+        return True  # 範囲指定なしなら全部通す
+    
+    ns_m = bounds["ns_m"]
+    ew_m = bounds["ew_m"]
+    
+    # フットプリントの重心を計算
+    xs = [p[0] for p in footprint]
+    ys = [p[1] for p in footprint]
+    cx = sum(xs) / len(xs)
+    cy = sum(ys) / len(ys)
+    
+    # 範囲チェック（相対座標なので ±ns_m, ±ew_m）
+    return abs(cy) <= ns_m and abs(cx) <= ew_m
+
+
 def extract_buildings_lod1(gml_path, to_epsg=None, src_epsg=4326,
-                           base_eps=0.2, swap_latlon=True):
+                           base_eps=0.2, swap_latlon=True, origin_xy=None, bounds=None):
     """
     1つの GML ファイルから bldg:lod1Solid の点群を抽出し、(XY凸包, zmin, zmax) を返す。
     - base_eps: zmin からの許容差（m）。底面近傍点の抽出に使用。
+    - origin_xy: (origin_x, origin_y) を指定した場合、相対座標に変換
+    - bounds: {"ns_m": float, "ew_m": float} を指定した場合、範囲外の建物をフィルタ
     """
     tree = ET.parse(gml_path)
     root = tree.getroot()
@@ -187,6 +262,10 @@ def extract_buildings_lod1(gml_path, to_epsg=None, src_epsg=4326,
         # 必要なら EPSG 変換
         xyz = project_xy(xyz, src_epsg=src_epsg, dst_epsg=to_epsg)
 
+        # 原点からの相対座標に変換
+        if origin_xy is not None:
+            xyz = to_relative_coords(xyz, origin_xy)
+
         # 高さレンジ
         zs = np.array([p[2] for p in xyz], dtype=float)
         zmin = float(np.min(zs))
@@ -203,6 +282,10 @@ def extract_buildings_lod1(gml_path, to_epsg=None, src_epsg=4326,
         if len(footprint) < 3:
             # 退避：点や線しか得られない場合はスキップ
             continue
+
+        # 範囲チェック（相対座標の場合のみ）
+        if origin_xy is not None and not is_within_bounds(footprint, bounds):
+            continue  # 範囲外なのでスキップ
 
         results.append({
             "id": bid,
@@ -246,6 +329,41 @@ def main():
     in_path  = Path(args.in_path)
     out_path = Path(args.out_path)
 
+    # query_meta.json の探索
+    origin_meta = None
+    origin_xy = None
+    bounds = None
+    
+    if in_path.is_dir():
+        meta_path = in_path / "query_meta.json"
+    else:
+        meta_path = in_path.parent / "query_meta.json"
+    
+    origin_meta = load_query_meta(meta_path)
+    
+    # 原点座標を投影座標系に変換
+    if origin_meta is not None:
+        center_lat = origin_meta["center_lat"]
+        center_lon = origin_meta["center_lon"]
+        
+        # 範囲情報を保持
+        if origin_meta.get("ns_m") is not None and origin_meta.get("ew_m") is not None:
+            bounds = {
+                "ns_m": origin_meta["ns_m"],
+                "ew_m": origin_meta["ew_m"]
+            }
+        
+        # swap_latlon に従って (lon, lat) または (lat, lon) に
+        if not args.no_swap_latlon:
+            origin_points = [(center_lon, center_lat, 0)]
+        else:
+            origin_points = [(center_lat, center_lon, 0)]
+        
+        # EPSG変換
+        origin_points = project_xy(origin_points, src_epsg=args.src_epsg, dst_epsg=args.to_epsg)
+        origin_xy = (origin_points[0][0], origin_points[0][1])
+        print(f"[INFO] 投影後の原点: x={origin_xy[0]:.2f}, y={origin_xy[1]:.2f}")
+
     # 対象 GML 一覧を集める
     gml_paths = collect_gml_paths(in_path, args.pattern)
     if not gml_paths:
@@ -254,6 +372,7 @@ def main():
     print(f"[INFO] Target GML count: {len(gml_paths)}")
 
     all_footprints = []
+    filtered_count = 0
     for gml in gml_paths:
         footprints = extract_buildings_lod1(
             gml_path=gml,
@@ -261,6 +380,8 @@ def main():
             src_epsg=args.src_epsg,
             base_eps=args.base_eps,
             swap_latlon=(not args.no_swap_latlon),
+            origin_xy=origin_xy,
+            bounds=bounds,
         )
         # どのGMLから来たか分かるようにする
         for poly in footprints:
@@ -271,12 +392,28 @@ def main():
     out = {
         "version": "0.1",
         "crs": f"EPSG:{args.to_epsg}" if args.to_epsg else f"EPSG:{args.src_epsg}",
+        "coordinate_system": "relative" if origin_xy else "absolute",
         "polygons": all_footprints
     }
+    
+    if origin_xy:
+        out["origin"] = {
+            "lat": origin_meta["center_lat"],
+            "lon": origin_meta["center_lon"],
+            "x": origin_xy[0],
+            "y": origin_xy[1]
+        }
+        if bounds:
+            out["bounds"] = bounds
+    
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
 
     print(f"[OK] buildings: {len(all_footprints)}  → {out_path}")
+    if origin_xy:
+        print(f"[OK] 相対座標系で出力しました（原点: lat={origin_meta['center_lat']}, lon={origin_meta['center_lon']}）")
+        if bounds:
+            print(f"[OK] 範囲フィルタ適用: ±{bounds['ns_m']}m (NS), ±{bounds['ew_m']}m (EW)")
 
 
 if __name__ == "__main__":
