@@ -68,6 +68,7 @@ def make_mjcf(
     collide_mode="all",  # "all" | "drone" | "none"
     pos_fn=lambda x, y, z: (x, y, z),
     yaw_fn=lambda a: a,
+    sxy_fn=lambda sx, sy: (sx, sy),
 ):
     """
     pos_fn: (cx, cy, cz) -> (x_mj, y_mj, z_mj)
@@ -97,7 +98,7 @@ def make_mjcf(
         # center は入力座標系の値
         cx, cy = it["center"]
 
-        sx, sy = it["half_size"]
+        sx, sy = sxy_fn(*it["half_size"])
         yaw_in = float(it.get("yaw_rad", it.get("yaw", 0.0)))
 
         # --- 高さ決定（優先順位: it.height / it.zmin,zmax / fallback） ---
@@ -207,17 +208,17 @@ def main():
     # === 座標変換関数を定義 ===
     if coordinate_system.startswith("enu"):
         # OBB: (x=East, y=North, z=Up)
-        # MJCF: (x=North, y=East, z=Up)
+        # MJCF: (x=North, y=-East, z=Up)
         def pos_fn(cx, cy, cz):
             # ENU -> MJCF
-            return cy, cx, cz
+            return cy, -cx, cz
 
         def yaw_fn(yaw_enu):
-            # ENUの yaw(東基準) -> MJCFの yaw(北基準)
-            # 方向ベクトル一致条件より: yaw_mj = π/2 - yaw_enu
-            rad = math.pi / 2.0 - yaw_enu
-            deg = math.degrees(rad)
+            deg = math.degrees(yaw_enu)
             return deg
+
+        def sxy_fn(sx, sy):
+            return sy, sx
 
         print("[INFO] Using ENU -> MJCF (X=North, Y=East, Z=Up) transform.")
     else:
@@ -241,6 +242,7 @@ def main():
         collide_mode=args.collide,
         pos_fn=pos_fn,
         yaw_fn=yaw_fn,
+        sxy_fn=sxy_fn,
     )
 
     indent(root)
