@@ -38,9 +38,9 @@
     <fieldset>
       <legend>原点設定</legend>
       <label>Origin Lat</label>
-      <input id="origin-lat" type="number" step="0.000001" value="35.666862">
+      <input id="origin-lat" type="number" step="0.000001" value="35.6625">
       <label>Origin Lon</label>
-      <input id="origin-lon" type="number" step="0.000001" value="139.692616">
+      <input id="origin-lon" type="number" step="0.000001" value="139.70625">
       <label>初期ズーム</label>
       <input id="init-zoom" type="number" min="1" max="25" value="16">
       <button id="btn-center">原点へ移動</button>
@@ -119,26 +119,40 @@
   <div id="map"></div>
 </div>
 
+<!-- Leaflet 本体 -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- EPSG:6677 への変換用 -->
+<script src="https://unpkg.com/proj4@2.9.0/dist/proj4.js"></script>
 <script>
-// ====== 座標変換（Env Zone Editor と同じ流儀） ======
-const proj = L.CRS.EPSG3857;
+proj4.defs("EPSG:6677",
+  "+proj=tmerc +lat_0=36 +lon_0=139.8333333333333 " +
+  "+k=0.9999 +x_0=0 +y_0=0 +ellps=GRS80 +units=m +no_defs"
+);
+</script>
+<script>
+// ====== 座標変換 (EPSG:4326 <-> EPSG:6677) ======
 function deg2rad(d){ return d*Math.PI/180; }
 function rad2deg(r){ return r*180/Math.PI; }
 
+// lat/lon (deg) → 原点基準の ENU[m] （x:東, y:北）
+//   ※EPSG:4326 → EPSG:6677 に投影して差分を取る
 function latlonToENU(originLat, originLon, lat, lon) {
-  const originPt = proj.project(L.latLng(originLat, originLon));
-  const targetPt = proj.project(L.latLng(lat, lon));
-  const mx = targetPt.x - originPt.x; // East
-  const my = targetPt.y - originPt.y; // North
+  const p0 = proj4('EPSG:4326','EPSG:6677',[originLon, originLat]); // [X0,Y0]
+  const p1 = proj4('EPSG:4326','EPSG:6677',[lon,        lat       ]); // [X1,Y1]
+  const mx = p1[0] - p0[0]; // East
+  const my = p1[1] - p0[1]; // North
   return [mx, my];
 }
 
+// 原点基準 ENU[m] → lat/lon (deg)
+//   ※EPSG:6677 で原点座標に差分を足してから、EPSG:4326 へ逆変換
 function ENUToLatLon(originLat, originLon, x, y) {
-  const originPt = proj.project(L.latLng(originLat, originLon));
-  const targetPt = L.point(originPt.x + x, originPt.y + y);
-  const latlng = proj.unproject(targetPt);
-  return [latlng.lat, latlng.lng];
+  const p0 = proj4('EPSG:4326','EPSG:6677',[originLon, originLat]); // [X0,Y0]
+  const p1 = [p0[0] + x, p0[1] + y]; // [X1,Y1]
+  const geo = proj4('EPSG:6677','EPSG:4326',p1); // [lon,lat]
+  const lon = geo[0];
+  const lat = geo[1];
+  return [lat, lon];
 }
 
 // ENU -> ROS
@@ -161,7 +175,6 @@ let waypoints = [];
 let selectedIndex = -1;
 let pathLine = null;
 
-
 const map = L.map('map', {
   preferCanvas: true,
   maxZoom: 25
@@ -169,8 +182,8 @@ const map = L.map('map', {
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution:'&copy; OpenStreetMap contributors',
-  maxZoom: 25,      // 画面上のズーム上限
-  maxNativeZoom: 19 // タイルは19までしか取りに行かない
+  maxZoom: 25,
+  maxNativeZoom: 19
 }).addTo(map);
 L.control.scale().addTo(map);
 pathLine = L.polyline([], { color:'#e67e22', weight:3 }).addTo(map);
@@ -285,7 +298,6 @@ const wpYawInput        = document.getElementById('wp-yaw');
 const wpSleepInput      = document.getElementById('wp-sleep');
 const btnDelWp          = document.getElementById('btn-del-wp');
 
-
 function refreshPolyline(){
   if (!pathLine) return;  // 念のため
 
@@ -296,8 +308,6 @@ function refreshPolyline(){
   }
   pathLine.setLatLngs(latlngs);
 }
-
-
 
 function refreshWpList(){
   wpListDiv.innerHTML = "";
