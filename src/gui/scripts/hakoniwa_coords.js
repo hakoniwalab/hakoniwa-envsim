@@ -29,10 +29,22 @@
     const lat = geo[1];
     return [lat, lon]; // [lat, lon]
   }
+  function deg2rad(d){ return d * Math.PI / 180; }
+  function rad2deg(r){ return r * 180 / Math.PI; }
 
-  // グローバルに公開
+  function enuToRosFrame(enu_x, enu_y, enu_z) {
+    return [enu_y, -enu_x, enu_z];
+  }
+  function rosToEnuFrame(x_ros, y_ros, z_ros){
+    return [-y_ros, x_ros, z_ros];
+  }
+
   global.HakoniwaCoords = {
     latlonToENU,
     ENUToLatLon,
+    deg2rad,
+    rad2deg,
+    enuToRosFrame,
+    rosToEnuFrame,
   };
 })(window);

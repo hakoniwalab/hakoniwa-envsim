@@ -142,22 +142,7 @@
 <!-- Leaflet 本体 -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// ====== 座標変換 (EPSG:4326 <-> EPSG:6677) ======
-function deg2rad(d){ return d*Math.PI/180; }
-function rad2deg(r){ return r*180/Math.PI; }
-
-
-// ENU -> ROS
-function enuToRosFrame(enu_x, enu_y, enu_z) {
-  // ENU (East, North, Up) -> ROS (X forward, Y left, Z up)
-  return [enu_y, -enu_x, enu_z];
-}
-// ROS -> ENU
-function rosToEnuFrame(x_ros, y_ros, z_ros){
-  // X_ros = Y_enu, Y_ros = -X_enu → X_enu = -Y_ros, Y_enu = X_ros
-  return [-y_ros, x_ros, z_ros];
-}
-
+  
 // ====== Map init ======
 const originLatInput = document.getElementById('origin-lat');
 const originLonInput = document.getElementById('origin-lon');
@@ -246,7 +231,7 @@ function importEnvObject(obj){
 
   const axis = (obj.meta && obj.meta.axis ? String(obj.meta.axis).toUpperCase() : "ENU");
   const toENU = (axis === "ROS")
-    ? (x,y,z)=>rosToEnuFrame(x,y,z)
+    ? (x,y,z)=>HakoniwaCoords.rosToEnuFrame(x,y,z)
     : (x,y,z)=>[x,y,z];
 
   (obj.zones || []).forEach(z=>{
@@ -300,7 +285,7 @@ function importMissionObject(obj) {
       nextSleep = cmd.parameters.duration_sec;
     } else if (cmd.command === "moveToPosition" && cmd.parameters) {
       const p = cmd.parameters;
-      const [ex, ey] = rosToEnuFrame(p.x, p.y, p.z);
+      const [ex, ey] = HakoniwaCoords.rosToEnuFrame(p.x, p.y, p.z);
       const [lat, lon] = HakoniwaCoords.ENUToLatLon(originLat, originLon, ex, ey);
       
       addWaypoint(L.latLng(lat, lon));
@@ -515,7 +500,7 @@ function markerToRosXY(wp){
   const originLat = parseFloat(originLatInput.value);
   const originLon = parseFloat(originLonInput.value);
   const [ex, ey] = HakoniwaCoords.latlonToENU(originLat, originLon, wp.lat, wp.lon);
-  const [xr, yr, zr] = enuToRosFrame(ex, ey, 0);
+  const [xr, yr, zr] = HakoniwaCoords.enuToRosFrame(ex, ey, 0);
   return [xr, yr];
 }
 
@@ -528,7 +513,7 @@ function computeYawForSegment(idx){
   const dy = cur.lat - prev.lat;
   if (dx === 0 && dy === 0) return 0;
   const rad = Math.atan2(dx, dy); // 北=0°、東=90° のようなイメージ
-  let deg = rad2deg(rad);
+  let deg = HakoniwaCoords.rad2deg(rad);
   return Math.round(deg);
 }
 
