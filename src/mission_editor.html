@@ -63,6 +63,22 @@
     </fieldset>
 
     <fieldset>
+      <legend>ミッションJSONインポート</legend>
+      <div class="row" style="align-items:center;">
+        <div>
+          <input id="mission-file" type="file" accept=".json">
+        </div>
+        <div>
+          <button id="btn-load-mission">ミッションJSON読み込み</button>
+        </div>
+      </div>
+      <div class="hint">
+        mission.json を選ぶと、<br>
+        ウェイポイントが地図に表示されます。
+      </div>
+    </fieldset>
+
+    <fieldset>
       <legend>共通設定</legend>
       <div class="row">
         <div>
@@ -102,6 +118,7 @@
         <input id="wp-sleep" type="number" value="0">
       </div>
       <button id="btn-del-wp">選択WPを削除</button>
+      <button id="btn-del-all-wps">全WPを削除</button>
     </fieldset>
 
     <fieldset>
@@ -286,6 +303,71 @@ function importEnvObject(obj){
 
 document.getElementById('btn-load-env').onclick = loadEnvJsonFromFile;
 
+// ====== ミッションJSONインポート ======
+function importMissionObject(obj) {
+  if (!obj || !Array.isArray(obj.mission)) {
+    alert('無効なミッションファイルです。 "mission" 配列が含まれていません。');
+    return;
+  }
+
+  // 既存のWPをクリア
+  if (waypoints.length > 0) {
+    waypoints.forEach(wp => map.removeLayer(wp.marker));
+    waypoints.length = 0;
+  }
+
+  const originLat = parseFloat(originLatInput.value);
+  const originLon = parseFloat(originLonInput.value);
+  let nextSleep = 0;
+
+  obj.mission.forEach(cmd => {
+    if (cmd.command === "sleep" && cmd.parameters && cmd.parameters.duration_sec != null) {
+      nextSleep = cmd.parameters.duration_sec;
+    } else if (cmd.command === "moveToPosition" && cmd.parameters) {
+      const p = cmd.parameters;
+      const [ex, ey] = rosToEnuFrame(p.x, p.y, p.z);
+      const [lat, lon] = ENUToLatLon(originLat, originLon, ex, ey);
+      
+      addWaypoint(L.latLng(lat, lon));
+      
+      // addWaypointで追加された最後のWPを取得して詳細を設定
+      const newWp = waypoints[waypoints.length - 1];
+      newWp.alt = p.z;
+      newWp.speed = p.speed;
+      newWp.yawDeg = p.yaw_deg;
+      newWp.sleepBefore = nextSleep;
+      
+      updateWpPopup(newWp);
+      nextSleep = 0; // sleepを消費
+    }
+  });
+
+  refreshWpList();
+  refreshPolyline();
+  selectWp(waypoints.length > 0 ? 0 : -1);
+}
+
+async function loadMissionJsonFromFile() {
+  const fi = document.getElementById('mission-file');
+  if (!fi.files || fi.files.length === 0) {
+    alert('ミッションJSONファイルを選択してください');
+    return;
+  }
+  const file = fi.files[0];
+  const text = await file.text();
+  let obj;
+  try {
+    obj = JSON.parse(text);
+  } catch(e) {
+    alert('JSON解析に失敗しました: ' + e.message);
+    return;
+  }
+  importMissionObject(obj);
+}
+
+document.getElementById('btn-load-mission').onclick = loadMissionJsonFromFile;
+
+
 // ====== Waypoints 管理 ======
 const defaultAltInput   = document.getElementById('default-alt');
 const defaultSpeedInput = document.getElementById('default-speed');
@@ -432,6 +514,21 @@ btnDelWp.onclick = ()=>{
   refreshPolyline();
   refreshWpList();
   selectWp(-1);
+};
+
+document.getElementById('btn-del-all-wps').onclick = ()=>{
+  if (waypoints.length === 0) {
+    alert('ウェイポイントがありません。');
+    return;
+  }
+  if (confirm('すべてのウェイポイントを削除しますか？')) {
+    waypoints.forEach(wp => map.removeLayer(wp.marker));
+    waypoints.length = 0; // 配列をクリア
+    selectedIndex = -1;
+    refreshPolyline();
+    refreshWpList();
+    selectWp(-1);
+  }
 };
 
 // ====== mission.json 生成 ======
