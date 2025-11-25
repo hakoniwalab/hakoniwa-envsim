@@ -6,6 +6,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js"></script>
 <script src="scripts/hakoniwa_coords.js"></script>
 <script src="scripts/hakoniwa_io.js"></script>
+<script src="scripts/hakoniwa_env_view.js"></script>
 
 <title>Hakoniwa Mission Editor — with Env Overlay</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -197,7 +198,8 @@ originLatInput.addEventListener('input', centerMap);
 originLonInput.addEventListener('input', centerMap);
 
 // ====== 環境ゾーン表示レイヤー ======
-const envLayerGroup = L.layerGroup().addTo(map);
+const envShapeLayer = L.layerGroup().addTo(map);
+const envDecoLayer  = L.layerGroup().addTo(map);
 
 async function loadEnvJsonFromFile(){
   try {
@@ -210,9 +212,8 @@ async function loadEnvJsonFromFile(){
 
 function importEnvObject(obj){
   if (!obj) return;
-  envLayerGroup.clearLayers();
 
-  // meta.origin_latlon があれば原点を合わせる
+  // meta.origin_latlon があれば原点を合わせる（従来どおり）
   if (obj.meta && Array.isArray(obj.meta.origin_latlon) && obj.meta.origin_latlon.length >= 2) {
     originLatInput.value = obj.meta.origin_latlon[0];
     originLonInput.value = obj.meta.origin_latlon[1];
@@ -221,35 +222,13 @@ function importEnvObject(obj){
   const originLat = parseFloat(originLatInput.value);
   const originLon = parseFloat(originLonInput.value);
 
-  const axis = (obj.meta && obj.meta.axis ? String(obj.meta.axis).toUpperCase() : "ENU");
-  const toENU = (axis === "ROS")
-    ? (x,y,z)=>HakoniwaCoords.rosToEnuFrame(x,y,z)
-    : (x,y,z)=>[x,y,z];
-
-  (obj.zones || []).forEach(z=>{
-    let layer = null;
-    if (z.shape && z.shape.rect && z.shape.rect.min_m && z.shape.rect.max_m){
-      const min = z.shape.rect.min_m;
-      const max = z.shape.rect.max_m;
-      const [ex1, ey1] = toENU(min[0], min[1], 0);
-      const [ex2, ey2] = toENU(max[0], max[1], 0);
-      const [swLat, swLon] = HakoniwaCoords.ENUToLatLon(originLat, originLon, Math.min(ex1,ex2), Math.min(ey1,ey2));
-      const [neLat, neLon] = HakoniwaCoords.ENUToLatLon(originLat, originLon, Math.max(ex1,ex2), Math.max(ey1,ey2));
-      layer = L.rectangle([[swLat, swLon], [neLat, neLon]], {
-        color:'#2ecc71', weight:2, fillOpacity:0.1
-      });
-    } else if (z.shape && z.shape.circle && z.shape.circle.center_m && z.shape.circle.radius_m != null){
-      const c = z.shape.circle.center_m;
-      const r = z.shape.circle.radius_m;
-      const [ex, ey] = toENU(c[0], c[1], 0);
-      const [lat, lon] = HakoniwaCoords.ENUToLatLon(originLat, originLon, ex, ey);
-      layer = L.circle([lat, lon], {
-        radius: r, color:'#3498db', weight:2, fillOpacity:0.1
-      });
-    }
-    if (layer){
-      layer.addTo(envLayerGroup);
-    }
+  HakoniwaEnvView.renderZonesReadonly({
+    obj,
+    map,
+    originLat,
+    originLon,
+    shapeLayerGroup: envShapeLayer,
+    decoLayerGroup:  envDecoLayer
   });
 }
 
