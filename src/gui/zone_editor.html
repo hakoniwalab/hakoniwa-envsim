@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hakoniwa Env Zone Editor — Sync + Turbulence + Import</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+
+<style>
+  html, body { height: 100%; margin: 0; }
+  #app { display: grid; grid-template-columns: 420px 1fr; height: 100%; }
+  #sidebar { padding: 12px; border-right: 1px solid #ddd; overflow: auto;
+             font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif; }
+  #map { height: 100%; width: 100%; }
+  fieldset { margin-bottom: 12px; }
+  label { display:block; font-size: 12px; margin: 6px 0 2px; }
+  input[type="text"], input[type="number"], select, textarea { width: 100%; padding: 6px; box-sizing: border-box; }
+  button { padding: 8px 10px; margin-right: 6px; }
+  .row { display:flex; gap:8px; }
+  .row > div { flex:1; }
+  .hint { color:#666; font-size:12px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+  .badge { display:inline-block; padding:2px 6px; background:#eee; border-radius: 6px; margin-right: 4px; }
+  .toolbar { display:flex; align-items:center; gap:8px; font-size:12px; flex-wrap: wrap; }
+  .toolbar label { display:inline; margin:0; }
+  .sep { flex: 1 0 100%; height: 0; }
+
+  /* Compass */
+  .compass-wrap { display:flex; align-items:center; gap:12px; }
+  .compass {
+    width: 120px; height: 120px; border-radius: 50%; position: relative; user-select: none;
+    border: 1px solid #bbb; background: radial-gradient(#fff, #f5f5f5);
+    box-shadow: inset 0 0 8px rgba(0,0,0,0.08); touch-action: none;
+    transition: opacity .15s ease;
+  }
+  .compass .label { position:absolute; font-size:10px; color:#666; }
+  .compass .N { top:2px; left:50%; transform:translateX(-50%); }
+  .compass .S { bottom:2px; left:50%; transform:translateX(-50%); }
+  .compass .E { right:2px; top:50%; transform:translateY(-50%); }
+  .compass .W { left:2px; top:50%; transform:translateY(-50%); }
+  .needle {
+    position:absolute; left:50%; top:50%; width: 2px; height: 42%;
+    background:#d35400; transform-origin: center calc(100%);
+    transform: translate(-50%, -100%) rotate(0deg);
+    border-radius: 2px; box-shadow: 0 0 2px rgba(0,0,0,0.3);
+  }
+  .center-dot { position:absolute; left:50%; top:50%; width:8px; height:8px; background:#d35400;
+                border-radius:50%; transform: translate(-50%,-50%); box-shadow: 0 0 2px rgba(0,0,0,0.3); }
+  .compass-info { font-size:12px; }
+
+  .disabled-note { font-size: 11px; color:#777; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <h1>Hakoniwa Env Zone Editor</h1>
+    <div class="hint">矩形/円を描いてゾーン属性（名前・風 or 乱流・GPS・優先度）を設定→JSON出力／インポート。</div>
+
+    <fieldset>
+      <legend>全体設定 (Grid & Base)</legend>
+      <div class="hint">シミュレーション全体の環境設定。</div>
+      
+      <label style="margin-top:10px; font-weight:bold;">Grid 設定</label>
+      <label>Min (x, y, z)</label>
+      <div class="row">
+        <div><input id="grid-min-x" type="number" value="-1000.0" step="10"></div>
+        <div><input id="grid-min-y" type="number" value="-1000.0" step="10"></div>
+        <div><input id="grid-min-z" type="number" value="0.0" step="10"></div>
+      </div>
+      <label>Max (x, y, z)</label>
+      <div class="row">
+        <div><input id="grid-max-x" type="number" value="1000.0" step="10"></div>
+        <div><input id="grid-max-y" type="number" value="1000.0" step="10"></div>
+        <div><input id="grid-max-z" type="number" value="100.0" step="10"></div>
+      </div>
+      <label>Cell Size (m)</label>
+      <div class="row">
+        <div><input id="grid-cell-x" type="number" value="100.0" step="10"></div>
+        <div><input id="grid-cell-y" type="number" value="100.0" step="10"></div>
+        <div><input id="grid-cell-z" type="number" value="100.0" step="10"></div>
+      </div>
+      <label>Levels</label>
+      <input id="grid-levels" type="number" value="1">
+
+      <label style="margin-top:10px; font-weight:bold;">Base 環境</label>
+      <label>基本風 (vector_ms x,y,z)</label>
+      <div class="row">
+        <div><input id="base-wind-x" type="number" step="0.1" value="4.0"></div>
+        <div><input id="base-wind-y" type="number" step="0.1" value="0.0"></div>
+        <div><input id="base-wind-z" type="number" step="0.1" value="0.0"></div>
+      </div>
+      <div class="row">
+        <div>
+          <label>気温 (°C)</label>
+          <input id="base-temp" type="number" step="0.1" value="20.0">
+        </div>
+        <div>
+          <label>気圧 (atm)</label>
+          <input id="base-pressure" type="number" step="0.01" value="1.0">
+        </div>
+      </div>
+      <label>基本GPS強度 (0..1)</label>
+      <input id="base-gps" type="number" step="0.05" min="0" max="1" value="1.0">
+    </fieldset>
+
+    <fieldset>
+      <legend>原点（起動点）</legend>
+      <label>Origin Lat</label>
+      <input id="origin-lat" type="number" step="0.000001" value="35.666862">
+      <label>Origin Lon</label>
+      <input id="origin-lon" type="number" step="0.000001" value="139.692616">
+      <div class="row">
+        <div>
+          <label>初期ズーム</label>
+          <input id="init-zoom" type="number" min="1" max="20" value="15">
+        </div>
+        <div>
+          <label>メートル表示補助</label>
+          <span class="hint">右下のスケール参照</span>
+        </div>
+      </div>
+      <button id="btn-center">原点へ移動</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>ゾーン設定（選択でロード・編集可）</legend>
+
+      <div class="toolbar">
+        <input type="checkbox" id="auto-apply" checked>
+        <label for="auto-apply">入力変更を自動で適用</label>
+        <span class="sep"></span>
+        <label>地図矢印表示:</label>
+        <label><input type="radio" name="arrowMode" value="from" checked> FROM (コンパスと同じ)</label>
+        <label><input type="radio" name="arrowMode" value="to"> TO（流れる方向）</label>
+      </div>
+
+      <label>名前</label>
+      <input id="zone-name" type="text" placeholder="block1">
+
+      <div class="row">
+        <div>
+          <label>優先度 priority</label>
+          <input id="zone-priority" type="number" value="1">
+        </div>
+        <div>
+          <label>GPS 強度 (0..1)</label>
+          <input id="zone-gps" type="number" step="0.05" min="0" max="1" value="0.8">
+        </div>
+      </div>
+
+      <label>モード</label>
+      <select id="zone-mode">
+        <option value="absolute" selected>absolute（一定風）</option>
+        <option value="turbulence">turbulence（乱流）</option>
+      </select>
+
+      <!-- absolute fields -->
+      <div id="absolute-fields">
+        <div class="row">
+          <div>
+            <label>風速 (m/s)</label>
+            <input id="zone-wind-speed" type="number" step="0.1" value="3.0">
+          </div>
+          <div>
+            <label>風向 (気象方位, °)</label>
+            <input id="zone-wind-dir" class="mono" type="number" step="1" value="225">
+          </div>
+        </div>
+
+        <div class="compass-wrap">
+          <div id="compass" class="compass" title="クリック/ドラッグで風向(気象方位:どこから吹く)を設定">
+            <div class="label N">N</div>
+            <div class="label E">E</div>
+            <div class="label S">S</div>
+            <div class="label W">W</div>
+            <div class="needle" id="needle"></div>
+            <div class="center-dot"></div>
+          </div>
+          <div class="compass-info">
+            <div>気象方位（FROM）: <span id="dir-deg" class="mono">225</span>°</div>
+            <div>ENUベクトル (to): <span id="vec-preview" class="mono">[?, ?, 0]</span></div>
+            <div class="hint">※北=0°, 東=90°。FROM→TOへ自動変換</div>
+            <div style="margin-top:6px;">
+              <button id="btn-snap-45">45°刻みにスナップ</button>
+            </div>
+            <div id="abs-disabled-note" class="disabled-note" style="display:none;">
+              乱流モードでは一定風の設定は無効です（表示のみ）。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- turbulence fields -->
+      <div id="turbulence-fields" style="display:none;">
+        <div class="row">
+          <div>
+            <label>標準偏差 std_ms (m/s)</label>
+            <input id="turb-std" type="number" step="0.1" value="3.0">
+          </div>
+          <div>
+            <label>乱数シード</label>
+            <input id="turb-seed" type="number" value="123">
+          </div>
+        </div>
+        <div class="hint">※ 可視化として中心に「ゆらぎ円」を描画（半透明の青、半径 = std_ms × 30 m）。</div>
+      </div>
+
+      <div style="margin-top:6px;">
+        <button id="btn-apply">選択図形に適用</button>
+        <button id="btn-delete">選択図形を削除</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>インポート / エクスポート</legend>
+      <div class="row" style="align-items:center;">
+        <div><button id="btn-export">JSONを生成</button></div>
+        <div><button id="btn-download">ダウンロード</button></div>
+      </div>
+      <div class="hint">出力は meta.axis="ROS"。rect/circle とも座標はROSで保存。</div>
+      <textarea id="output" placeholder="ここにJSONが出ます" style="width:100%;height:140px;"></textarea>
+
+      <div style="margin-top:10px;">
+        <div class="row" style="align-items:center;">
+          <div><button id="btn-import-text">TextImport</button></div>
+          <div style="text-align:right;">
+            <input id="file-input" type="file" accept=".json">
+            <button id="btn-import-file">FileImport</button>
+          </div>
+        </div>
+        <div class="hint">インポート時は meta.axis を見て ROS/ENU のどちらでも復元します。</div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>現在のゾーン</legend>
+      <div id="zone-list" class="zone-list"></div>
+    </fieldset>
+  </div>
+
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://unpkg.com/proj4@2.9.0/dist/proj4.js"></script>
+<script>
+proj4.defs("EPSG:6677",
+  "+proj=tmerc +lat_0=36 +lon_0=139.8333333333333 " +
+  "+k=0.9999 +x_0=0 +y_0=0 +ellps=GRS80 +units=m +no_defs"
+);
+</script>
+<script>
+// ---------- Math & Conversion ----------
+
+const proj = L.CRS.EPSG3857;
+function deg2rad(d){return d*Math.PI/180;}
+function rad2deg(r){return r*180/Math.PI;}
+
+function latlonToENU(originLat, originLon, lat, lon) {
+  const p0 = proj4('EPSG:4326','EPSG:6677',[originLon, originLat]); // [X0,Y0]
+  const p1 = proj4('EPSG:4326','EPSG:6677',[lon,        lat       ]); // [X1,Y1]
+  const mx = p1[0] - p0[0]; // East
+  const my = p1[1] - p0[1]; // North
+  return [mx, my];
+}
+
+function ENUToLatLon(originLat, originLon, x, y) {
+  const p0 = proj4('EPSG:4326','EPSG:6677',[originLon, originLat]); // [X0,Y0]
+  const p1 = [p0[0] + x, p0[1] + y]; // [X1,Y1]
+  const geo = proj4('EPSG:6677','EPSG:4326',p1); // [lon,lat]
+  const lon = geo[0];
+  const lat = geo[1];
+  return [lat, lon];
+}
+
+// ENU -> ROS
+function enuToRosFrame(enu_x, enu_y, enu_z) {
+  // ENU (East, North, Up) -> ROS (X forward, Y left, Z up)
+  return [enu_y, -enu_x, enu_z];
+}
+// ROS -> ENU
+function rosToEnuFrame(x_ros, y_ros, z_ros){
+  // 逆変換：X_ros = Y_enu, Y_ros = -X_enu → X_enu = -Y_ros, Y_enu = X_ros
+  return [-y_ros, x_ros, z_ros];
+}
+function windFromDirectionToENU(speed, metDirDeg){
+  const flowTo = (metDirDeg + 180.0) % 360.0; // FROM→TO
+  const r = deg2rad(flowTo);
+  const vx = Math.sin(r) * speed; // ENU x=East
+  const vy = Math.cos(r) * speed; // ENU y=North
+  return [vx, vy, 0.0];
+}
+function round1(v){ return Math.round(v*10)/10; }
+
+// ---------- AABB（四隅→ENU→ROS→min/max） ----------
+function computeAabbForLeafletRect(bounds, originLat, originLon) {
+  // 四隅（SW, SE, NE, NW）
+  const sw = bounds.getSouthWest();
+  const ne = bounds.getNorthEast();
+  const nw = L.latLng(ne.lat, sw.lng);
+  const se = L.latLng(sw.lat, ne.lng);
+  const cornersLL = [sw, se, ne, nw];
+
+  // ENUへ（zは不要なので0）
+  const cornersENU = cornersLL.map(ll => {
+    const [x, y] = latlonToENU(originLat, originLon, ll.lat, ll.lng);
+    return [x, y, 0];
+  });
+
+  // ENU→ROS
+  const cornersROS = cornersENU.map(([xe, ye, ze]) => enuToRosFrame(xe, ye, ze));
+
+  // 軸配列
+  const xs = cornersROS.map(p => p[0]);  // ROS X
+  const ys = cornersROS.map(p => p[1]);  // ROS Y
+
+  // min/max
+  const minx = Math.min(...xs), maxx = Math.max(...xs);
+  const miny = Math.min(...ys), maxy = Math.max(...ys);
+
+  return {
+    rect: {
+      min_m: [round1(minx), round1(miny)],
+      max_m: [round1(maxx), round1(maxy)]
+    }
+  };
+}
+
+// ---------- Map init ----------
+const map = L.map('map', { preferCanvas: true });
+const originLatInput = document.getElementById('origin-lat');
+const originLonInput = document.getElementById('origin-lon');
+const initZoomInput  = document.getElementById('init-zoom');
+let originMarker = null;
+
+function centerMap(){
+  const lat = parseFloat(originLatInput.value);
+  const lon = parseFloat(originLonInput.value);
+  const zoom = parseInt(initZoomInput.value || "15", 10);
+  map.setView([lat, lon], zoom);
+  if (!originMarker) {
+    originMarker = L.marker([lat, lon]).addTo(map)
+      .bindTooltip("Origin", { permanent: false, direction: 'top' });
+  } else {
+    originMarker.setLatLng([lat, lon]);
+  }
+}
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+L.control.scale().addTo(map);
+centerMap();
+document.getElementById('btn-center').onclick = centerMap;
+originLatInput.addEventListener('input', centerMap);
+originLonInput.addEventListener('input', centerMap);
+
+// ---------- Draw controls ----------
+const drawnItems = new L.FeatureGroup();
+map.addLayer(drawnItems);
+const drawControl = new L.Control.Draw({
+  edit: { featureGroup: drawnItems, edit: true, remove: true },
+  draw: {
+    polygon: false, polyline: false, marker: false, circlemarker: false,
+    rectangle: { shapeOptions: { color: '#e67e22', weight: 2 } },
+    circle:    { shapeOptions: { color: '#27ae60', weight: 2 } }
+  }
+});
+map.addControl(drawControl);
+
+let selectedLayer = null;
+const arrowLayerGroup = L.layerGroup().addTo(map); // arrows / turbulence circles
+
+map.on(L.Draw.Event.CREATED, function (e) {
+  const layer = e.layer;
+  drawnItems.addLayer(layer);
+  selectLayer(layer);
+  refreshZoneList();
+  renderOverlays();
+});
+map.on('draw:edited', function(e){
+  refreshZoneList();
+  renderOverlays();
+});
+map.on('draw:deleted', function(e){
+  refreshZoneList();
+  renderOverlays();
+});
+map.on('click', function(e){
+  let found = null;
+  drawnItems.eachLayer(function(layer){
+    if (layer.getBounds && layer.getBounds().contains(e.latlng)) {
+      found = layer;
+    } else if (layer.getLatLng && layer.getLatLng().distanceTo(e.latlng) <= layer.getRadius()) {
+      found = layer;
+    }
+  });
+  if (found) selectLayer(found); else clearSelection();
+});
+
+function layerCenterLatLng(layer){
+  if (layer instanceof L.Rectangle){
+    return layer.getBounds().getCenter();
+  } else if (layer instanceof L.Circle){
+    return layer.getLatLng();
+  } else {
+    return null;
+  }
+}
+
+// ---------- UI refs ----------
+const zoneName     = document.getElementById('zone-name');
+const zonePriority = document.getElementById('zone-priority');
+const zoneGPS      = document.getElementById('zone-gps');
+const zoneMode     = document.getElementById('zone-mode');
+
+const zoneWindSpd  = document.getElementById('zone-wind-speed');
+const zoneWindDir  = document.getElementById('zone-wind-dir');
+const compassEl    = document.getElementById('compass');
+const needle       = document.getElementById('needle');
+const dirDegEl     = document.getElementById('dir-deg');
+const vecPreviewEl = document.getElementById('vec-preview');
+const btnSnap45    = document.getElementById('btn-snap-45');
+const absDisabledNote = document.getElementById('abs-disabled-note');
+
+const turbFields = document.getElementById('turbulence-fields');
+const turbStd    = document.getElementById('turb-std');
+const turbSeed   = document.getElementById('turb-seed');
+
+const autoApply  = document.getElementById('auto-apply');
+const arrowModeRadios = document.querySelectorAll('input[name="arrowMode"]');
+
+// ---------- Compass interactions ----------
+function updateCompassVisual(deg){
+  needle.style.transform = `translate(-50%, -100%) rotate(${deg}deg)`;
+  dirDegEl.textContent = Math.round(deg);
+  const v = windFromDirectionToENU(parseFloat(zoneWindSpd.value||"0"), deg);
+  vecPreviewEl.textContent = `[${v[0].toFixed(2)}, ${v[1].toFixed(2)}, 0]`;
+}
+function setDirectionDeg(deg){
+  deg = (deg%360+360)%360;
+  zoneWindDir.value = deg.toFixed(0);
+  updateCompassVisual(deg);
+  if (autoApply.checked) applyToSelected();
+}
+function getCenter(el){
+  const r = el.getBoundingClientRect();
+  return { cx: r.left + r.width/2, cy: r.top + r.height/2 };
+}
+function handlePointer(e){
+  const { cx, cy } = getCenter(compassEl);
+  const x = ('clientX' in e) ? e.clientX : (e.touches?.[0]?.clientX||0);
+  const y = ('clientY' in e) ? e.clientY : (e.touches?.[0]?.clientY||0);
+  const ang = Math.atan2(x - cx, cy - y); // 0 at North, CW positive
+  const deg = (rad2deg(ang)+360)%360;
+  setDirectionDeg(deg);
+}
+let dragging = false;
+compassEl.addEventListener('pointerdown', e=>{ if(compassEl.dataset.disabled==="1") return; dragging=true; compassEl.setPointerCapture(e.pointerId); handlePointer(e); });
+compassEl.addEventListener('pointermove', e=>{ if(dragging && compassEl.dataset.disabled!=="1") handlePointer(e); });
+compassEl.addEventListener('pointerup',   e=>{ dragging=false; try{compassEl.releasePointerCapture(e.pointerId);}catch{} });
+compassEl.addEventListener('pointerleave',e=>{ dragging=false; });
+
+zoneWindDir.addEventListener('input', e=>{ setDirectionDeg(parseFloat(e.target.value||"0")); });
+zoneWindSpd.addEventListener('input', e=>{ updateCompassVisual(parseFloat(zoneWindDir.value||"0")); if (autoApply.checked) applyToSelected(); });
+btnSnap45.addEventListener('click', ()=>{
+  const v = parseFloat(zoneWindDir.value||"0");
+  const snapped = Math.round(v/45)*45;
+  setDirectionDeg(snapped);
+});
+
+setDirectionDeg(parseFloat(zoneWindDir.value||"225"));
+
+// ---------- Mode UI enable/disable ----------
+function updateModeUI(){
+  const isTurb = (zoneMode.value === 'turbulence');
+  turbFields.style.display = isTurb ? 'block' : 'none';
+  zoneWindSpd.disabled = isTurb;
+  zoneWindDir.disabled = isTurb;
+  compassEl.style.opacity = isTurb ? 0.35 : 1.0;
+  absDisabledNote.style.display = isTurb ? 'block' : 'none';
+  compassEl.dataset.disabled = isTurb ? "1" : "0";
+  if (autoApply.checked) applyToSelected();
+  renderOverlays();
+}
+zoneMode.addEventListener('change', updateModeUI);
+updateModeUI();
+
+// ---------- Selection & metadata ----------
+function selectLayer(layer){
+  clearSelection();
+  selectedLayer = layer;
+  if (selectedLayer.setStyle) selectedLayer.setStyle({ weight: 4 });
+  const m = selectedLayer._hakoniwa || {};
+  zoneName.value     = m.name     ?? '';
+  zonePriority.value = m.priority ?? 1;
+  zoneGPS.value      = m.gpsAbs   ?? 0.8;
+  zoneMode.value     = m.mode     ?? 'absolute';
+  zoneWindSpd.value  = m.windSpd  ?? 3.0;
+  setDirectionDeg( Number.isFinite(m.windDir) ? m.windDir : 225 );
+  turbStd.value      = m.turbStd  ?? 3.0;
+  turbSeed.value     = m.turbSeed ?? 123;
+  updateModeUI();
+  refreshZoneList();
+  renderOverlays();
+}
+function clearSelection(){
+  if (selectedLayer && selectedLayer.setStyle) selectedLayer.setStyle({ weight: 2 });
+  selectedLayer = null;
+}
+
+document.getElementById('btn-apply').onclick = function(){ applyToSelected(true); };
+document.getElementById('btn-delete').onclick = function(){
+  if (!selectedLayer){ alert('図形を選択してください'); return; }
+  drawnItems.removeLayer(selectedLayer);
+  selectedLayer = null;
+  refreshZoneList();
+  renderOverlays();
+};
+
+function applyToSelected(force=false){
+  if (!selectedLayer) return;
+  selectedLayer._hakoniwa = {
+    name: zoneName.value || 'zone',
+    priority: parseInt(zonePriority.value || "1", 10),
+    gpsAbs: parseFloat(zoneGPS.value || "0.8"),
+    mode: zoneMode.value,
+    windDir: parseFloat(zoneWindDir.value || "225"),
+    windSpd: parseFloat(zoneWindSpd.value || "3.0"),
+    turbStd: parseFloat(turbStd.value || "3.0"),
+    turbSeed: parseInt(turbSeed.value || "123")
+  };
+  refreshZoneList();
+  renderOverlays();
+}
+
+// auto-apply on changes
+zoneName.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
+zonePriority.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
+zoneGPS.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
+turbStd.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
+turbSeed.addEventListener('input', ()=>{ if (autoApply.checked) applyToSelected(); });
+arrowModeRadios.forEach(r=>r.addEventListener('change', ()=>renderOverlays()));
+
+// ---------- Export JSON ----------
+function layerToZoneJSON(layer){
+  const originLat = parseFloat(originLatInput.value);
+  const originLon = parseFloat(originLonInput.value);
+  const meta = layer._hakoniwa || {};
+  const base = {
+    name: meta.name || 'zone',
+    priority: (meta.priority != null ? meta.priority : 1),
+    effect: { mode: meta.mode || "absolute", gps_abs: (meta.gpsAbs != null ? meta.gpsAbs : 0.8) }
+  };
+
+  if (meta.mode === 'absolute'){
+    const v = windFromDirectionToENU((meta.windSpd||3.0), (meta.windDir||225)); // ENU to-vector
+    const ros_v = enuToRosFrame(v[0], v[1], v[2]);
+    base.effect.wind_ms = [ Number(ros_v[0].toFixed(3)), Number(ros_v[1].toFixed(3)), 0.0 ];
+  } else if (meta.mode === 'turbulence'){
+    base.effect.turbulence = {
+      type: "gauss",
+      std_ms: meta.turbStd || 3.0,
+      seed: Math.floor(meta.turbSeed || 0)
+    };
+  }
+
+  if (layer instanceof L.Rectangle){
+    const b = layer.getBounds();
+    const shape = computeAabbForLeafletRect(b, originLat, originLon);
+    base.shape = shape; // rect (ROS座標のmin/max)
+  } else if (layer instanceof L.Circle){
+    const c = layer.getLatLng();
+    const r = layer.getRadius();
+    // ENU中心→ROS中心で保存
+    const enuC = latlonToENU(originLat, originLon, c.lat, c.lng);
+    const rosC = enuToRosFrame(enuC[0], enuC[1], 0);
+    base.shape = { circle: { center_m: [round1(rosC[0]), round1(rosC[1])], radius_m: round1(r) } };
+  } else { return null; }
+  return base;
+}
+
+function exportJSON(){
+  const zones = [];
+  drawnItems.eachLayer(function(layer){
+    const z = layerToZoneJSON(layer);
+    if (z) zones.push(z);
+  });
+
+  const grid = {
+    min: [
+      parseFloat(document.getElementById('grid-min-x').value),
+      parseFloat(document.getElementById('grid-min-y').value),
+      parseFloat(document.getElementById('grid-min-z').value)
+    ],
+    max: [
+      parseFloat(document.getElementById('grid-max-x').value),
+      parseFloat(document.getElementById('grid-max-y').value),
+      parseFloat(document.getElementById('grid-max-z').value)
+    ],
+    cell_m: [
+      parseFloat(document.getElementById('grid-cell-x').value),
+      parseFloat(document.getElementById('grid-cell-y').value),
+      parseFloat(document.getElementById('grid-cell-z').value)
+    ],
+    levels: parseInt(document.getElementById('grid-levels').value, 10)
+  };
+
+  const base = {
+    wind: {
+      vector_ms: [
+        parseFloat(document.getElementById('base-wind-x').value),
+        parseFloat(document.getElementById('base-wind-y').value),
+        parseFloat(document.getElementById('base-wind-z').value)
+      ]
+    },
+    temperature_C: parseFloat(document.getElementById('base-temp').value),
+    pressure_atm: parseFloat(document.getElementById('base-pressure').value),
+    gps_strength: parseFloat(document.getElementById('base-gps').value)
+  };
+
+  const out = {
+    version: "0.1",
+    meta: {
+      crs: "local-enu",
+      origin_latlon: [ parseFloat(originLatInput.value), parseFloat(originLonInput.value) ],
+      axis: "ROS",
+      units: { length: "m", speed: "m/s", temp: "C" }
+    },
+    grid: grid,
+    base: base,
+    zones: zones
+  };
+  return JSON.stringify(out, null, 2);
+}
+
+document.getElementById('btn-export').onclick = function(){
+  document.getElementById('output').value = exportJSON();
+};
+document.getElementById('btn-download').onclick = function(){
+  const blob = new Blob([exportJSON()], {type: "application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = "env_zones.json";
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+// ---------- Import JSON ----------
+function importFromObject(obj){
+  // 1) 原点・ズームを適用
+  if (obj?.meta?.origin_latlon?.length >= 2){
+    originLatInput.value = obj.meta.origin_latlon[0];
+    originLonInput.value = obj.meta.origin_latlon[1];
+    centerMap();
+  }
+  const originLat = parseFloat(originLatInput.value);
+  const originLon = parseFloat(originLonInput.value);
+
+  // -- Grid & Base のインポート --
+  if (obj.grid) {
+    document.getElementById('grid-min-x').value = obj.grid.min?.[0] ?? -1000.0;
+    document.getElementById('grid-min-y').value = obj.grid.min?.[1] ?? -1000.0;
+    document.getElementById('grid-min-z').value = obj.grid.min?.[2] ?? 0.0;
+    document.getElementById('grid-max-x').value = obj.grid.max?.[0] ?? 1000.0;
+    document.getElementById('grid-max-y').value = obj.grid.max?.[1] ?? 1000.0;
+    document.getElementById('grid-max-z').value = obj.grid.max?.[2] ?? 100.0;
+    document.getElementById('grid-cell-x').value = obj.grid.cell_m?.[0] ?? 100.0;
+    document.getElementById('grid-cell-y').value = obj.grid.cell_m?.[1] ?? 100.0;
+    document.getElementById('grid-cell-z').value = obj.grid.cell_m?.[2] ?? 100.0;
+    document.getElementById('grid-levels').value = obj.grid.levels ?? 1;
+  }
+  if (obj.base) {
+    document.getElementById('base-wind-x').value = obj.base.wind?.vector_ms?.[0] ?? 4.0;
+    document.getElementById('base-wind-y').value = obj.base.wind?.vector_ms?.[1] ?? 0.0;
+    document.getElementById('base-wind-z').value = obj.base.wind?.vector_ms?.[2] ?? 0.0;
+    document.getElementById('base-temp').value = obj.base.temperature_C ?? 20.0;
+    document.getElementById('base-pressure').value = obj.base.pressure_atm ?? 1.0;
+    document.getElementById('base-gps').value = obj.base.gps_strength ?? 1.0;
+  }
+
+  // 2) 軸（ROS/ENU）に応じた変換関数
+  const axis = (obj?.meta?.axis || "ENU").toUpperCase();
+  const toENU = (axis === "ROS")
+    ? (x,y,z)=>rosToEnuFrame(x,y,z)
+    : (x,y,z)=>[x,y,z];
+
+  // 3) 既存をクリア
+  drawnItems.clearLayers();
+  arrowLayerGroup.clearLayers();
+
+  // 4) 各ゾーンを復元
+  (obj.zones || []).forEach(z=>{
+    let layer = null;
+
+    if (z.shape?.rect?.min_m && z.shape?.rect?.max_m){
+      const min = z.shape.rect.min_m;
+      const max = z.shape.rect.max_m;
+      // JSON座標→ENU
+      const [ex1, ey1] = toENU(min[0], min[1], 0);
+      const [ex2, ey2] = toENU(max[0], max[1], 0);
+      // ENU→LatLon
+      const [swLat, swLon] = ENUToLatLon(originLat, originLon, Math.min(ex1,ex2), Math.min(ey1,ey2));
+      const [neLat, neLon] = ENUToLatLon(originLat, originLon, Math.max(ex1,ex2), Math.max(ey1,ey2));
+      layer = L.rectangle([[swLat, swLon], [neLat, neLon]], { color:'#e67e22', weight:2 });
+    } else if (z.shape?.circle?.center_m && z.shape?.circle?.radius_m != null){
+      const c = z.shape.circle.center_m;
+      const r = z.shape.circle.radius_m;
+      const [ex, ey] = toENU(c[0], c[1], 0);
+      const [lat, lon] = ENUToLatLon(originLat, originLon, ex, ey);
+      layer = L.circle([lat, lon], { radius: r, color:'#27ae60', weight:2 });
+    }
+
+    if (layer){
+      drawnItems.addLayer(layer);
+      // メタ（UI同期用）
+      const eff = z.effect || {};
+      layer._hakoniwa = {
+        name: z.name || 'zone',
+        priority: z.priority ?? 1,
+        gpsAbs: (eff.gps_abs != null ? eff.gps_abs : 0.8),
+        mode: eff.mode || 'absolute',
+        // absolute
+        windDir: 225, windSpd: 3.0,
+        // turbulence
+        turbStd: (eff.turbulence?.std_ms ?? 3.0),
+        turbSeed: (eff.turbulence?.seed ?? 123)
+      };
+      if (eff.mode === 'absolute' && Array.isArray(eff.wind_ms)){
+        // wind_ms は ROS ベクトル想定 → ENUへ戻して方位/速さを推定しUI表示用に再計算
+        const ros = eff.wind_ms;
+        const enu = rosToEnuFrame(ros[0], ros[1], ros[2] || 0);
+        const spd = Math.hypot(enu[0], enu[1]);
+        // ENU “to” ベクトル → 気象FROM角度 = (to+180)
+        const toAngleRad = Math.atan2(enu[0], enu[1]); // x=East=sin, y=North=cos に整合 (draw側と同じ)
+        let metDir = (rad2deg(toAngleRad) + 180.0) % 360.0;
+        if (metDir < 0) metDir += 360;
+        layer._hakoniwa.windSpd = Number(spd.toFixed(1));
+        layer._hakoniwa.windDir = Math.round(metDir);
+      }
+    }
+  });
+
+  refreshZoneList();
+  renderOverlays();
+}
+
+function importFromText(){
+  try{
+    const txt = document.getElementById('output').value.trim();
+    if (!txt){ alert('上のテキストにJSONを貼り付けてください'); return; }
+    const obj = JSON.parse(txt);
+    importFromObject(obj);
+  }catch(e){
+    console.error(e);
+    alert('JSONの解析に失敗しました: ' + e.message);
+  }
+}
+
+async function importFromFile(){
+  const fi = document.getElementById('file-input');
+  if (!fi.files || fi.files.length === 0){ alert('Select'); return; }
+  const file = fi.files[0];
+  const text = await file.text();
+  document.getElementById('output').value = text; // ついでに表示
+  try{
+    const obj = JSON.parse(text);
+    importFromObject(obj);
+  }catch(e){
+    console.error(e);
+    alert('JSONの解析に失敗しました: ' + e.message);
+  }
+}
+
+document.getElementById('btn-import-text').onclick = importFromText;
+document.getElementById('btn-import-file').onclick = importFromFile;
+
+// ---------- List & Overlays ----------
+function refreshZoneList(){
+  const list = document.getElementById('zone-list');
+  let html = "";
+  let idx = 1;
+  drawnItems.eachLayer(function(layer){
+    const meta = layer._hakoniwa || {};
+    let label = meta.name || ('zone'+idx);
+    const type = (layer instanceof L.Rectangle) ? 'rect' :
+                 (layer instanceof L.Circle) ? 'circle' : 'shape';
+    html += `<div><span class="badge">${type}</span>${label}`;
+    if (meta.mode === 'absolute'){
+      if (meta.windSpd != null) html += ` <span class="badge">wind ${meta.windSpd} m/s @${meta.windDir}°</span>`;
+    } else if (meta.mode === 'turbulence'){
+      html += ` <span class="badge">turb σ=${meta.turbStd ?? 3.0} m/s seed=${meta.turbSeed ?? 0}</span>`;
+    }
+    if (meta.gpsAbs != null) html += ` <span class="badge">gps ${meta.gpsAbs}</span>`;
+    if (meta.priority != null) html += ` <span class="badge">prio ${meta.priority}</span>`;
+    html += `</div>`;
+    idx++;
+  });
+  list.innerHTML = html || "<i>なし</i>";
+}
+
+function renderOverlays(){
+  arrowLayerGroup.clearLayers();
+  const originLat = parseFloat(originLatInput.value);
+  const originLon = parseFloat(originLonInput.value);
+  const modeArrow = document.querySelector('input[name="arrowMode"]:checked').value; // 'from' | 'to'
+
+  drawnItems.eachLayer(function(layer){
+    if (!layer._hakoniwa) return;
+    const m = layer._hakoniwa;
+    const center = layerCenterLatLng(layer);
+    if (!center) return;
+
+    if (m.mode === 'absolute'){
+      const v_to = windFromDirectionToENU((m.windSpd||0), (m.windDir||0)); // ENU (to)
+      const v = (modeArrow === 'from') ? [-v_to[0], -v_to[1], 0] : v_to; // FROMは反転
+
+      const scale = 50;
+      const enuStart = latlonToENU(originLat, originLon, center.lat, center.lng);
+      const enuEnd = [ enuStart[0] + v[0]*scale, enuStart[1] + v[1]*scale ];
+      const [endLat, endLon] = ENUToLatLon(originLat, originLon, enuEnd[0], enuEnd[1]);
+
+      L.polyline([[center.lat, center.lng], [endLat, endLon]], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
+
+      const angle = Math.atan2(endLon - center.lng, endLat - center.lat);
+      const headLen = 0.0001;
+      const left = [ endLat - headLen*Math.cos(angle - Math.PI/6), endLon - headLen*Math.sin(angle - Math.PI/6) ];
+      const right= [ endLat - headLen*Math.cos(angle + Math.PI/6), endLon - headLen*Math.sin(angle + Math.PI/6) ];
+      L.polyline([[endLat, endLon], left], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
+      L.polyline([[endLat, endLon], right], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
+    } else if (m.mode === 'turbulence'){
+      const radiusMeters = (m.turbStd ?? 3.0) * 30.0;
+      L.circle(center, {
+        radius: radiusMeters,
+        color: '#3498db',
+        fillColor: '#3498db',
+        fillOpacity: 0.15,
+        weight: 1
+      }).addTo(arrowLayerGroup);
+    }
+  });
+}
+</script>
+</body>
+</html>
