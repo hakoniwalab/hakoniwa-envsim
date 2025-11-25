@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Hakoniwa Env/Mission Launcher</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+      display: flex;
+      flex-direction: column;
+    }
+    #tabbar {
+      display: flex;
+      border-bottom: 1px solid #ccc;
+      background: #f7f7f7;
+    }
+    .tab {
+      padding: 8px 16px;
+      cursor: pointer;
+      user-select: none;
+      border-right: 1px solid #ddd;
+    }
+    .tab.active {
+      background: #fff;
+      font-weight: bold;
+      border-bottom: 2px solid #007acc;
+    }
+    #frame-container {
+      flex: 1;
+    }
+    #editor-frame {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="tabbar">
+    <div class="tab" data-target="zone_editor.html">Zone</div>
+    <div class="tab active" data-target="mission_editor.html">Mission</div>
+  </div>
+  <div id="frame-container">
+    <iframe id="editor-frame" src="mission_editor.html"></iframe>
+  </div>
+
+  <script>
+    const tabs = document.querySelectorAll('.tab');
+    const frame = document.getElementById('editor-frame');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        // タブの見た目を更新
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        // iframe の表示先を切り替え
+        const target = tab.getAttribute('data-target');
+        frame.src = target;
+      });
+    });
+  </script>
+</body>
+</html>
