@@ -253,43 +253,15 @@ proj4.defs("EPSG:6677",
   "+k=0.9999 +x_0=0 +y_0=0 +ellps=GRS80 +units=m +no_defs"
 );
 </script>
+<script src="scripts/hakoniwa_coords.js"></script>
+<script src="scripts/hakoniwa_io.js"></script>
 <script>
 // ---------- Math & Conversion ----------
 
 const proj = L.CRS.EPSG3857;
-function deg2rad(d){return d*Math.PI/180;}
-function rad2deg(r){return r*180/Math.PI;}
-
-function latlonToENU(originLat, originLon, lat, lon) {
-  const p0 = proj4('EPSG:4326','EPSG:6677',[originLon, originLat]); // [X0,Y0]
-  const p1 = proj4('EPSG:4326','EPSG:6677',[lon,        lat       ]); // [X1,Y1]
-  const mx = p1[0] - p0[0]; // East
-  const my = p1[1] - p0[1]; // North
-  return [mx, my];
-}
-
-function ENUToLatLon(originLat, originLon, x, y) {
-  const p0 = proj4('EPSG:4326','EPSG:6677',[originLon, originLat]); // [X0,Y0]
-  const p1 = [p0[0] + x, p0[1] + y]; // [X1,Y1]
-  const geo = proj4('EPSG:6677','EPSG:4326',p1); // [lon,lat]
-  const lon = geo[0];
-  const lat = geo[1];
-  return [lat, lon];
-}
-
-// ENU -> ROS
-function enuToRosFrame(enu_x, enu_y, enu_z) {
-  // ENU (East, North, Up) -> ROS (X forward, Y left, Z up)
-  return [enu_y, -enu_x, enu_z];
-}
-// ROS -> ENU
-function rosToEnuFrame(x_ros, y_ros, z_ros){
-  // 逆変換：X_ros = Y_enu, Y_ros = -X_enu → X_enu = -Y_ros, Y_enu = X_ros
-  return [-y_ros, x_ros, z_ros];
-}
 function windFromDirectionToENU(speed, metDirDeg){
   const flowTo = (metDirDeg + 180.0) % 360.0; // FROM→TO
-  const r = deg2rad(flowTo);
+  const r = HakoniwaCoords.deg2rad(flowTo);
   const vx = Math.sin(r) * speed; // ENU x=East
   const vy = Math.cos(r) * speed; // ENU y=North
   return [vx, vy, 0.0];
@@ -307,12 +279,12 @@ function computeAabbForLeafletRect(bounds, originLat, originLon) {
 
   // ENUへ（zは不要なので0）
   const cornersENU = cornersLL.map(ll => {
-    const [x, y] = latlonToENU(originLat, originLon, ll.lat, ll.lng);
+    const [x, y] = HakoniwaCoords.latlonToENU(originLat, originLon, ll.lat, ll.lng);
     return [x, y, 0];
   });
 
   // ENU→ROS
-  const cornersROS = cornersENU.map(([xe, ye, ze]) => enuToRosFrame(xe, ye, ze));
+  const cornersROS = cornersENU.map(([xe, ye, ze]) => HakoniwaCoords.enuToRosFrame(xe, ye, ze));
 
   // 軸配列
   const xs = cornersROS.map(p => p[0]);  // ROS X
@@ -455,7 +427,7 @@ function handlePointer(e){
   const x = ('clientX' in e) ? e.clientX : (e.touches?.[0]?.clientX||0);
   const y = ('clientY' in e) ? e.clientY : (e.touches?.[0]?.clientY||0);
   const ang = Math.atan2(x - cx, cy - y); // 0 at North, CW positive
-  const deg = (rad2deg(ang)+360)%360;
+  const deg = (HakoniwaCoords.rad2deg(ang)+360)%360;
   setDirectionDeg(deg);
 }
 let dragging = false;
@@ -558,7 +530,7 @@ function layerToZoneJSON(layer){
 
   if (meta.mode === 'absolute'){
     const v = windFromDirectionToENU((meta.windSpd||3.0), (meta.windDir||225)); // ENU to-vector
-    const ros_v = enuToRosFrame(v[0], v[1], v[2]);
+    const ros_v = HakoniwaCoords.enuToRosFrame(v[0], v[1], v[2]);
     base.effect.wind_ms = [ Number(ros_v[0].toFixed(3)), Number(ros_v[1].toFixed(3)), 0.0 ];
   } else if (meta.mode === 'turbulence'){
     base.effect.turbulence = {
@@ -576,8 +548,8 @@ function layerToZoneJSON(layer){
     const c = layer.getLatLng();
     const r = layer.getRadius();
     // ENU中心→ROS中心で保存
-    const enuC = latlonToENU(originLat, originLon, c.lat, c.lng);
-    const rosC = enuToRosFrame(enuC[0], enuC[1], 0);
+    const enuC = HakoniwaCoords.latlonToENU(originLat, originLon, c.lat, c.lng);
+    const rosC = HakoniwaCoords.enuToRosFrame(enuC[0], enuC[1], 0);
     base.shape = { circle: { center_m: [round1(rosC[0]), round1(rosC[1])], radius_m: round1(r) } };
   } else { return null; }
   return base;
@@ -641,13 +613,8 @@ document.getElementById('btn-export').onclick = function(){
   document.getElementById('output').value = exportJSON();
 };
 document.getElementById('btn-download').onclick = function(){
-  const blob = new Blob([exportJSON()], {type: "application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = "env_zones.json";
-  a.click();
-  URL.revokeObjectURL(url);
+  const obj = JSON.parse(exportJSON());
+  HakoniwaIO.downloadJson(obj, "env_zones.json");
 };
 
 // ---------- Import JSON ----------
@@ -686,7 +653,7 @@ function importFromObject(obj){
   // 2) 軸（ROS/ENU）に応じた変換関数
   const axis = (obj?.meta?.axis || "ENU").toUpperCase();
   const toENU = (axis === "ROS")
-    ? (x,y,z)=>rosToEnuFrame(x,y,z)
+    ? (x,y,z)=>HakoniwaCoords.rosToEnuFrame(x,y,z)
     : (x,y,z)=>[x,y,z];
 
   // 3) 既存をクリア
@@ -704,14 +671,14 @@ function importFromObject(obj){
       const [ex1, ey1] = toENU(min[0], min[1], 0);
       const [ex2, ey2] = toENU(max[0], max[1], 0);
       // ENU→LatLon
-      const [swLat, swLon] = ENUToLatLon(originLat, originLon, Math.min(ex1,ex2), Math.min(ey1,ey2));
-      const [neLat, neLon] = ENUToLatLon(originLat, originLon, Math.max(ex1,ex2), Math.max(ey1,ey2));
+      const [swLat, swLon] = HakoniwaCoords.ENUToLatLon(originLat, originLon, Math.min(ex1,ex2), Math.min(ey1,ey2));
+      const [neLat, neLon] = HakoniwaCoords.ENUToLatLon(originLat, originLon, Math.max(ex1,ex2), Math.max(ey1,ey2));
       layer = L.rectangle([[swLat, swLon], [neLat, neLon]], { color:'#e67e22', weight:2 });
     } else if (z.shape?.circle?.center_m && z.shape?.circle?.radius_m != null){
       const c = z.shape.circle.center_m;
       const r = z.shape.circle.radius_m;
       const [ex, ey] = toENU(c[0], c[1], 0);
-      const [lat, lon] = ENUToLatLon(originLat, originLon, ex, ey);
+      const [lat, lon] = HakoniwaCoords.ENUToLatLon(originLat, originLon, ex, ey);
       layer = L.circle([lat, lon], { radius: r, color:'#27ae60', weight:2 });
     }
 
@@ -733,11 +700,11 @@ function importFromObject(obj){
       if (eff.mode === 'absolute' && Array.isArray(eff.wind_ms)){
         // wind_ms は ROS ベクトル想定 → ENUへ戻して方位/速さを推定しUI表示用に再計算
         const ros = eff.wind_ms;
-        const enu = rosToEnuFrame(ros[0], ros[1], ros[2] || 0);
+        const enu = HakoniwaCoords.rosToEnuFrame(ros[0], ros[1], ros[2] || 0);
         const spd = Math.hypot(enu[0], enu[1]);
         // ENU “to” ベクトル → 気象FROM角度 = (to+180)
         const toAngleRad = Math.atan2(enu[0], enu[1]); // x=East=sin, y=North=cos に整合 (draw側と同じ)
-        let metDir = (rad2deg(toAngleRad) + 180.0) % 360.0;
+        let metDir = (HakoniwaCoords.rad2deg(toAngleRad) + 180.0) % 360.0;
         if (metDir < 0) metDir += 360;
         layer._hakoniwa.windSpd = Number(spd.toFixed(1));
         layer._hakoniwa.windDir = Math.round(metDir);
@@ -762,17 +729,13 @@ function importFromText(){
 }
 
 async function importFromFile(){
-  const fi = document.getElementById('file-input');
-  if (!fi.files || fi.files.length === 0){ alert('Select'); return; }
-  const file = fi.files[0];
-  const text = await file.text();
-  document.getElementById('output').value = text; // ついでに表示
-  try{
-    const obj = JSON.parse(text);
+  try {
+    const obj = await HakoniwaIO.loadJsonFromFileInput('file-input');
+    document.getElementById('output').value = JSON.stringify(obj, null, 2); // Populate textarea
     importFromObject(obj);
-  }catch(e){
+  } catch(e) {
     console.error(e);
-    alert('JSONの解析に失敗しました: ' + e.message);
+    alert('JSONの読み込みに失敗しました: ' + e.message);
   }
 }
 
@@ -820,9 +783,9 @@ function renderOverlays(){
       const v = (modeArrow === 'from') ? [-v_to[0], -v_to[1], 0] : v_to; // FROMは反転
 
       const scale = 50;
-      const enuStart = latlonToENU(originLat, originLon, center.lat, center.lng);
+      const enuStart = HakoniwaCoords.latlonToENU(originLat, originLon, center.lat, center.lng);
       const enuEnd = [ enuStart[0] + v[0]*scale, enuStart[1] + v[1]*scale ];
-      const [endLat, endLon] = ENUToLatLon(originLat, originLon, enuEnd[0], enuEnd[1]);
+      const [endLat, endLon] = HakoniwaCoords.ENUToLatLon(originLat, originLon, enuEnd[0], enuEnd[1]);
 
       L.polyline([[center.lat, center.lng], [endLat, endLon]], { color:'#d35400', weight:3 }).addTo(arrowLayerGroup);
 
