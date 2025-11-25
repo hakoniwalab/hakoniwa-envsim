@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js"></script>
 <script src="scripts/hakoniwa_coords.js"></script>
+<script src="scripts/hakoniwa_io.js"></script>
 
 <title>Hakoniwa Mission Editor — with Env Overlay</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -199,21 +200,12 @@ originLonInput.addEventListener('input', centerMap);
 const envLayerGroup = L.layerGroup().addTo(map);
 
 async function loadEnvJsonFromFile(){
-  const fi = document.getElementById('env-file');
-  if (!fi.files || fi.files.length === 0) {
-    alert('環境JSONファイルを選択してください');
-    return;
-  }
-  const file = fi.files[0];
-  const text = await file.text();
-  let obj;
   try {
-    obj = JSON.parse(text);
-  } catch(e){
-    alert('JSON解析に失敗しました: ' + e.message);
-    return;
-  }
-  importEnvObject(obj);
+    const obj = await HakoniwaIO.loadJsonFromFileInput("env-file");
+    importEnvObject(obj);
+  } catch (e) {
+    alert(e.message);
+  }  
 }
 
 function importEnvObject(obj){
@@ -308,21 +300,12 @@ function importMissionObject(obj) {
 }
 
 async function loadMissionJsonFromFile() {
-  const fi = document.getElementById('mission-file');
-  if (!fi.files || fi.files.length === 0) {
-    alert('ミッションJSONファイルを選択してください');
-    return;
-  }
-  const file = fi.files[0];
-  const text = await file.text();
-  let obj;
   try {
-    obj = JSON.parse(text);
-  } catch(e) {
-    alert('JSON解析に失敗しました: ' + e.message);
-    return;
+    const obj = await HakoniwaIO.loadJsonFromFileInput("mission-file");
+    importMissionObject(obj);
+  } catch (e) {
+    alert(e.message);
   }
-  importMissionObject(obj);
 }
 
 document.getElementById('btn-load-mission').onclick = loadMissionJsonFromFile;
@@ -571,14 +554,7 @@ document.getElementById('btn-gen').onclick = ()=>{
 document.getElementById('btn-dl').onclick = ()=>{
   const obj = buildMission();
   if (!obj) return;
-  const text = JSON.stringify(obj, null, 2);
-  const blob = new Blob([text], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = "mission.json";
-  a.click();
-  URL.revokeObjectURL(url);
+  HakoniwaIO.downloadJson(obj, "mission.json");
 };
 </script>
 </body>
