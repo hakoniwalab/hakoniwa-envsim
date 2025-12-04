@@ -1,0 +1,24 @@
+{
+  "area": "../examples/datasets/shibuya/generated/area.json",
+  "property": "../examples/datasets/shibuya/generated/property.json",
+  "link": "../examples/datasets/shibuya/generated/link.json",
+
+  "overlay_map": true,
+  "origin_lat": 35.666862,
+  "origin_lon": 139.692616,
+  "offset_x": 0,
+  "offset_y": 0,
+
+  "mode": "gps",
+  "wind_scale": 1.0,
+  "tiles": "OpenStreetMap.Mapnik",
+  "zoom": null,
+
+    "markers": [
+    {"lat": 35.666862, "lon": 139.692616, "label": "Origin"},
+    {"lat": 35.670065, "lon": 139.694966, "label": "Yoyogi Park"}
+    ],
+
+  "print_latlon": false,
+  "print_shifted_origin": true
+}

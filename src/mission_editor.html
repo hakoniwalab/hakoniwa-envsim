@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hakoniwa Mission Editor — with Env Overlay</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  html, body { height: 100%; margin:0; }
+  #app { display:grid; grid-template-columns: 380px 1fr; height:100%; }
+  #sidebar {
+    padding:10px; border-right:1px solid #ddd; overflow:auto;
+    font-family: system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans JP",sans-serif;
+    font-size:13px;
+  }
+  #map { height:100%; }
+  fieldset { margin-bottom:10px; }
+  label { display:block; margin-top:6px; }
+  input, textarea { width:100%; box-sizing:border-box; padding:4px; font-size:13px; }
+  button { padding:6px 10px; margin-right:4px; margin-top:6px; font-size:12px; }
+  .row { display:flex; gap:6px; }
+  .row > div { flex:1; }
+  .wp-item { padding:3px 4px; border-radius:4px; cursor:pointer; }
+  .wp-item.selected { background:#e8f4ff; }
+  .hint { color:#666; font-size:11px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <h2>Hakoniwa Mission Editor</h2>
+    <div class="hint">
+      ・地図クリックでウェイポイント追加<br>
+      ・左で高度・速度・sleepなど編集<br>
+      ・Env JSONを読み込むと環境ゾーンが重なります
+    </div>
+
+    <fieldset>
+      <legend>原点設定</legend>
+      <label>Origin Lat</label>
+      <input id="origin-lat" type="number" step="0.000001" value="35.6625">
+      <label>Origin Lon</label>
+      <input id="origin-lon" type="number" step="0.000001" value="139.70625">
+      <label>初期ズーム</label>
+      <input id="init-zoom" type="number" min="1" max="25" value="16">
+      <button id="btn-center">原点へ移動</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>環境JSONオーバーレイ</legend>
+      <div class="row" style="align-items:center;">
+        <div>
+          <input id="env-file" type="file" accept=".json">
+        </div>
+        <div>
+          <button id="btn-load-env">環境JSON読み込み</button>
+        </div>
+      </div>
+      <div class="hint">
+        zone editor から出力した env_zones.json を選ぶと、<br>
+        rect/circle のゾーンが地図に表示されます。
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>ミッションJSONインポート</legend>
+      <div class="row" style="align-items:center;">
+        <div>
+          <input id="mission-file" type="file" accept=".json">
+        </div>
+        <div>
+          <button id="btn-load-mission">ミッションJSON読み込み</button>
+        </div>
+      </div>
+      <div class="hint">
+        mission.json を選ぶと、<br>
+        ウェイポイントが地図に表示されます。
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>共通設定</legend>
+      <div class="row">
+        <div>
+          <label>デフォルト高度 z[m]</label>
+          <input id="default-alt" type="number" value="20">
+        </div>
+        <div>
+          <label>デフォルト速度 [m/s]</label>
+          <input id="default-speed" type="number" value="10">
+        </div>
+      </div>
+      <label>takeoff timeout_sec</label>
+      <input id="takeoff-timeout" type="number" value="6000">
+      <label>moveToPosition timeout_sec</label>
+      <input id="move-timeout" type="number" value="6000">
+    </fieldset>
+
+    <fieldset>
+      <legend>ウェイポイント一覧</legend>
+      <div id="wp-list"></div>
+      <div class="hint">
+        地図クリックで末尾に追加。項目をクリックすると編集対象になります。
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>選択中WPの設定</legend>
+      <div id="no-wp" class="hint">WPを選択してください。</div>
+      <div id="wp-editor" style="display:none;">
+        <label>高度 z[m]</label>
+        <input id="wp-alt" type="number">
+        <label>速度 speed[m/s]</label>
+        <input id="wp-speed" type="number">
+        <label>yaw_deg（空白なら自動計算）</label>
+        <input id="wp-yaw" type="number">
+        <label>このWPの直前で sleep[s]</label>
+        <input id="wp-sleep" type="number" value="0">
+      </div>
+      <button id="btn-del-wp">選択WPを削除</button>
+      <button id="btn-del-all-wps">全WPを削除</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>JSON生成</legend>
+      <button id="btn-gen">mission JSON 生成</button>
+      <button id="btn-dl">ダウンロード</button>
+      <textarea id="output" rows="10" placeholder="ここにmission.jsonが出力されます"></textarea>
+      <div class="hint">
+        構造は現在の mission.json と同様に<br>
+        takeoff → (sleep) → moveToPosition ... → land です。
+      </div>
+    </fieldset>
+  </div>
+
+  <div id="map"></div>
+</div>
+
+<!-- Leaflet 本体 -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- EPSG:6677 への変換用 -->
+<script src="https://unpkg.com/proj4@2.9.0/dist/proj4.js"></script>
+<script>
+proj4.defs("EPSG:6677",
+  "+proj=tmerc +lat_0=36 +lon_0=139.8333333333333 " +
+  "+k=0.9999 +x_0=0 +y_0=0 +ellps=GRS80 +units=m +no_defs"
+);
+</script>
+<script>
+// ====== 座標変換 (EPSG:4326 <-> EPSG:6677) ======
+function deg2rad(d){ return d*Math.PI/180; }
+function rad2deg(r){ return r*180/Math.PI; }
+
+// lat/lon (deg) → 原点基準の ENU[m] （x:東, y:北）
+//   ※EPSG:4326 → EPSG:6677 に投影して差分を取る
+function latlonToENU(originLat, originLon, lat, lon) {
+  const p0 = proj4('EPSG:4326','EPSG:6677',[originLon, originLat]); // [X0,Y0]
+  const p1 = proj4('EPSG:4326','EPSG:6677',[lon,        lat       ]); // [X1,Y1]
+  const mx = p1[0] - p0[0]; // East
+  const my = p1[1] - p0[1]; // North
+  return [mx, my];
+}
+
+// 原点基準 ENU[m] → lat/lon (deg)
+//   ※EPSG:6677 で原点座標に差分を足してから、EPSG:4326 へ逆変換
+function ENUToLatLon(originLat, originLon, x, y) {
+  const p0 = proj4('EPSG:4326','EPSG:6677',[originLon, originLat]); // [X0,Y0]
+  const p1 = [p0[0] + x, p0[1] + y]; // [X1,Y1]
+  const geo = proj4('EPSG:6677','EPSG:4326',p1); // [lon,lat]
+  const lon = geo[0];
+  const lat = geo[1];
+  return [lat, lon];
+}
+
+// ENU -> ROS
+function enuToRosFrame(enu_x, enu_y, enu_z) {
+  // ENU (East, North, Up) -> ROS (X forward, Y left, Z up)
+  return [enu_y, -enu_x, enu_z];
+}
+// ROS -> ENU
+function rosToEnuFrame(x_ros, y_ros, z_ros){
+  // X_ros = Y_enu, Y_ros = -X_enu → X_enu = -Y_ros, Y_enu = X_ros
+  return [-y_ros, x_ros, z_ros];
+}
+
+// ====== Map init ======
+const originLatInput = document.getElementById('origin-lat');
+const originLonInput = document.getElementById('origin-lon');
+const initZoomInput  = document.getElementById('init-zoom');
+let originMarker = null;
+let waypoints = [];
+let selectedIndex = -1;
+let pathLine = null;
+
+const map = L.map('map', {
+  preferCanvas: true,
+  maxZoom: 25
+});
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution:'&copy; OpenStreetMap contributors',
+  maxZoom: 25,
+  maxNativeZoom: 19
+}).addTo(map);
+L.control.scale().addTo(map);
+pathLine = L.polyline([], { color:'#e67e22', weight:3 }).addTo(map);
+
+function getOriginLatLng() {
+  const lat = parseFloat(originLatInput.value);
+  const lon = parseFloat(originLonInput.value);
+  return [lat, lon];
+}
+
+function centerMap(){
+  const [lat, lon] = getOriginLatLng();
+  const z   = parseInt(initZoomInput.value || "16", 10);
+  map.setView([lat, lon], z);
+  if (!originMarker){
+    // Origin は赤い丸
+    originMarker = L.circleMarker([lat, lon], {
+      radius: 6,
+      color: '#e74c3c',
+      fillColor: '#e74c3c',
+      fillOpacity: 1.0
+    }).addTo(map)
+      .bindTooltip("Origin",{direction:"top"});
+  } else {
+    originMarker.setLatLng([lat, lon]);
+  }
+  // Origin が変わったらポリラインも更新
+  refreshPolyline();
+}
+centerMap();
+document.getElementById('btn-center').onclick = centerMap;
+originLatInput.addEventListener('input', centerMap);
+originLonInput.addEventListener('input', centerMap);
+
+// ====== 環境ゾーン表示レイヤー ======
+const envLayerGroup = L.layerGroup().addTo(map);
+
+async function loadEnvJsonFromFile(){
+  const fi = document.getElementById('env-file');
+  if (!fi.files || fi.files.length === 0) {
+    alert('環境JSONファイルを選択してください');
+    return;
+  }
+  const file = fi.files[0];
+  const text = await file.text();
+  let obj;
+  try {
+    obj = JSON.parse(text);
+  } catch(e){
+    alert('JSON解析に失敗しました: ' + e.message);
+    return;
+  }
+  importEnvObject(obj);
+}
+
+function importEnvObject(obj){
+  if (!obj) return;
+  envLayerGroup.clearLayers();
+
+  // meta.origin_latlon があれば原点を合わせる
+  if (obj.meta && Array.isArray(obj.meta.origin_latlon) && obj.meta.origin_latlon.length >= 2) {
+    originLatInput.value = obj.meta.origin_latlon[0];
+    originLonInput.value = obj.meta.origin_latlon[1];
+    centerMap();
+  }
+  const originLat = parseFloat(originLatInput.value);
+  const originLon = parseFloat(originLonInput.value);
+
+  const axis = (obj.meta && obj.meta.axis ? String(obj.meta.axis).toUpperCase() : "ENU");
+  const toENU = (axis === "ROS")
+    ? (x,y,z)=>rosToEnuFrame(x,y,z)
+    : (x,y,z)=>[x,y,z];
+
+  (obj.zones || []).forEach(z=>{
+    let layer = null;
+    if (z.shape && z.shape.rect && z.shape.rect.min_m && z.shape.rect.max_m){
+      const min = z.shape.rect.min_m;
+      const max = z.shape.rect.max_m;
+      const [ex1, ey1] = toENU(min[0], min[1], 0);
+      const [ex2, ey2] = toENU(max[0], max[1], 0);
+      const [swLat, swLon] = ENUToLatLon(originLat, originLon, Math.min(ex1,ex2), Math.min(ey1,ey2));
+      const [neLat, neLon] = ENUToLatLon(originLat, originLon, Math.max(ex1,ex2), Math.max(ey1,ey2));
+      layer = L.rectangle([[swLat, swLon], [neLat, neLon]], {
+        color:'#2ecc71', weight:2, fillOpacity:0.1
+      });
+    } else if (z.shape && z.shape.circle && z.shape.circle.center_m && z.shape.circle.radius_m != null){
+      const c = z.shape.circle.center_m;
+      const r = z.shape.circle.radius_m;
+      const [ex, ey] = toENU(c[0], c[1], 0);
+      const [lat, lon] = ENUToLatLon(originLat, originLon, ex, ey);
+      layer = L.circle([lat, lon], {
+        radius: r, color:'#3498db', weight:2, fillOpacity:0.1
+      });
+    }
+    if (layer){
+      layer.addTo(envLayerGroup);
+    }
+  });
+}
+
+document.getElementById('btn-load-env').onclick = loadEnvJsonFromFile;
+
+// ====== ミッションJSONインポート ======
+function importMissionObject(obj) {
+  if (!obj || !Array.isArray(obj.mission)) {
+    alert('無効なミッションファイルです。 "mission" 配列が含まれていません。');
+    return;
+  }
+
+  // 既存のWPをクリア
+  if (waypoints.length > 0) {
+    waypoints.forEach(wp => map.removeLayer(wp.marker));
+    waypoints.length = 0;
+  }
+
+  const originLat = parseFloat(originLatInput.value);
+  const originLon = parseFloat(originLonInput.value);
+  let nextSleep = 0;
+
+  obj.mission.forEach(cmd => {
+    if (cmd.command === "sleep" && cmd.parameters && cmd.parameters.duration_sec != null) {
+      nextSleep = cmd.parameters.duration_sec;
+    } else if (cmd.command === "moveToPosition" && cmd.parameters) {
+      const p = cmd.parameters;
+      const [ex, ey] = rosToEnuFrame(p.x, p.y, p.z);
+      const [lat, lon] = ENUToLatLon(originLat, originLon, ex, ey);
+      
+      addWaypoint(L.latLng(lat, lon));
+      
+      // addWaypointで追加された最後のWPを取得して詳細を設定
+      const newWp = waypoints[waypoints.length - 1];
+      newWp.alt = p.z;
+      newWp.speed = p.speed;
+      newWp.yawDeg = p.yaw_deg;
+      newWp.sleepBefore = nextSleep;
+      
+      updateWpPopup(newWp);
+      nextSleep = 0; // sleepを消費
+    }
+  });
+
+  refreshWpList();
+  refreshPolyline();
+  selectWp(waypoints.length > 0 ? 0 : -1);
+}
+
+async function loadMissionJsonFromFile() {
+  const fi = document.getElementById('mission-file');
+  if (!fi.files || fi.files.length === 0) {
+    alert('ミッションJSONファイルを選択してください');
+    return;
+  }
+  const file = fi.files[0];
+  const text = await file.text();
+  let obj;
+  try {
+    obj = JSON.parse(text);
+  } catch(e) {
+    alert('JSON解析に失敗しました: ' + e.message);
+    return;
+  }
+  importMissionObject(obj);
+}
+
+document.getElementById('btn-load-mission').onclick = loadMissionJsonFromFile;
+
+
+// ====== Waypoints 管理 ======
+const defaultAltInput   = document.getElementById('default-alt');
+const defaultSpeedInput = document.getElementById('default-speed');
+const wpListDiv         = document.getElementById('wp-list');
+const noWpDiv           = document.getElementById('no-wp');
+const wpEditorDiv       = document.getElementById('wp-editor');
+const wpAltInput        = document.getElementById('wp-alt');
+const wpSpeedInput      = document.getElementById('wp-speed');
+const wpYawInput        = document.getElementById('wp-yaw');
+const wpSleepInput      = document.getElementById('wp-sleep');
+const btnDelWp          = document.getElementById('btn-del-wp');
+
+function refreshPolyline(){
+  if (!pathLine) return;  // 念のため
+
+  const latlngs = waypoints.map(wp => [wp.lat, wp.lon]);
+  if (waypoints.length > 0) {
+    const [olat, olon] = getOriginLatLng();
+    latlngs.unshift([olat, olon]);
+  }
+  pathLine.setLatLngs(latlngs);
+}
+
+function refreshWpList(){
+  wpListDiv.innerHTML = "";
+  waypoints.forEach((wp, idx)=>{
+    const div = document.createElement('div');
+    div.className = 'wp-item' + (idx === selectedIndex ? ' selected' : '');
+    let label = `WP${idx+1}: z=${wp.alt}m, v=${wp.speed}m/s`;
+    if (wp.sleepBefore > 0) label += `, sleep=${wp.sleepBefore}s`;
+    div.textContent = label;
+    div.onclick = ()=> selectWp(idx);
+    wpListDiv.appendChild(div);
+  });
+  if (waypoints.length === 0){
+    wpListDiv.innerHTML = '<i>なし</i>';
+  }
+}
+
+function selectWp(idx){
+  selectedIndex = idx;
+  refreshWpList();
+  if (idx < 0 || idx >= waypoints.length){
+    wpEditorDiv.style.display = 'none';
+    noWpDiv.style.display = 'block';
+    return;
+  }
+  const wp = waypoints[idx];
+  noWpDiv.style.display = 'none';
+  wpEditorDiv.style.display = 'block';
+  wpAltInput.value   = wp.alt;
+  wpSpeedInput.value = wp.speed;
+  wpYawInput.value   = (wp.yawDeg != null ? wp.yawDeg : "");
+  wpSleepInput.value = wp.sleepBefore;
+}
+
+// マーカーポップアップの内容を更新
+function updateWpPopup(wp) {
+  const html =
+    `z = ${wp.alt} m<br>` +
+    `speed = ${wp.speed} m/s<br>` +
+    `sleepBefore = ${wp.sleepBefore} s` +
+    (wp.yawDeg != null ? `<br>yaw = ${wp.yawDeg}°` : "");
+  wp.marker.bindPopup(html);
+}
+
+function addWaypoint(latlng){
+  const alt   = parseFloat(defaultAltInput.value || "20");
+  const speed = parseFloat(defaultSpeedInput.value || "10");
+  // Waypoint はデフォルトマーカー（青ピン）のまま
+  const marker = L.marker(latlng, { draggable:true }).addTo(map);
+  const wp = {
+    marker,
+    lat: latlng.lat,
+    lon: latlng.lng,
+    alt,
+    speed,
+    yawDeg: null,   // 未設定なら自動計算
+    sleepBefore: 0
+  };
+
+  marker.on('drag', e=>{
+    wp.lat = e.target.getLatLng().lat;
+    wp.lon = e.target.getLatLng().lng;
+    refreshPolyline();
+  });
+
+  // マーカークリックで選択＆ポップアップ表示
+  marker.on('click', () => {
+    const idx = waypoints.indexOf(wp);
+    if (idx >= 0) {
+      selectWp(idx);
+      marker.openPopup();
+    }
+  });
+
+  waypoints.push(wp);
+  updateWpPopup(wp);
+  refreshPolyline();
+  refreshWpList();
+  selectWp(waypoints.length - 1);
+}
+
+map.on('click', e=>{
+  addWaypoint(e.latlng);
+});
+
+// 入力フォーム → WPデータ & ポップアップ更新
+wpAltInput.addEventListener('input', ()=>{
+  if (selectedIndex < 0) return;
+  const wp = waypoints[selectedIndex];
+  wp.alt = parseFloat(wpAltInput.value || "0");
+  refreshWpList();
+  updateWpPopup(wp);
+});
+wpSpeedInput.addEventListener('input', ()=>{
+  if (selectedIndex < 0) return;
+  const wp = waypoints[selectedIndex];
+  wp.speed = parseFloat(wpSpeedInput.value || "0");
+  refreshWpList();
+  updateWpPopup(wp);
+});
+wpYawInput.addEventListener('input', ()=>{
+  if (selectedIndex < 0) return;
+  const wp = waypoints[selectedIndex];
+  const v = wpYawInput.value.trim();
+  wp.yawDeg = (v === "" ? null : parseFloat(v));
+  updateWpPopup(wp);
+});
+wpSleepInput.addEventListener('input', ()=>{
+  if (selectedIndex < 0) return;
+  const wp = waypoints[selectedIndex];
+  wp.sleepBefore = parseFloat(wpSleepInput.value || "0");
+  refreshWpList();
+  updateWpPopup(wp);
+});
+
+btnDelWp.onclick = ()=>{
+  if (selectedIndex < 0) return;
+  const wp = waypoints[selectedIndex];
+  map.removeLayer(wp.marker);
+  waypoints.splice(selectedIndex,1);
+  selectedIndex = -1;
+  refreshPolyline();
+  refreshWpList();
+  selectWp(-1);
+};
+
+document.getElementById('btn-del-all-wps').onclick = ()=>{
+  if (waypoints.length === 0) {
+    alert('ウェイポイントがありません。');
+    return;
+  }
+  if (confirm('すべてのウェイポイントを削除しますか？')) {
+    waypoints.forEach(wp => map.removeLayer(wp.marker));
+    waypoints.length = 0; // 配列をクリア
+    selectedIndex = -1;
+    refreshPolyline();
+    refreshWpList();
+    selectWp(-1);
+  }
+};
+
+// ====== mission.json 生成 ======
+const takeoffTimeoutInput = document.getElementById('takeoff-timeout');
+const moveTimeoutInput    = document.getElementById('move-timeout');
+const outputTextarea      = document.getElementById('output');
+
+function markerToRosXY(wp){
+  const originLat = parseFloat(originLatInput.value);
+  const originLon = parseFloat(originLonInput.value);
+  const [ex, ey] = latlonToENU(originLat, originLon, wp.lat, wp.lon);
+  const [xr, yr, zr] = enuToRosFrame(ex, ey, 0);
+  return [xr, yr];
+}
+
+function computeYawForSegment(idx){
+  // idx番目のWP用に、前WPとの方向からざっくり yaw を計算
+  if (idx <= 0 || idx >= waypoints.length) return 0;
+  const prev = waypoints[idx-1];
+  const cur  = waypoints[idx];
+  const dx = cur.lon - prev.lon;
+  const dy = cur.lat - prev.lat;
+  if (dx === 0 && dy === 0) return 0;
+  const rad = Math.atan2(dx, dy); // 北=0°、東=90° のようなイメージ
+  let deg = rad2deg(rad);
+  return Math.round(deg);
+}
+
+function buildMission(){
+  if (waypoints.length === 0){
+    alert('WPがありません');
+    return null;
+  }
+  const mission = [];
+  const h = waypoints[0].alt;
+  const takeoffTimeout = parseFloat(takeoffTimeoutInput.value || "6000");
+  const moveTimeout    = parseFloat(moveTimeoutInput.value || "6000");
+
+  mission.push({
+    command: "takeoff",
+    parameters: {
+      height: h,
+      timeout_sec: takeoffTimeout
+    }
+  });
+
+  waypoints.forEach((wp, idx)=>{
+    if (wp.sleepBefore > 0){
+      mission.push({
+        command: "sleep",
+        parameters: { duration_sec: wp.sleepBefore }
+      });
+    }
+    const [xr, yr] = markerToRosXY(wp);
+    const yaw = (wp.yawDeg != null) ? wp.yawDeg : computeYawForSegment(idx);
+    mission.push({
+      command: "moveToPosition",
+      parameters: {
+        x: parseFloat(xr.toFixed(3)),
+        y: parseFloat(yr.toFixed(3)),
+        z: wp.alt,
+        speed: wp.speed,
+        yaw_deg: yaw,
+        timeout_sec: moveTimeout
+      }
+    });
+  });
+
+  mission.push({ command: "land" });
+
+  return { mission };
+}
+
+document.getElementById('btn-gen').onclick = ()=>{
+  const obj = buildMission();
+  if (!obj) return;
+  outputTextarea.value = JSON.stringify(obj, null, 2);
+};
+
+document.getElementById('btn-dl').onclick = ()=>{
+  const obj = buildMission();
+  if (!obj) return;
+  const text = JSON.stringify(obj, null, 2);
+  const blob = new Blob([text], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = "mission.json";
+  a.click();
+  URL.revokeObjectURL(url);
+};
+</script>
+</body>
+</html>

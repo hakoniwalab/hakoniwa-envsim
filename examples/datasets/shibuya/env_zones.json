@@ -1,0 +1,173 @@
+{
+  "version": "0.1",
+  "meta": {
+    "crs": "local-enu",
+    "origin_latlon": [
+      35.6625,
+      139.70625
+    ],
+    "axis": "ROS",
+    "units": {
+      "length": "m",
+      "speed": "m/s",
+      "temp": "C"
+    }
+  },
+  "grid": {
+    "min": [
+      -1000,
+      -1000,
+      0
+    ],
+    "max": [
+      1000,
+      1000,
+      100
+    ],
+    "cell_m": [
+      50,
+      50,
+      100
+    ],
+    "levels": 1
+  },
+  "base": {
+    "wind": {
+      "vector_ms": [
+        4,
+        0,
+        0
+      ]
+    },
+    "temperature_C": 20,
+    "pressure_atm": 1,
+    "gps_strength": 1
+  },
+  "zones": [
+    {
+      "name": "zone1",
+      "priority": 1,
+      "effect": {
+        "mode": "absolute",
+        "gps_abs": 0.8,
+        "wind_ms": [
+          -3.999,
+          -0.07,
+          0
+        ]
+      },
+      "shape": {
+        "rect": {
+          "min_m": [
+            -90.6,
+            -144.5
+          ],
+          "max_m": [
+            125.5,
+            152.9
+          ]
+        }
+      }
+    },
+    {
+      "name": "zone",
+      "priority": 1,
+      "effect": {
+        "mode": "turbulence",
+        "gps_abs": 0.8,
+        "turbulence": {
+          "type": "gauss",
+          "std_ms": 3,
+          "seed": 123
+        }
+      },
+      "shape": {
+        "rect": {
+          "min_m": [
+            -307.4,
+            -139.1
+          ],
+          "max_m": [
+            -97.2,
+            149.9
+          ]
+        }
+      }
+    },
+    {
+      "name": "zone3",
+      "priority": 1,
+      "effect": {
+        "mode": "absolute",
+        "gps_abs": 0.8,
+        "wind_ms": [
+          3.536,
+          -3.536,
+          0
+        ]
+      },
+      "shape": {
+        "rect": {
+          "min_m": [
+            -496.1,
+            -132
+          ],
+          "max_m": [
+            -309.8,
+            159.5
+          ]
+        }
+      }
+    },
+    {
+      "name": "zone4",
+      "priority": 1,
+      "effect": {
+        "mode": "absolute",
+        "gps_abs": 0.8,
+        "wind_ms": [
+          -2.998,
+          -0.105,
+          0
+        ]
+      },
+      "shape": {
+        "rect": {
+          "min_m": [
+            -505.7,
+            -803.2
+          ],
+          "max_m": [
+            132.1,
+            -146.3
+          ]
+        }
+      }
+    },
+    {
+      "name": "zone5",
+      "priority": 1,
+      "effect": {
+        "mode": "absolute",
+        "gps_abs": 0.8,
+        "wind_ms": [
+          2.121,
+          -2.121,
+          0
+        ]
+      },
+      "shape": {
+        "rect": {
+          "min_m": [
+            -828.1,
+            -530.9
+          ],
+          "max_m": [
+            -517.6,
+            149.9
+          ]
+        }
+      }
+    }
+  ]
+}
