@@ -235,10 +235,6 @@
       </div>
     </fieldset>
 
-    <fieldset>
-      <legend>現在のゾーン</legend>
-      <div id="zone-list" class="zone-list"></div>
-    </fieldset>
   </div>
 
   <div id="map"></div>
@@ -350,15 +346,12 @@ map.on(L.Draw.Event.CREATED, function (e) {
   const layer = e.layer;
   drawnItems.addLayer(layer);
   selectLayer(layer);
-  refreshZoneList();
   renderOverlays();
 });
 map.on('draw:edited', function(e){
-  refreshZoneList();
   renderOverlays();
 });
 map.on('draw:deleted', function(e){
-  refreshZoneList();
   renderOverlays();
 });
 map.on('click', function(e){
@@ -476,7 +469,6 @@ function selectLayer(layer){
   turbStd.value      = m.turbStd  ?? 3.0;
   turbSeed.value     = m.turbSeed ?? 123;
   updateModeUI();
-  refreshZoneList();
   renderOverlays();
 }
 function clearSelection(){
@@ -489,7 +481,6 @@ document.getElementById('btn-delete').onclick = function(){
   if (!selectedLayer){ alert('図形を選択してください'); return; }
   drawnItems.removeLayer(selectedLayer);
   selectedLayer = null;
-  refreshZoneList();
   renderOverlays();
 };
 
@@ -505,7 +496,6 @@ function applyToSelected(force=false){
     turbStd: parseFloat(turbStd.value || "3.0"),
     turbSeed: parseInt(turbSeed.value || "123")
   };
-  refreshZoneList();
   renderOverlays();
 }
 
@@ -712,7 +702,6 @@ function importFromObject(obj){
     }
   });
 
-  refreshZoneList();
   renderOverlays();
 }
 
@@ -743,28 +732,6 @@ document.getElementById('btn-import-text').onclick = importFromText;
 document.getElementById('btn-import-file').onclick = importFromFile;
 
 // ---------- List & Overlays ----------
-function refreshZoneList(){
-  const list = document.getElementById('zone-list');
-  let html = "";
-  let idx = 1;
-  drawnItems.eachLayer(function(layer){
-    const meta = layer._hakoniwa || {};
-    let label = meta.name || ('zone'+idx);
-    const type = (layer instanceof L.Rectangle) ? 'rect' :
-                 (layer instanceof L.Circle) ? 'circle' : 'shape';
-    html += `<div><span class="badge">${type}</span>${label}`;
-    if (meta.mode === 'absolute'){
-      if (meta.windSpd != null) html += ` <span class="badge">wind ${meta.windSpd} m/s @${meta.windDir}°</span>`;
-    } else if (meta.mode === 'turbulence'){
-      html += ` <span class="badge">turb σ=${meta.turbStd ?? 3.0} m/s seed=${meta.turbSeed ?? 0}</span>`;
-    }
-    if (meta.gpsAbs != null) html += ` <span class="badge">gps ${meta.gpsAbs}</span>`;
-    if (meta.priority != null) html += ` <span class="badge">prio ${meta.priority}</span>`;
-    html += `</div>`;
-    idx++;
-  });
-  list.innerHTML = html || "<i>なし</i>";
-}
 
 function renderOverlays(){
   arrowLayerGroup.clearLayers();
