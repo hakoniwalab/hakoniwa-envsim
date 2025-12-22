@@ -119,15 +119,31 @@ class PlotRenderer:
         cell_dy = min(a.aabb2d.ymax - a.aabb2d.ymin for a in areas)
         s = (0.5 * max(1e-6, min(cell_dx, cell_dy)) / max(1e-6, max_mag)) * wind_scale
 
+        hw = max(0.2 * min(cell_dx, cell_dy), 0.5 * s)
+        hl = max(0.4 * min(cell_dx, cell_dy), 1.5 * s)
+        fc = "#1f4f5f"   # 落ち着いた青緑
+        ec = "#0b1f26"
+        alpha = 0.9
+        linewidth = 0.2
+        min_len = 0.15 * min(cell_dx, cell_dy) * wind_scale  # お好みで 0.15〜0.35
+
         for a in areas:
             if a.wind_velocity:
                 vx, vy, vz = a.wind_velocity
                 cx, cy = a.aabb2d.center()
+
+                mag = (vx*vx + vy*vy + vz*vz) ** 0.5
+                ux = vx / max(mag, 1e-6)
+                uy = vy / max(mag, 1e-6)
+
+                length = max(min_len, mag * s)
+
                 ax.arrow(
                     cx, cy,
-                    vx * s, vy * s,
-                    head_width=0.5 * s, head_length=0.25 * s,
-                    fc="yellow", ec="yellow",
+                    ux * length, uy * length,
+                    head_width=hw, head_length=hl,
+                    fc=fc, ec=ec,
+                    linewidth=linewidth, alpha=alpha,
                     length_includes_head=True, zorder=4,
                 )
 
