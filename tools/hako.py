@@ -170,10 +170,17 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
         value = cfg["selection"]["half_extent_m"][key]
         if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
             raise ConfigError(f"selection.half_extent_m.{key} must be positive")
-    for key in ("base_epsilon_m", "waste_threshold", "wall_thickness_m"):
+    for key in ("base_epsilon_m", "wall_thickness_m"):
         value = cfg["geometry"][key]
         if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
             raise ConfigError(f"geometry.{key} must be positive")
+    waste_threshold = cfg["geometry"]["waste_threshold"]
+    if (
+        not isinstance(waste_threshold, (int, float))
+        or isinstance(waste_threshold, bool)
+        or not 0 <= waste_threshold <= 1
+    ):
+        raise ConfigError("geometry.waste_threshold must be in [0, 1]")
     if cfg["mjcf"]["collision"] not in {"all", "drone", "none"}:
         raise ConfigError("mjcf.collision must be all, drone, or none")
     if not isinstance(cfg["mjcf"]["floor"], bool):

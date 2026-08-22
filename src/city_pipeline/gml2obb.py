@@ -11,7 +11,7 @@ gml2obb.py
     * --in / --out は必須引数
     * 入力JSONに origin / bounds 情報があればそのまま引き継ぐ
     * 相対座標・絶対座標どちらもそのまま処理
-    * --waste-threshold で OBB面積 / 多角形面積 の閾値を指定
+    * --waste-threshold で OBB内の空白面積 / OBB面積 (0..1) の閾値を指定
         - 閾値以下: 従来どおり 1枚の OBB (mode="obb")
         - 閾値超え: ポリゴンの各辺を薄いBOXで表現 (mode="wall")
     * --wall-thickness で壁BOXの厚みを指定
@@ -42,6 +42,13 @@ def polygon_area(points: np.ndarray) -> float:
         return 0.0
     x, y = pts[:, 0], pts[:, 1]
     return 0.5 * abs(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))
+
+
+def obb_empty_area_ratio(area_polygon: float, area_obb: float) -> float:
+    """Fraction of the OBB area not occupied by the source footprint (0..1)."""
+    if area_obb <= 0.0:
+        return 0.0
+    return min(1.0, max(0.0, (area_obb - area_polygon) / area_obb))
 
 
 def convex_hull(points: np.ndarray):
@@ -217,6 +224,8 @@ def make_wall_records(
     wall_thickness: float,
     waste_ratio: float,
     min_edge_len: float = 1e-3,
+    boundary_kind: str = "exterior",
+    ring_index: int = 0,
 ):
     """
     壁BOXモード:
@@ -253,8 +262,13 @@ def make_wall_records(
         )
         rect_edge = rect_local @ R + np.array([cx, cy])
 
+        edge_id = (
+            f"{pid}_edge{i}"
+            if boundary_kind == "exterior"
+            else f"{pid}_interior{ring_index}_edge{i}"
+        )
         rec = {
-            "id": f"{pid}_edge{i}",
+            "id": edge_id,
             "parent_id": pid,
             "center": [float(cx), float(cy)],
             "half_size": [float(half_len), float(half_thick)],
@@ -264,6 +278,8 @@ def make_wall_records(
             "area": float(4.0 * half_len * half_thick),
             "mode": "wall",
             "edge_index": i,
+            "boundary_kind": boundary_kind,
+            "ring_index": ring_index,
             "waste_ratio": float(waste_ratio),
         }
         if zmin   is not None:
@@ -289,7 +305,7 @@ def main():
     ap.add_argument("--out", dest="out_path", type=str, required=True,
                     help="OBB(after) / 壁BOX(after) の出力 JSON パス")
     ap.add_argument("--waste-threshold", type=float, default=None,
-                    help="OBB面積 / 多角形面積 がこの値を超えたら壁BOXモードに切り替え")
+                    help="OBB内の空白面積 / OBB面積 (0..1) がこの値を超えたら壁BOXモードに切り替え")
     ap.add_argument("--wall-thickness", type=float, default=1.0,
                     help="壁BOXの厚み（入力座標系の単位）")
     args = ap.parse_args()
@@ -298,6 +314,10 @@ def main():
     out_path = Path(args.out_path)
     waste_th = args.waste_threshold
     wall_t = args.wall_thickness
+    if waste_th is not None and not 0.0 <= waste_th <= 1.0:
+        raise SystemExit("[ERR] --waste-threshold must be in [0, 1]")
+    if wall_t <= 0.0:
+        raise SystemExit("[ERR] --wall-thickness must be positive")
 
     with open(in_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -320,6 +340,9 @@ def main():
     for poly in polys_in:
         pid = poly.get("id", "poly")
         pts = np.array(poly["vertices"], dtype=float)
+        interior_rings = [
+            np.array(ring, dtype=float) for ring in poly.get("interior_rings", [])
+        ]
 
         if len(pts) < 3:
             continue
@@ -331,7 +354,7 @@ def main():
         source = poly.get("source_gml")
 
         # 元多角形の面積（凹み込み）
-        area_poly = polygon_area(pts)
+        area_poly = polygon_area(pts) - sum(polygon_area(ring) for ring in interior_rings)
 
         # OBB 計算（入力座標系のまま）
         center, halfsize, yaw, rect, area_obb = min_area_rect_calipers(pts)
@@ -346,7 +369,7 @@ def main():
             results_after.append(rec)
             continue
 
-        waste_ratio = area_obb / area_poly
+        waste_ratio = obb_empty_area_ratio(area_poly, area_obb)
         use_wall_mode = (waste_th is not None and waste_ratio > waste_th)
 
         if not use_wall_mode:
@@ -366,6 +389,15 @@ def main():
                 waste_ratio=waste_ratio,
                 min_edge_len=1e-3
             )
+            for ring_index, ring in enumerate(interior_rings):
+                wall_records.extend(make_wall_records(
+                    pid, ring, zmin, zmax, height, source,
+                    wall_thickness=wall_t,
+                    waste_ratio=waste_ratio,
+                    min_edge_len=1e-3,
+                    boundary_kind="interior",
+                    ring_index=ring_index,
+                ))
             # 万一全部の辺が短すぎてスキップされた場合は、保険でOBBを残す
             if not wall_records:
                 rec = make_obb_record(
@@ -378,7 +410,7 @@ def main():
                 results_after.extend(wall_records)
 
     out = {
-        "version": "0.5",
+        "version": "0.6",
         "mode": "after",
         "source": str(in_path),
         "crs": crs,

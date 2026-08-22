@@ -52,7 +52,7 @@
       "required": ["base_epsilon_m", "waste_threshold", "wall_thickness_m"],
       "properties": {
         "base_epsilon_m": {"type": "number", "exclusiveMinimum": 0},
-        "waste_threshold": {"type": "number", "exclusiveMinimum": 0},
+        "waste_threshold": {"type": "number", "minimum": 0, "maximum": 1},
         "wall_thickness_m": {"type": "number", "exclusiveMinimum": 0}
       }
     },

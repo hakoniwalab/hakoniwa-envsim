@@ -22,8 +22,9 @@ import re
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-import numpy as np
-from shapely.geometry import MultiPoint
+from shapely.geometry import Polygon
+from shapely.geometry.polygon import orient
+from shapely.ops import unary_union
 
 NS = {
     "gml":  "http://www.opengis.net/gml",
@@ -102,23 +103,71 @@ def project_epsg6697_to_local_enu(points, center_lat, center_lon):
     return output
 
 
-def convex_hull_xy(points_xy, min_points=3):
-    """XY の凸包 (Shapely) → 頂点列（反時計回り）。"""
-    if len(points_xy) < min_points:
+def _open_ring(points):
+    """Drop the duplicate closure and consecutive duplicate XY vertices."""
+    output = []
+    for point in points:
+        xy = (float(point[0]), float(point[1]))
+        if not output or xy != output[-1]:
+            output.append(xy)
+    if len(output) > 1 and output[0] == output[-1]:
+        output.pop()
+    return output
+
+
+def _canonical_ring(coords):
+    """Return an open ring with a deterministic first vertex."""
+    ring = _open_ring(coords)
+    if not ring:
         return []
+    start = min(range(len(ring)), key=lambda index: ring[index])
+    return ring[start:] + ring[:start]
 
-    pts2d = [(p[0], p[1]) for p in points_xy]
 
-    hull = MultiPoint(pts2d).convex_hull  # Polygon or LineString or Point
-    if hull.geom_type == "Polygon":
-        xys = list(hull.exterior.coords)[:-1]  # 閉路の最後を落とす
-        return [(float(x), float(y)) for (x, y) in xys]
-    if hull.geom_type == "LineString":
-        xys = list(hull.coords)
-        return [(float(x), float(y)) for (x, y) in xys]
-    if hull.geom_type == "Point":
-        return [(float(hull.x), float(hull.y))]
-    return []
+def _canonical_polygon(polygon):
+    """Serialize one valid polygon as CCW exterior and CW interior rings."""
+    polygon = orient(polygon, sign=1.0)
+    return {
+        "vertices": _canonical_ring(polygon.exterior.coords),
+        "interior_rings": [
+            _canonical_ring(interior.coords) for interior in polygon.interiors
+        ],
+    }
+
+
+def _base_polygons(bldg, zmin, base_eps, local_origin):
+    """Extract ordered horizontal bottom surfaces without convexification."""
+    polygons = []
+    for element in bldg.findall(".//bldg:lod1Solid//gml:Polygon", NS):
+        exterior = element.find("gml:exterior/gml:LinearRing/gml:posList", NS)
+        if exterior is None or not exterior.text:
+            continue
+        exterior_geo = parse_poslist(exterior.text)
+        if len(exterior_geo) < 4 or any(abs(point[2] - zmin) > base_eps for point in exterior_geo):
+            continue
+
+        exterior_enu = project_epsg6697_to_local_enu(
+            exterior_geo, center_lat=local_origin[0], center_lon=local_origin[1]
+        )
+        holes = []
+        for interior in element.findall("gml:interior/gml:LinearRing/gml:posList", NS):
+            if not interior.text:
+                continue
+            interior_geo = parse_poslist(interior.text)
+            if any(abs(point[2] - zmin) > base_eps for point in interior_geo):
+                raise ValueError("LOD1 bottom polygon has a non-horizontal interior ring")
+            interior_enu = project_epsg6697_to_local_enu(
+                interior_geo, center_lat=local_origin[0], center_lon=local_origin[1]
+            )
+            holes.append(_open_ring(interior_enu))
+
+        polygon = Polygon(_open_ring(exterior_enu), holes)
+        if polygon.is_empty or polygon.area <= 0.0:
+            continue
+        if not polygon.is_valid:
+            raise ValueError("LOD1 bottom polygon is invalid and cannot be preserved")
+        polygons.append(polygon)
+    return polygons
 
 
 def load_query_meta(meta_path):
@@ -167,11 +216,12 @@ def is_within_bounds(footprint, bounds):
     ns_m = bounds["ns_m"]
     ew_m = bounds["ew_m"]
     
-    # フットプリントの重心を計算
-    xs = [p[0] for p in footprint]
-    ys = [p[1] for p in footprint]
-    cx = sum(xs) / len(xs)
-    cy = sum(ys) / len(ys)
+    # 頂点の算術平均ではなく、凹形状と穴も反映した面積重心を使う。
+    if hasattr(footprint, "centroid"):
+        cx, cy = footprint.centroid.x, footprint.centroid.y
+    else:
+        polygon = Polygon(footprint)
+        cx, cy = polygon.centroid.x, polygon.centroid.y
     
     # 範囲チェック（相対座標なので ±ns_m, ±ew_m）
     return abs(cy) <= ns_m and abs(cx) <= ew_m
@@ -179,8 +229,8 @@ def is_within_bounds(footprint, bounds):
 
 def extract_buildings_lod1(gml_path, base_eps=0.2, bounds=None, local_origin=None):
     """
-    1つの GML ファイルから bldg:lod1Solid の点群を抽出し、(XY凸包, zmin, zmax) を返す。
-    - base_eps: zmin からの許容差（m）。底面近傍点の抽出に使用。
+    1つの GML ファイルから bldg:lod1Solid の元の底面外周と穴を抽出する。
+    - base_eps: zmin からの許容差（m）。水平底面の判定に使用。
     - local_origin: (latitude, longitude) を指定し、局所ENUの原点とする
     - bounds: {"ns_m": float, "ew_m": float} を指定した場合、範囲外の建物をフィルタ
     """
@@ -218,32 +268,37 @@ def extract_buildings_lod1(gml_path, base_eps=0.2, bounds=None, local_origin=Non
             center_lon=local_origin[1],
         )
 
-        # 高さレンジ
-        zs = np.array([p[2] for p in xyz], dtype=float)
-        zmin = float(np.min(zs))
-        zmax = float(np.max(zs))
+        zmin = float(min(p[2] for p in xyz))
+        zmax = float(max(p[2] for p in xyz))
 
-        # 底面近傍 (|z - zmin| <= base_eps) の XY を抽出
-        base_xy = [(x, y, z) for (x, y, z) in xyz if abs(z - zmin) <= base_eps]
-        if len(base_xy) < 3:
-            # 壁面しか拾えなかった等 → 全点から凸包（苦肉の策）
-            base_xy = xyz
+        base_polygons = _base_polygons(bldg, zmin, base_eps, local_origin)
+        if not base_polygons:
+            raise ValueError(f"LOD1 horizontal bottom surface was not found: building={bid}")
 
-        # 凸包でフットプリント（安定重視の簡便法）
-        footprint = convex_hull_xy(base_xy)
-        if len(footprint) < 3:
-            # 退避：点や線しか得られない場合はスキップ
-            continue
+        merged = unary_union(base_polygons)
+        if merged.geom_type == "Polygon":
+            parts = [merged]
+        elif merged.geom_type == "MultiPolygon":
+            parts = sorted(merged.geoms, key=lambda item: tuple(item.bounds))
+        else:
+            raise ValueError(f"LOD1 bottom surfaces did not form polygons: building={bid}")
 
-        if not is_within_bounds(footprint, bounds):
-            continue  # 範囲外なのでスキップ
-
-        results.append({
-            "id": bid,
-            "vertices": [[float(x), float(y)] for (x, y) in footprint],
-            "zmin": zmin,
-            "zmax": zmax,
-        })
+        for index, part in enumerate(parts, start=1):
+            serialized = _canonical_polygon(part)
+            footprint = serialized["vertices"]
+            if not is_within_bounds(part, bounds):
+                continue
+            part_id = bid if len(parts) == 1 else f"{bid}__part_{index:03d}"
+            results.append({
+                "id": part_id,
+                "vertices": [[float(x), float(y)] for (x, y) in footprint],
+                "interior_rings": [
+                    [[float(x), float(y)] for (x, y) in ring]
+                    for ring in serialized["interior_rings"]
+                ],
+                "zmin": zmin,
+                "zmax": zmax,
+            })
 
     return results
 
@@ -277,7 +332,7 @@ def merge_unique_footprints(target, footprints, source_gml):
             target.append(candidate)
             by_id[candidate["id"]] = candidate
             continue
-        geometry_keys = ("vertices", "zmin", "zmax")
+        geometry_keys = ("vertices", "interior_rings", "zmin", "zmax")
         if any(existing.get(key) != candidate.get(key) for key in geometry_keys):
             raise ValueError(
                 "conflicting PLATEAU building geometry for duplicate ID "
@@ -349,7 +404,7 @@ def main():
         duplicate_count += merge_unique_footprints(all_footprints, footprints, gml)
 
     out = {
-        "version": "0.1",
+        "version": "0.2",
         "source_crs": "EPSG:6697",
         "crs": "LOCAL_ENU_GRS80",
         "coordinate_system": "local-enu",

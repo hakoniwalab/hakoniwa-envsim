@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import copy
 import json
 import math
 import subprocess
@@ -28,6 +29,24 @@ def load_pipeline_module():
 def load_obb2mjcf_module():
     path = ROOT / "src" / "city_pipeline" / "obb2mjcf.py"
     spec = importlib.util.spec_from_file_location("obb2mjcf", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_gml2obb_module():
+    path = ROOT / "src" / "city_pipeline" / "gml2obb.py"
+    spec = importlib.util.spec_from_file_location("gml2obb", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_hako_module():
+    path = ROOT / "tools" / "hako.py"
+    spec = importlib.util.spec_from_file_location("envsim_hako", path)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -106,6 +125,92 @@ class PlateauCityGmlTest(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "EPSG:6697"):
             module.validate_epsg6697_contract(invalid, Path("invalid.gml"))
+
+    def test_lod1_extractor_preserves_original_concave_footprint(self):
+        extractor = load_pipeline_module()
+        converter = load_gml2obb_module()
+        polygons = extractor.extract_buildings_lod1(
+            ROOT / "tests" / "fixtures" / "concave_bldg_6697_op.gml",
+            local_origin=(35.681200, 139.706720),
+        )
+        self.assertEqual(len(polygons), 1)
+        self.assertEqual(len(polygons[0]["vertices"]), 6)
+        points = __import__("numpy").array(polygons[0]["vertices"])
+        area = converter.polygon_area(points)
+        _, _, _, _, obb_area = converter.min_area_rect_calipers(points)
+        self.assertAlmostEqual(converter.obb_empty_area_ratio(area, obb_area), 0.25, delta=0.01)
+
+    def test_waste_threshold_selects_obb_or_original_boundary_walls(self):
+        polygon = {
+            "id": "l-shape",
+            "vertices": [[0, 0], [2, 0], [2, 1], [1, 1], [1, 2], [0, 2]],
+            "interior_rings": [],
+            "zmin": 0,
+            "zmax": 5,
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "polygons.json"
+            source.write_text(json.dumps({
+                "coordinate_system": "local-enu",
+                "polygons": [polygon],
+            }), encoding="utf-8")
+            outputs = {}
+            for threshold in (0.2, 0.3, 1.0):
+                output = Path(temporary) / f"walls-{threshold}.json"
+                subprocess.run([
+                    sys.executable,
+                    str(ROOT / "src" / "city_pipeline" / "gml2obb.py"),
+                    "--in", str(source), "--out", str(output),
+                    "--waste-threshold", str(threshold),
+                ], cwd=ROOT, check=True, capture_output=True, text=True)
+                outputs[threshold] = json.loads(output.read_text(encoding="utf-8"))["results"]
+
+            self.assertEqual(len(outputs[0.2]), 6)
+            self.assertTrue(all(record["mode"] == "wall" for record in outputs[0.2]))
+            self.assertEqual([record["edge_index"] for record in outputs[0.2]], list(range(6)))
+            self.assertEqual(len(outputs[0.3]), 1)
+            self.assertEqual(outputs[0.3][0]["mode"], "obb")
+            self.assertEqual(len(outputs[1.0]), 1)
+            self.assertAlmostEqual(outputs[1.0][0]["waste_ratio"], 0.25)
+
+    def test_wall_mode_preserves_interior_ring_boundaries(self):
+        polygon = {
+            "id": "courtyard",
+            "vertices": [[0, 0], [4, 0], [4, 4], [0, 4]],
+            "interior_rings": [[[1, 1], [1, 3], [3, 3], [3, 1]]],
+            "zmin": 0,
+            "zmax": 5,
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "polygons.json"
+            output = Path(temporary) / "walls.json"
+            source.write_text(json.dumps({
+                "coordinate_system": "local-enu",
+                "polygons": [polygon],
+            }), encoding="utf-8")
+            subprocess.run([
+                sys.executable,
+                str(ROOT / "src" / "city_pipeline" / "gml2obb.py"),
+                "--in", str(source), "--out", str(output),
+                "--waste-threshold", "0.2",
+            ], cwd=ROOT, check=True, capture_output=True, text=True)
+            records = json.loads(output.read_text(encoding="utf-8"))["results"]
+            self.assertEqual(len(records), 8)
+            self.assertEqual(sum(r["boundary_kind"] == "exterior" for r in records), 4)
+            self.assertEqual(sum(r["boundary_kind"] == "interior" for r in records), 4)
+            self.assertAlmostEqual(records[0]["waste_ratio"], 0.25)
+
+    def test_waste_threshold_configuration_is_a_zero_to_one_ratio(self):
+        hako = load_hako_module()
+        for value in (0.0, 1.0):
+            config = copy.deepcopy(hako.DEFAULT_CONFIG)
+            config["geometry"]["waste_threshold"] = value
+            self.assertEqual(hako.resolve_config(config)["geometry"]["waste_threshold"], value)
+        for value in (-0.01, 1.01):
+            config = copy.deepcopy(hako.DEFAULT_CONFIG)
+            config["geometry"]["waste_threshold"] = value
+            with self.assertRaisesRegex(hako.ConfigError, r"\[0, 1\]"):
+                hako.resolve_config(config)
 
     def test_conversion_entrypoint_rejects_malformed_crs_contracts(self):
         fixture = (ROOT / "tests" / "fixtures" / "tiny_bldg_6697_op.gml").read_text(

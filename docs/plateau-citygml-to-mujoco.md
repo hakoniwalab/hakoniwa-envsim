@@ -47,10 +47,16 @@ LOD1抽出時に建物フットプリントの重心で指定範囲へ再度絞�
 |---|---|
 | `source.year` | `latest`または西暦。`latest`は市区町村ごとの最新データを選択 |
 | `geometry.base_epsilon_m` | 建物底面点を抽出する高さ許容差 |
-| `geometry.waste_threshold` | OBB面積/建物面積がこの値を超えたら外周壁boxへ切替 |
+| `geometry.waste_threshold` | OBB内の空白面積率 `(OBB面積-建物面積)/OBB面積` がこの値を超えたら外周壁boxへ切替（0〜1） |
 | `geometry.wall_thickness_m` | 外周壁boxの厚さ |
 | `mjcf.collision` | `all`、`drone`、`none` |
 | `mjcf.floor` | MJCFに平面床を追加するか |
+
+LOD1の元の底面外周（凹形状と穴を含む）は変換中も保持されます。
+`waste_threshold: 1.0` のデフォルトは、すべての建物を1個のOBBで近似し、
+データ量を最小化します。閾値を下げると、OBB内の空白率がその値を超える
+建物だけが、元の外周の各辺を表すwall boxへ切り替わります。
+`0.0` では、OBBと完全に一致する建物を除き、最も詳細なwall表現になります。
 
 ## 実行
 
