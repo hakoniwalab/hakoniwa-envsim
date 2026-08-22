@@ -9,6 +9,7 @@ import os
 import re
 import urllib.parse
 import urllib.request
+import urllib.error
 from pathlib import Path
 from typing import Any
 
@@ -65,11 +66,26 @@ def third_mesh_codes(bbox: tuple[float, float, float, float]) -> list[str]:
     return codes
 
 
-def request_catalog(url: str, timeout_sec: int = 60) -> dict[str, Any]:
+def request_catalog(
+    url: str, timeout_sec: int = 60, *, allow_not_found: bool = False
+) -> dict[str, Any]:
     request = urllib.request.Request(url, headers={"User-Agent": "hakoniwa-envsim/plateau-citygml"})
     try:
         with urllib.request.urlopen(request, timeout=timeout_sec) as response:
             payload = json.load(response)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404 and allow_not_found:
+            exc.close()
+            return {
+                "cities": [],
+                "_catalog_status": {
+                    "status": "not_available",
+                    "http_status": 404,
+                    "url": url,
+                },
+            }
+        exc.close()
+        raise PlateauError(f"PLATEAU catalog request failed: {url}: {exc}") from exc
     except Exception as exc:
         raise PlateauError(f"PLATEAU catalog request failed: {url}: {exc}") from exc
     if not isinstance(payload, dict) or not isinstance(payload.get("cities"), list):

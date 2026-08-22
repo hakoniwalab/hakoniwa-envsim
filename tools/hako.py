@@ -461,6 +461,7 @@ def build(manifest: Path, offline: bool = False) -> int:
     meta = _query_meta(cfg)
     (source_root / "query_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     downloaded = []
+    catalog_status: dict[str, dict[str, Any]] = {}
     enabled_features = [
         name for name, enabled in cfg["source"]["feature_types"].items() if enabled
     ]
@@ -482,7 +483,10 @@ def build(manifest: Path, offline: bool = False) -> int:
         else:
             url = search_url(cfg["source"]["api_base_url"], feature_type, bbox)
             print(f"INFO: querying PLATEAU {feature_type} catalog: {url}")
-            payload = request_catalog(url)
+            payload = request_catalog(
+                url,
+                allow_not_found=cfg["city_world"]["enabled"] and feature_type == "frn",
+            )
             response_path.write_text(
                 json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
             )
@@ -501,6 +505,10 @@ def build(manifest: Path, offline: bool = False) -> int:
                 "INFO: no CityFurniture dataset is available; "
                 "road markings will be omitted and reported by Dataset Validator"
             )
+        catalog_status[feature_type] = payload.get(
+            "_catalog_status",
+            {"status": "available" if selected else "not_available"},
+        )
         for index, item in enumerate(selected, 1):
             item = {**item, "feature_type": feature_type}
             print(
@@ -518,7 +526,12 @@ def build(manifest: Path, offline: bool = False) -> int:
                 **item, "path": str(expected), "bytes": expected.stat().st_size,
                 "sha256": sha256_file(expected), "mode": "offline-reused"
             })
-    download_manifest = {"schema_version": 1, "query": meta, "files": downloaded}
+    download_manifest = {
+        "schema_version": 1,
+        "query": meta,
+        "catalog_status": catalog_status,
+        "files": downloaded,
+    }
     download_manifest_path = build_dir / "download-manifest.json"
     download_manifest_path.write_text(json.dumps(download_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     outputs = _convert(

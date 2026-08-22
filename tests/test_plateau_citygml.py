@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import copy
+import io
 import json
 import math
 import subprocess
@@ -9,13 +10,18 @@ import struct
 import sys
 import tempfile
 import unittest
+import urllib.error
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-from plateau_citygml import PlateauError, bounding_box, search_url, select_files, third_mesh_codes
+from plateau_citygml import (
+    PlateauError, bounding_box, request_catalog, search_url, select_files,
+    third_mesh_codes,
+)
 
 
 def load_pipeline_module():
@@ -93,6 +99,25 @@ class PlateauCityGmlTest(unittest.TestCase):
             select_files({"cities": []}, "frn", "latest", allow_empty=True),
             [],
         )
+
+    def test_optional_catalog_404_is_reported_as_not_available(self):
+        error = urllib.error.HTTPError(
+            "https://api.example/frn", 404, "Not Found", {}, io.BytesIO()
+        )
+        with mock.patch("urllib.request.urlopen", side_effect=error):
+            payload = request_catalog(
+                "https://api.example/frn", allow_not_found=True
+            )
+        self.assertEqual(payload["cities"], [])
+        self.assertEqual(payload["_catalog_status"]["status"], "not_available")
+
+    def test_required_catalog_404_remains_an_error(self):
+        error = urllib.error.HTTPError(
+            "https://api.example/dem", 404, "Not Found", {}, io.BytesIO()
+        )
+        with mock.patch("urllib.request.urlopen", side_effect=error):
+            with self.assertRaises(PlateauError):
+                request_catalog("https://api.example/dem")
 
     def test_local_enu_has_meter_scale_and_axis_direction(self):
         module = load_pipeline_module()

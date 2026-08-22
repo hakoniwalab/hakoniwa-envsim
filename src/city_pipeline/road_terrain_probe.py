@@ -188,7 +188,9 @@ def extract_all_transport_surfaces(
     source: Path, latitude: float, longitude: float, ns_m: float, ew_m: float
 ):
     combined = {name: [] for name in SURFACE_STYLE}
-    lod_evidence: dict[str, int] = {"lod3": 0, "lod2_fallback": 0}
+    lod_evidence: dict[str, int] = {
+        "lod3": 0, "lod2_fallback": 0, "lod1_fallback": 0,
+    }
     paths = transport_source_paths(source)
     for path in paths:
         try:
@@ -197,8 +199,19 @@ def extract_all_transport_surfaces(
             )
         except RoadProbeError as exc:
             if "no classified" in str(exc):
-                continue
-            raise
+                try:
+                    lod1_roads = extract_lod1_roads(
+                        path, latitude, longitude, ns_m, ew_m
+                    )
+                except RoadProbeError as lod1_exc:
+                    if "no LOD1" in str(lod1_exc):
+                        continue
+                    raise
+                surfaces = {name: [] for name in SURFACE_STYLE}
+                surfaces["roadway"] = lod1_roads
+                lod_evidence["lod1_fallback"] += len(lod1_roads)
+            else:
+                raise
         for category, records in surfaces.items():
             combined[category].extend(records)
     if not any(combined.values()):

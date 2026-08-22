@@ -59,6 +59,30 @@ class RoadTerrainProbeTest(unittest.TestCase):
             "island": 1,
         })
 
+    def test_lod1_road_is_used_when_semantic_lod2_and_lod3_are_absent(self):
+        xml = '''<core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0"
+          xmlns:gml="http://www.opengis.net/gml"
+          xmlns:tran="http://www.opengis.net/citygml/transportation/2.0">
+          <tran:Road gml:id="lod1-road">
+            <tran:lod1MultiSurface><gml:MultiSurface><gml:surfaceMember>
+              <gml:Polygon><gml:exterior><gml:LinearRing><gml:posList>
+                35.66249 139.70624 0 35.66249 139.70626 0
+                35.66251 139.70626 0 35.66251 139.70624 0
+                35.66249 139.70624 0
+              </gml:posList></gml:LinearRing></gml:exterior></gml:Polygon>
+            </gml:surfaceMember></gml:MultiSurface></tran:lod1MultiSurface>
+          </tran:Road></core:CityModel>'''
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "tiny_tran_lod1_op.gml"
+            path.write_text(xml, encoding="utf-8")
+            _paths, surfaces, evidence = road.extract_all_transport_surfaces(
+                path, 35.6625, 139.70625, 100.0, 100.0
+            )
+        self.assertEqual(len(surfaces["roadway"]), 1)
+        self.assertEqual(evidence, {
+            "lod3": 0, "lod2_fallback": 0, "lod1_fallback": 1,
+        })
+
 
 if __name__ == "__main__":
     unittest.main()

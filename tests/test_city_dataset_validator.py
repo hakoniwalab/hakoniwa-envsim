@@ -57,6 +57,43 @@ class CityDatasetValidatorTest(unittest.TestCase):
                 text.read_text(encoding="utf-8"),
             )
 
+    def test_reports_lod1_road_surface_as_last_resort_fallback(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+
+            def receipt(name, data):
+                path = root / name
+                path.write_text(json.dumps({"schema_version": 1, **data}), encoding="utf-8")
+                return path
+
+            report = module.validate_dataset(
+                receipt("terrain.json", {"nrow": 11, "ncol": 11}),
+                receipt("buildings.json", {"buildings": {"lod2": 0, "lod1_fallback": 5}}),
+                receipt("roads.json", {
+                    "lod_polygon_counts": {
+                        "lod3": 0, "lod2_fallback": 0, "lod1_fallback": 2,
+                    },
+                    "surface_polygon_counts": {"roadway": 2},
+                }),
+                receipt("markings.json", {
+                    "status": "not_available", "polygon_count": 0,
+                    "reason": "no CityFurniture dataset",
+                }),
+            )
+            lines = module.format_report(report)
+        self.assertIn("Buildings     : LOD1 (LOD2 not available, fallback)", lines)
+        self.assertIn(
+            "Road surfaces : LOD1 (LOD3/LOD2 not available, fallback)", lines
+        )
+        self.assertEqual(
+            report["components"]["road_surfaces"]["lod_resolution"]["effective_lod"],
+            "LOD1",
+        )
+        self.assertEqual(
+            report["components"]["road_surfaces"]["lod_resolution"]["fallback_lod"],
+            "LOD2",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

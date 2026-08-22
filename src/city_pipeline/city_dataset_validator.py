@@ -21,23 +21,32 @@ def _load(path: Path, label: str) -> dict:
     return data
 
 
-def _lod_resolution(preferred_lod: str, preferred_count: int,
-                    fallback_lod: str, fallback_count: int) -> dict:
-    if preferred_count > 0 and fallback_count > 0:
-        effective_lod = "mixed"
-    elif preferred_count > 0:
-        effective_lod = preferred_lod
-    elif fallback_count > 0:
-        effective_lod = fallback_lod
-    else:
-        effective_lod = None
+def _lod_resolution(levels: list[tuple[str, int]]) -> dict:
+    available = [(lod, count) for lod, count in levels if count > 0]
+    effective_lod = (
+        available[0][0] if len(available) == 1
+        else "mixed" if available
+        else None
+    )
+    preferred_lod, preferred_count = levels[0]
+    fallback_levels = levels[1:]
+    legacy_fallback_lod, legacy_fallback_count = (
+        fallback_levels[0] if fallback_levels else (None, 0)
+    )
     return {
         "preferred_lod": preferred_lod,
         "effective_lod": effective_lod,
         "preferred_count": preferred_count,
-        "fallback_lod": fallback_lod,
-        "fallback_count": fallback_count,
-        "fallback_used": fallback_count > 0,
+        # Preserve the schema-v1 two-level view for existing consumers.  The
+        # ordered levels list is the authoritative representation when more
+        # than one fallback exists.
+        "fallback_lod": legacy_fallback_lod,
+        "fallback_count": legacy_fallback_count,
+        "levels": [
+            {"lod": lod, "count": count, "role": "preferred" if index == 0 else "fallback"}
+            for index, (lod, count) in enumerate(levels)
+        ],
+        "fallback_used": any(count > 0 for _, count in fallback_levels),
         "preferred_lod_available": preferred_count > 0,
     }
 
@@ -58,14 +67,15 @@ def validate_dataset(
     marking_available = markings.get("status") == "available" and int(
         markings.get("polygon_count", 0)
     ) > 0
-    building_resolution = _lod_resolution(
-        "LOD2", int(building_lods.get("lod2", 0)),
-        "LOD1", int(building_lods.get("lod1_fallback", 0)),
-    )
-    road_resolution = _lod_resolution(
-        "LOD3", int(road_lods.get("lod3", 0)),
-        "LOD2", int(road_lods.get("lod2_fallback", 0)),
-    )
+    building_resolution = _lod_resolution([
+        ("LOD2", int(building_lods.get("lod2", 0))),
+        ("LOD1", int(building_lods.get("lod1_fallback", 0))),
+    ])
+    road_resolution = _lod_resolution([
+        ("LOD3", int(road_lods.get("lod3", 0))),
+        ("LOD2", int(road_lods.get("lod2_fallback", 0))),
+        ("LOD1", int(road_lods.get("lod1_fallback", 0))),
+    ])
     report = {
         "schema_version": 1,
         "status": "ready",
@@ -85,6 +95,7 @@ def validate_dataset(
                 "status": "available",
                 "lod3": int(road_lods.get("lod3", 0)),
                 "lod2_fallback": int(road_lods.get("lod2_fallback", 0)),
+                "lod1_fallback": int(road_lods.get("lod1_fallback", 0)),
                 "surface_polygon_counts": roads.get("surface_polygon_counts", {}),
                 "lod_resolution": road_resolution,
             },
@@ -128,33 +139,51 @@ def format_report(report: dict) -> list[str]:
     roads = components["road_surfaces"]
     markings = components["road_markings"]
     grid = terrain["grid"]
-    def lod_line(
-        label: str, component: dict, preferred_lod: str, preferred_key: str,
-        fallback_lod: str, fallback_key: str,
-    ) -> str:
-        resolution = component.get("lod_resolution") or _lod_resolution(
-            preferred_lod, int(component.get(preferred_key, 0)),
-            fallback_lod, int(component.get(fallback_key, 0)),
-        )
-        preferred = resolution["preferred_lod"]
-        fallback = resolution["fallback_lod"]
-        preferred_count = resolution["preferred_count"]
-        fallback_count = resolution["fallback_count"]
-        if preferred_count == 0 and fallback_count > 0:
-            return f"{label:<14}: {fallback} ({preferred} not available, fallback)"
-        if preferred_count > 0 and fallback_count > 0:
-            return (
-                f"{label:<14}: {preferred} ({preferred_count}), "
-                f"{fallback} fallback ({fallback_count})"
+    def lod_line(label: str, component: dict, level_keys: list[tuple[str, str]]) -> str:
+        resolution = component.get("lod_resolution") or _lod_resolution([
+            (lod, int(component.get(key, 0))) for lod, key in level_keys
+        ])
+        levels = resolution.get("levels") or [
+            {
+                "lod": resolution["preferred_lod"],
+                "count": resolution["preferred_count"],
+                "role": "preferred",
+            },
+            {
+                "lod": resolution["fallback_lod"],
+                "count": resolution["fallback_count"],
+                "role": "fallback",
+            },
+        ]
+        available = [level for level in levels if int(level["count"]) > 0]
+        if not available:
+            return f"{label:<14}: NOT AVAILABLE"
+        preferred = levels[0]
+        if int(preferred["count"]) == 0 and len(available) == 1:
+            chosen = available[0]
+            unavailable = "/".join(
+                level["lod"] for level in levels[:levels.index(chosen)]
             )
-        if preferred_count > 0:
-            return f"{label:<14}: {preferred} ({preferred_count})"
+            return (
+                f"{label:<14}: {chosen['lod']} "
+                f"({unavailable} not available, fallback)"
+            )
+        if len(available) > 1:
+            values = []
+            for level in available:
+                suffix = "" if level["role"] == "preferred" else " fallback"
+                values.append(f"{level['lod']}{suffix} ({level['count']})")
+            return f"{label:<14}: " + ", ".join(values)
+        if int(preferred["count"]) > 0:
+            return f"{label:<14}: {preferred['lod']} ({preferred['count']})"
         return f"{label:<14}: NOT AVAILABLE"
 
     lines = [
         f"{'Terrain':<14}: DEM hfield ({grid['rows']} x {grid['columns']})",
-        lod_line("Buildings", buildings, "LOD2", "lod2", "LOD1", "lod1_fallback"),
-        lod_line("Road surfaces", roads, "LOD3", "lod3", "LOD2", "lod2_fallback"),
+        lod_line("Buildings", buildings, [("LOD2", "lod2"), ("LOD1", "lod1_fallback")]),
+        lod_line("Road surfaces", roads, [
+            ("LOD3", "lod3"), ("LOD2", "lod2_fallback"), ("LOD1", "lod1_fallback")
+        ]),
     ]
     if markings["status"] == "available":
         count = sum(int(value) for value in markings["feature_counts"].values())
