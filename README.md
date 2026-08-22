@@ -6,6 +6,27 @@
 
 ![image](/docs/images/overview.png)
 
+## PLATEAU CityGMLからMuJoCo壁モデルを生成する
+
+`tools/hako.py` は、緯度・経度と南北/東西の範囲を
+`hakoniwa-build.yaml` に指定すると、国土交通省PLATEAU配信サービスから
+該当する建築物LOD1 CityGMLを取得し、MuJoCo MJCFの壁モデルへ変換します。
+
+```bash
+python -m pip install -r requirements.txt
+python tools/hako.py doctor
+python tools/hako.py build
+python tools/hako.py install
+```
+
+生成物は既定で `.hako/build/plateau-city-mjcf/plateau-city.xml`、インストール先は
+`.hako/install/share/hakoniwa-envsim/city/plateau-city/` です。座標は指定した中心を
+原点とする局所ENUメートル座標へ変換してから、MuJoCoの
+`X=North, Y=-East, Z=Up` へ写像します。
+
+設定、取得データのprovenance、オフライン再変換、範囲の意味については
+[PLATEAU CityGML → MuJoCo変換](docs/plateau-citygml-to-mujoco.md)を参照してください。
+
 # プレゼンテーション
 
 本プロジェクトの全体像については、以下のプレゼンテーション資料をご参照ください。
@@ -434,4 +455,3 @@ data = json.load(open("examples/models/space_areas.json"))
 validate(instance=data, schema=schema)
 print("OK")
 ```
-

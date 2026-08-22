@@ -1,6 +1,5 @@
-pyproj
+shapely
 numpy
 lxml
 matplotlib
 contextily
-

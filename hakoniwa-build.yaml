@@ -1,0 +1,33 @@
+version: 1
+component: hakoniwa-envsim
+
+pipeline:
+  type: plateau-citygml-to-mjcf
+
+source:
+  api_base_url: https://api.plateauview.mlit.go.jp
+  feature_type: bldg
+  year: latest
+
+selection:
+  center:
+    latitude: 35.681236
+    longitude: 139.706763
+  half_extent_m:
+    north_south: 100
+    east_west: 100
+
+geometry:
+  base_epsilon_m: 0.2
+  waste_threshold: 1.0
+  wall_thickness_m: 0.1
+
+mjcf:
+  model_name: plateau_city
+  collision: all
+  floor: false
+
+output:
+  build_dir: .hako/build/plateau-city-mjcf
+  install_dir: .hako/install
+  name: plateau-city

@@ -307,6 +307,11 @@ def main():
     # メタ情報を引き継ぐ
     crs = data.get("crs", "unknown")
     coordinate_system = data.get("coordinate_system", "unknown")
+    if coordinate_system != "local-enu":
+        raise SystemExit(
+            "[ERR] Input must use coordinate_system='local-enu'; "
+            f"found {coordinate_system!r}"
+        )
     origin = data.get("origin")
     bounds = data.get("bounds")
 

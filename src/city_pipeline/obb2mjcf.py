@@ -56,6 +56,20 @@ def load_zmap(zsrc_path: str):
     return zmap
 
 
+def coordinate_transform(coordinate_system: str):
+    """Return the one supported local-ENU to Hakoniwa MJCF transform."""
+    if coordinate_system != "local-enu":
+        raise ValueError(
+            "OBB input must use coordinate_system='local-enu'; "
+            f"found {coordinate_system!r}"
+        )
+    return (
+        lambda east, north, up: (north, -east, up),
+        lambda yaw_rad: math.degrees(yaw_rad),
+        lambda east_half, north_half: (north_half, east_half),
+    )
+
+
 def make_mjcf(
     items,
     default_density=None,
@@ -177,7 +191,7 @@ def main():
         raise SystemExit("[ERR] No items found in --inp (expects key 'results' or 'polygons').")
 
     # 座標系情報を表示
-    coordinate_system = "enu"
+    coordinate_system = data.get("coordinate_system", "unknown")
     origin = data.get("origin")
     bounds = data.get("bounds")
     
@@ -229,30 +243,8 @@ def main():
     default_rgba = tuple(args.rgba) if args.rgba else (0.82, 0.82, 0.86, 1.0)
 
     # === 座標変換関数を定義 ===
-    if coordinate_system.startswith("enu"):
-        # OBB: (x=East, y=North, z=Up)
-        # MJCF: (x=North, y=-East, z=Up)
-        def pos_fn(cx, cy, cz):
-            # ENU -> MJCF
-            return cy, -cx, cz
-
-        def yaw_fn(yaw_enu):
-            deg = math.degrees(yaw_enu)
-            return deg
-
-        def sxy_fn(sx, sy):
-            return sy, sx
-
-        print("[INFO] Using ENU -> MJCF (X=North, Y=East, Z=Up) transform.")
-    else:
-        # 何も知らない座標系なら、とりあえず素通し
-        def pos_fn(cx, cy, cz):
-            return cx, cy, cz
-
-        def yaw_fn(a):
-            return a
-
-        print("[INFO] Unknown coordinate system: no axis transform applied.")
+    pos_fn, yaw_fn, sxy_fn = coordinate_transform(coordinate_system)
+    print("[INFO] Using ENU -> MJCF (X=North, Y=-East, Z=Up) transform.")
 
     root = make_mjcf(
         items=items,
