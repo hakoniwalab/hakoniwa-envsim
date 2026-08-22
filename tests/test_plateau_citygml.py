@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import math
+import subprocess
 import sys
+import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -103,6 +106,54 @@ class PlateauCityGmlTest(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "EPSG:6697"):
             module.validate_epsg6697_contract(invalid, Path("invalid.gml"))
+
+    def test_conversion_entrypoint_rejects_malformed_crs_contracts(self):
+        fixture = (ROOT / "tests" / "fixtures" / "tiny_bldg_6697_op.gml").read_text(
+            encoding="utf-8"
+        )
+        cases = {
+            "wrong_epsg": (
+                fixture.replace("/6697\"", "/4326\"", 1),
+                "CityGML must declare EPSG:6697",
+            ),
+            "two_dimensions": (
+                fixture.replace('srsDimension="3"', 'srsDimension="2"', 1),
+                "EPSG:6697 CityGML must declare srsDimension=3",
+            ),
+        }
+        for name, (gml_text, expected_error) in cases.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                source = Path(temporary) / "source"
+                source.mkdir()
+                (source / "query_meta.json").write_text(
+                    json.dumps({
+                        "center_lat": 35.681236,
+                        "center_lon": 139.706763,
+                        "ns_m": 100,
+                        "ew_m": 100,
+                    }),
+                    encoding="utf-8",
+                )
+                (source / "invalid_bldg_6697_op.gml").write_text(
+                    gml_text,
+                    encoding="utf-8",
+                )
+                completed = subprocess.run(
+                    [
+                        sys.executable,
+                        str(ROOT / "src" / "city_pipeline" / "gml_lod1_extract.py"),
+                        "--in",
+                        str(source),
+                        "--out",
+                        str(Path(temporary) / "lod1.json"),
+                    ],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertNotEqual(completed.returncode, 0)
+                self.assertIn(expected_error, completed.stdout + completed.stderr)
 
     def test_overlapping_municipality_files_deduplicate_identical_buildings(self):
         module = load_pipeline_module()

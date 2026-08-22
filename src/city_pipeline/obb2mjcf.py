@@ -9,7 +9,7 @@ OBB JSON (center, half_size, yaw) -> MJCF (MuJoCo XML)
 - --collide {all,drone,none} で接触設定を一括付与
 - --floor で z=0 の無限平面を追加
 - 高さ情報が無い場合は --height / --zmin をフォールバックに使用
-- 入力が ENU 座標系の場合、MJCF 座標系 (X=North, Y=East, Z=Up) に変換して出力
+- 入力が ENU 座標系の場合、MJCF 座標系 (X=North, Y=-East, Z=Up) に変換して出力
 """
 
 import argparse, json, math
