@@ -49,6 +49,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "wall_thickness_m": 0.1,
     },
     "mjcf": {"model_name": "plateau_city", "collision": "all", "floor": False},
+    "glb": {
+        "enabled": True,
+        "lod_policy": "highest_available",
+        "texture_mode": "embedded-if-available",
+    },
     "output": {
         "build_dir": ".hako/build/plateau-city-mjcf",
         "install_dir": ".hako/install",
@@ -185,6 +190,12 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
         raise ConfigError("mjcf.collision must be all, drone, or none")
     if not isinstance(cfg["mjcf"]["floor"], bool):
         raise ConfigError("mjcf.floor must be true or false")
+    if not isinstance(cfg["glb"]["enabled"], bool):
+        raise ConfigError("glb.enabled must be true or false")
+    if cfg["glb"]["lod_policy"] != "highest_available":
+        raise ConfigError("glb.lod_policy currently supports only highest_available")
+    if cfg["glb"]["texture_mode"] not in {"embedded-if-available", "flat"}:
+        raise ConfigError("glb.texture_mode must be embedded-if-available or flat")
     for key in ("build_dir", "install_dir", "name"):
         if not isinstance(cfg["output"][key], str) or not cfg["output"][key]:
             raise ConfigError(f"output.{key} must be a non-empty string")
@@ -242,13 +253,12 @@ def doctor(manifest: Path) -> int:
         return 1
     if sys.version_info < (3, 10):
         errors.append(f"Python 3.10 or newer is required; found {sys.version.split()[0]}")
-    # Shapely is required, rather than treated as an optional acceleration,
-    # because its stable hull ordering is part of the generated geom-ID
-    # contract used by downstream MuJoCo worlds and historical regression.
-    for module in ("numpy", "shapely"):
+    # Geometry dependencies are required contracts, not optional accelerators:
+    # Shapely preserves ordered footprints and Earcut/Trimesh produce GLB.
+    for module in ("numpy", "shapely", "mapbox_earcut", "trimesh", "PIL"):
         if importlib.util.find_spec(module) is None:
             errors.append(f"Python package is missing: {module}; run: python -m pip install -r requirements.txt")
-    for script in ("gml_lod1_extract.py", "gml2obb.py", "obb2mjcf.py"):
+    for script in ("gml_lod1_extract.py", "gml2obb.py", "obb2mjcf.py", "citygml2glb.py"):
         if not (PIPELINE / script).is_file():
             errors.append(f"pipeline tool is missing: src/city_pipeline/{script}")
     if errors:
@@ -265,7 +275,13 @@ def doctor(manifest: Path) -> int:
     return 0
 
 
-def _convert(cfg: dict[str, Any], source_root: Path, build_dir: Path) -> Path:
+def _convert(
+    cfg: dict[str, Any],
+    source_root: Path,
+    build_dir: Path,
+    download_manifest: Path | None = None,
+    offline: bool = True,
+) -> dict[str, Path]:
     output_name = cfg["output"]["name"]
     lod1 = build_dir / f"{output_name}-lod1.json"
     walls = build_dir / f"{output_name}-walls.json"
@@ -291,7 +307,23 @@ def _convert(cfg: dict[str, Any], source_root: Path, build_dir: Path) -> Path:
     if cfg["mjcf"]["floor"]:
         command.append("--floor")
     _run(command)
-    return mjcf
+    outputs = {"mjcf": mjcf}
+    if cfg["glb"]["enabled"]:
+        glb = build_dir / f"{output_name}.glb"
+        glb_receipt = build_dir / f"{output_name}-glb-receipt.json"
+        glb_command = [
+            sys.executable, str(PIPELINE / "citygml2glb.py"),
+            "--selection", str(lod1), "--out", str(glb),
+            "--receipt", str(glb_receipt),
+            "--texture-mode", cfg["glb"]["texture_mode"],
+        ]
+        if download_manifest is not None:
+            glb_command.extend(["--download-manifest", str(download_manifest)])
+        if not offline and cfg["glb"]["texture_mode"] != "flat":
+            glb_command.append("--fetch-textures")
+        _run(glb_command)
+        outputs.update({"glb": glb, "glb_receipt": glb_receipt})
+    return outputs
 
 
 def build(manifest: Path, offline: bool = False) -> int:
@@ -328,8 +360,14 @@ def build(manifest: Path, offline: bool = False) -> int:
             "sha256": sha256_file(expected), "mode": "offline-reused"
         })
     download_manifest = {"schema_version": 1, "query": meta, "files": downloaded}
-    (build_dir / "download-manifest.json").write_text(json.dumps(download_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    mjcf = _convert(cfg, source_root, build_dir)
+    download_manifest_path = build_dir / "download-manifest.json"
+    download_manifest_path.write_text(json.dumps(download_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    outputs = _convert(
+        cfg, source_root, build_dir,
+        download_manifest=download_manifest_path,
+        offline=offline,
+    )
+    mjcf = outputs["mjcf"]
     root = ET.parse(mjcf).getroot()
     geom_count = len(root.findall(".//geom"))
     if geom_count == 0:
@@ -337,7 +375,8 @@ def build(manifest: Path, offline: bool = False) -> int:
     receipt = {
         "schema_version": 1, "component": "hakoniwa-envsim",
         "pipeline": cfg["pipeline"]["type"], "manifest": str(manifest.resolve()),
-        "output": str(mjcf), "geom_count": geom_count,
+        "outputs": {kind: str(path) for kind, path in outputs.items()},
+        "geom_count": geom_count,
         "source_files": len(downloaded), "year_policy": cfg["source"]["year"],
     }
     (build_dir / "build-receipt.json").write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -350,14 +389,19 @@ def install(manifest: Path) -> int:
     build_dir = _path(cfg["output"]["build_dir"])
     receipt = build_dir / "build-receipt.json"
     source = build_dir / f"{cfg['output']['name']}.xml"
-    if not receipt.is_file() or not source.is_file():
+    glb = build_dir / f"{cfg['output']['name']}.glb"
+    glb_receipt = build_dir / f"{cfg['output']['name']}-glb-receipt.json"
+    if not receipt.is_file() or not source.is_file() or (cfg["glb"]["enabled"] and not glb.is_file()):
         print("ERROR: build output is missing; run build first", file=sys.stderr)
         return 1
     destination = _path(cfg["output"]["install_dir"]) / "share" / "hakoniwa-envsim" / "city" / cfg["output"]["name"]
     destination.mkdir(parents=True, exist_ok=True)
-    for name in (source.name, "build-receipt.json", "download-manifest.json"):
+    names = [source.name, "build-receipt.json", "download-manifest.json"]
+    if cfg["glb"]["enabled"]:
+        names.extend([glb.name, glb_receipt.name])
+    for name in names:
         shutil.copy2(build_dir / name, destination / name)
-    print(f"OK: installed PLATEAU MuJoCo model: {destination / source.name}")
+    print(f"OK: installed PLATEAU assets: {destination}")
     return 0
 
 
@@ -375,12 +419,18 @@ def smoke() -> int:
             "ns_m": 100, "ew_m": 100,
         }), encoding="utf-8")
         cfg = load_config(DEFAULT_MANIFEST)
-        mjcf = _convert(cfg, source, temp)
+        outputs = _convert(cfg, source, temp)
+        mjcf = outputs["mjcf"]
         geoms = ET.parse(mjcf).getroot().findall(".//geom")
         if not geoms:
             print("ERROR: smoke conversion produced no geoms", file=sys.stderr)
             return 1
-        print(f"OK: offline PLATEAU-to-MJCF smoke produced {len(geoms)} geom(s)")
+        if cfg["glb"]["enabled"]:
+            scene = __import__("trimesh").load(outputs["glb"], force="scene")
+            if not scene.geometry:
+                print("ERROR: smoke conversion produced an empty GLB", file=sys.stderr)
+                return 1
+        print(f"OK: offline PLATEAU asset smoke produced {len(geoms)} MuJoCo geom(s) and GLB")
     return 0
 
 

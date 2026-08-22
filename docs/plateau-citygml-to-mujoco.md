@@ -1,9 +1,9 @@
-# PLATEAU CityGML → MuJoCo壁モデル
+# PLATEAU CityGML → MuJoCo壁モデル / GLB表示モデル
 
 ## 目的
 
-緯度・経度と範囲から、該当するPLATEAU建築物LOD1 CityGMLを取得し、
-MuJoCoで衝突判定に使えるbox geom群を含むMJCFへ変換します。
+緯度・経度と範囲から、該当するPLATEAU建築物CityGMLを取得し、
+MuJoCoの衝突判定用MJCFとブラウザ表示用GLBを同じ建物選択・原点から生成します。
 
 処理の流れは次のとおりです。
 
@@ -12,8 +12,8 @@ latitude / longitude / half extents
   → PLATEAU Distribution Service の範囲検索
   → bldg CityGMLの取得
   → LOD1フットプリントと高さの抽出
-  → OBBまたは外周壁boxへの変換
-  → MuJoCo MJCF
+  ├→ OBBまたは外周壁box → MuJoCo MJCF
+  └→ LOD2優先 / LOD1フォールバック → GLB
 ```
 
 PLATEAU APIによる範囲検索は、ローカルCityGML一式を対象にした従来の
@@ -51,12 +51,35 @@ LOD1抽出時に建物フットプリントの重心で指定範囲へ再度絞�
 | `geometry.wall_thickness_m` | 外周壁boxの厚さ |
 | `mjcf.collision` | `all`、`drone`、`none` |
 | `mjcf.floor` | MJCFに平面床を追加するか |
+| `glb.enabled` | 同じ建物選択と原点からGLBも生成するか |
+| `glb.lod_policy` | `highest_available`：LOD2を優先し、建物ごとにLOD1へフォールバック |
+| `glb.texture_mode` | `embedded-if-available`または`flat` |
 
 LOD1の元の底面外周（凹形状と穴を含む）は変換中も保持されます。
 `waste_threshold: 1.0` のデフォルトは、すべての建物を1個のOBBで近似し、
 データ量を最小化します。閾値を下げると、OBB内の空白率がその値を超える
 建物だけが、元の外周の各辺を表すwall boxへ切り替わります。
 `0.0` では、OBBと完全に一致する建物を除き、最も詳細なwall表現になります。
+
+## GLBのLODとテクスチャ
+
+GLBはUnityを介さず、PLATEAU CityGMLから直接生成します。同一範囲でも
+入力データの詳細度に応じて次の表現が混在します。
+
+```text
+LOD2 + Appearance/UV + 参照画像あり -> 詳細形状・テクスチャ付き
+LOD2あり、テクスチャなし           -> 詳細形状・フラット色
+LOD2なし                             -> LOD1外周の立体・フラット色
+```
+
+`embedded-if-available`は、選択されたLOD2面が参照する画像だけを取得し、
+GLB内へ埋め込みます。URL、バイト数、SHA-256は`<name>-glb-receipt.json`に
+記録します。`--offline`は取得済み画像を再利用し、未取得面はフラット色に
+フォールバックします。
+
+GLB頂点はThree.jsネイティブの`X=East, Y=Up, Z=-North`で出力します。
+箱庭/ROSの`X=North, Y=-East, Z=Up`と一対一に対応し、原点高度はMJCFと共有します。
+新規GLBには従来Asset用の180度補正は不要です。
 
 ## 実行
 
@@ -70,7 +93,7 @@ python tools/hako.py install
 ```
 
 `doctor` と `configure` はネットワークへアクセスしません。`build` を明示的に
-実行したときだけ、PLATEAU APIの検索とCityGML取得を行います。
+実行したときだけ、PLATEAU APIの検索、CityGML取得、選択されたLOD2テクスチャ取得を行います。
 
 一度取得したデータからネットワークなしで再変換する場合は次を使います。
 

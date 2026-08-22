@@ -27,6 +27,11 @@ mjcf:
   collision: all
   floor: false
 
+glb:
+  enabled: true
+  lod_policy: highest_available
+  texture_mode: embedded-if-available
+
 output:
   build_dir: .hako/build/plateau-city-mjcf
   install_dir: .hako/install

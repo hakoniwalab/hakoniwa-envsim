@@ -3,3 +3,6 @@ numpy
 lxml
 matplotlib
 contextily
+Pillow
+mapbox-earcut
+trimesh

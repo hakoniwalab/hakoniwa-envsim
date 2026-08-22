@@ -4,7 +4,7 @@
   "title": "Hakoniwa Envsim PLATEAU build manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "component", "pipeline", "source", "selection", "geometry", "mjcf", "output"],
+  "required": ["version", "component", "pipeline", "source", "selection", "geometry", "mjcf", "glb", "output"],
   "properties": {
     "version": {"const": 1},
     "component": {"const": "hakoniwa-envsim"},
@@ -63,6 +63,15 @@
         "model_name": {"type": "string", "minLength": 1},
         "collision": {"enum": ["all", "drone", "none"]},
         "floor": {"type": "boolean"}
+      }
+    },
+    "glb": {
+      "type": "object", "additionalProperties": false,
+      "required": ["enabled", "lod_policy", "texture_mode"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "lod_policy": {"const": "highest_available"},
+        "texture_mode": {"enum": ["embedded-if-available", "flat"]}
       }
     },
     "output": {

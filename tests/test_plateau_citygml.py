@@ -5,6 +5,7 @@ import copy
 import json
 import math
 import subprocess
+import struct
 import sys
 import tempfile
 import unittest
@@ -211,6 +212,61 @@ class PlateauCityGmlTest(unittest.TestCase):
             config["geometry"]["waste_threshold"] = value
             with self.assertRaisesRegex(hako.ConfigError, r"\[0, 1\]"):
                 hako.resolve_config(config)
+
+    def test_direct_glb_embeds_lod2_texture_and_uses_lod1_fallback(self):
+        pipeline = load_pipeline_module()
+        fixture = ROOT / "tests" / "fixtures" / "tiny_mixed_lod_6697_op.gml"
+        with tempfile.TemporaryDirectory() as temporary:
+            source_root = Path(temporary) / "source"
+            source_root.mkdir()
+            gml = source_root / fixture.name
+            gml.write_bytes(fixture.read_bytes())
+            texture = source_root / "tiny_mixed_lod_6697_appearance" / "roof.jpg"
+            texture.parent.mkdir()
+            from PIL import Image
+            Image.new("RGB", (2, 2), (220, 80, 40)).save(texture, format="JPEG")
+            selection = Path(temporary) / "selection.json"
+            polygons = pipeline.extract_buildings_lod1(
+                gml, local_origin=(35.681200, 139.706720)
+            )
+            for polygon in polygons:
+                polygon["source_gml"] = str(gml)
+            selection.write_text(json.dumps({
+                "coordinate_system": "local-enu",
+                "origin": {"lat": 35.681200, "lon": 139.706720},
+                "polygons": polygons,
+            }), encoding="utf-8")
+            manifest = Path(temporary) / "download-manifest.json"
+            manifest.write_text(json.dumps({"files": [{
+                "path": str(gml),
+                "url": "https://assets.example.invalid/dataset/udx/bldg/tiny_mixed_lod_6697_op.gml",
+            }]}), encoding="utf-8")
+            glb = Path(temporary) / "city.glb"
+            receipt = Path(temporary) / "city-glb-receipt.json"
+            completed = subprocess.run([
+                sys.executable,
+                str(ROOT / "src" / "city_pipeline" / "citygml2glb.py"),
+                "--selection", str(selection),
+                "--out", str(glb),
+                "--receipt", str(receipt),
+                "--download-manifest", str(manifest),
+            ], cwd=ROOT, capture_output=True, text=True, check=False)
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            evidence = json.loads(receipt.read_text(encoding="utf-8"))
+            self.assertEqual(evidence["buildings"], {"lod2": 1, "lod1_fallback": 1})
+            self.assertEqual(evidence["surfaces"]["textured"], 1)
+            self.assertEqual(len(evidence["textures"]), 1)
+            self.assertGreater(evidence["triangles"], 2)
+            payload = glb.read_bytes()
+            self.assertEqual(payload[:4], b"glTF")
+            json_length, json_type = struct.unpack_from("<II", payload, 12)
+            self.assertEqual(json_type, 0x4E4F534A)
+            document = json.loads(payload[20:20 + json_length].decode("utf-8"))
+            self.assertTrue(document.get("images"))
+            self.assertIn("bufferView", document["images"][0])
+            self.assertNotIn("uri", document["images"][0])
+            scene = __import__("trimesh").load(glb, force="scene")
+            self.assertTrue(scene.geometry)
 
     def test_conversion_entrypoint_rejects_malformed_crs_contracts(self):
         fixture = (ROOT / "tests" / "fixtures" / "tiny_bldg_6697_op.gml").read_text(
