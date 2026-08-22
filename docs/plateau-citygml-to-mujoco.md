@@ -36,8 +36,11 @@ selection:
 ```
 
 `north_south` と `east_west` は中心から片側への距離です。この例の検索矩形は
-南北200 m × 東西200 mです。APIはこの矩形に交差するCityGMLメッシュを返し、
-LOD1抽出時に建物フットプリントの重心で指定範囲へ再度絞り込みます。
+南北200 m × 東西200 mです。Envsimはこの矩形に交差する全3次メッシュを列挙して
+PLATEAU APIへ明示し、LOD1抽出時に建物フットプリントの重心で指定範囲へ再度絞り込みます。
+矩形検索をAPIの`r:`応答だけに委ねません。検証した渋谷範囲では、南北端を含む
+メッシュだけが返り、中間メッシュが欠落する事象を確認したためです。現在は全交差
+メッシュを`m:`条件で問い合わせ、メッシュコード一覧をquery契約として記録します。
 隣接自治体から同一メッシュ・同一建物が返る場合はCityGML建物IDで一つにまとめます。
 同じIDで形状が異なる場合は、任意の一方を選ばず入力矛盾として停止します。
 
@@ -108,6 +111,7 @@ python tools/hako.py build --offline
 | ファイル | 内容 |
 |---|---|
 | `plateau-catalog-response.json` | PLATEAU APIの応答 |
+| `plateau-catalog-query.json` | API URLと、列挙した全3次メッシュコード |
 | `source/query_meta.json` | 中心、half extent、検索bbox |
 | `source/<city>-<year>/*.gml` | 取得したCityGML |
 | `download-manifest.json` | URL、都市、年度、カタログ記載サイズ、実サイズ、SHA-256、取得/再利用モード |
