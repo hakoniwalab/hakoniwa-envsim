@@ -38,6 +38,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "source": {
         "api_base_url": "https://api.plateauview.mlit.go.jp",
         "feature_type": "bldg",
+        "feature_types": {"bldg": True, "tran": False, "dem": False, "frn": False},
         "year": "latest",
     },
     "selection": {
@@ -54,6 +55,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "enabled": True,
         "lod_policy": "highest_available",
         "texture_mode": "embedded-if-available",
+    },
+    "city_world": {
+        "enabled": False,
+        "terrain_spacing_m": 2.0,
+        "marking_vertical_offset_m": 0.055,
     },
     "output": {
         "build_dir": ".hako/build/plateau-city-mjcf",
@@ -161,6 +167,11 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
         raise ConfigError("pipeline.type must be plateau-citygml-to-assets")
     if cfg["source"]["feature_type"] != "bldg":
         raise ConfigError("source.feature_type currently supports only bldg")
+    feature_types = cfg["source"]["feature_types"]
+    if not all(isinstance(feature_types[name], bool) for name in ("bldg", "tran", "dem", "frn")):
+        raise ConfigError("source.feature_types values must be boolean")
+    if not feature_types["bldg"]:
+        raise ConfigError("source.feature_types.bldg must be true")
     if not isinstance(cfg["source"]["api_base_url"], str) or not cfg["source"]["api_base_url"].startswith("https://"):
         raise ConfigError("source.api_base_url must be an HTTPS URL")
     year = cfg["source"]["year"]
@@ -197,6 +208,14 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
         raise ConfigError("glb.lod_policy currently supports only highest_available")
     if cfg["glb"]["texture_mode"] not in {"embedded-if-available", "flat"}:
         raise ConfigError("glb.texture_mode must be embedded-if-available or flat")
+    if not isinstance(cfg["city_world"]["enabled"], bool):
+        raise ConfigError("city_world.enabled must be true or false")
+    for key in ("terrain_spacing_m", "marking_vertical_offset_m"):
+        value = cfg["city_world"][key]
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
+            raise ConfigError(f"city_world.{key} must be positive")
+    if cfg["city_world"]["enabled"] and not all(feature_types.values()):
+        raise ConfigError("city_world.enabled requires bldg, tran, dem, and frn feature types")
     for key in ("build_dir", "install_dir", "name"):
         if not isinstance(cfg["output"][key], str) or not cfg["output"][key]:
             raise ConfigError(f"output.{key} must be a non-empty string")
@@ -260,7 +279,13 @@ def doctor(manifest: Path) -> int:
     for module in ("numpy", "shapely", "mapbox_earcut", "trimesh", "PIL"):
         if importlib.util.find_spec(module) is None:
             errors.append(f"Python package is missing: {module}; run: python -m pip install -r requirements.txt")
-    for script in ("gml_lod1_extract.py", "gml2obb.py", "obb2mjcf.py", "citygml2glb.py"):
+    scripts = ["gml_lod1_extract.py", "gml2obb.py", "obb2mjcf.py", "citygml2glb.py"]
+    if cfg["city_world"]["enabled"]:
+        scripts.extend([
+            "dem2hfield.py", "road_terrain_probe.py", "city_furniture2glb.py",
+            "city_world_composer.py", "city_dataset_validator.py", "world_frame.py",
+        ])
+    for script in scripts:
         if not (PIPELINE / script).is_file():
             errors.append(f"pipeline tool is missing: src/city_pipeline/{script}")
     if errors:
@@ -287,7 +312,6 @@ def _convert(
     output_name = cfg["output"]["name"]
     lod1 = build_dir / f"{output_name}-lod1.json"
     walls = build_dir / f"{output_name}-walls.json"
-    mjcf = build_dir / f"{output_name}.xml"
     geometry = cfg["geometry"]
     _run([
         sys.executable, str(PIPELINE / "gml_lod1_extract.py"),
@@ -300,6 +324,104 @@ def _convert(
         "--waste-threshold", str(geometry["waste_threshold"]),
         "--wall-thickness", str(geometry["wall_thickness_m"]),
     ])
+    city_world = cfg["city_world"]
+    if city_world["enabled"]:
+        components = build_dir / "components"
+        terrain_dir = components / "terrain"
+        roads_dir = components / "roads"
+        markings_dir = components / "road-markings"
+        buildings_dir = components / "buildings"
+        world_dir = build_dir / "world"
+        for directory in (terrain_dir, roads_dir, markings_dir, buildings_dir, world_dir):
+            directory.mkdir(parents=True, exist_ok=True)
+
+        terrain_xml = terrain_dir / "terrain.xml"
+        _run([
+            sys.executable, str(PIPELINE / "dem2hfield.py"),
+            "--in", str(source_root), "--out", str(terrain_xml),
+            "--latitude", str(cfg["selection"]["center"]["latitude"]),
+            "--longitude", str(cfg["selection"]["center"]["longitude"]),
+            "--north-south", str(cfg["selection"]["half_extent_m"]["north_south"]),
+            "--east-west", str(cfg["selection"]["half_extent_m"]["east_west"]),
+            "--spacing", str(city_world["terrain_spacing_m"]),
+        ])
+        world_frame = terrain_dir / "world-frame.json"
+        terrain_receipt = terrain_dir / "terrain-receipt.json"
+
+        buildings_xml = buildings_dir / "buildings.xml"
+        command = [
+            sys.executable, str(PIPELINE / "obb2mjcf.py"),
+            "--inp", str(walls), "--zsrc", str(lod1), "--out", str(buildings_xml),
+            "--model-name", cfg["mjcf"]["model_name"],
+            "--collide", cfg["mjcf"]["collision"],
+            "--world-frame", str(world_frame),
+        ]
+        if cfg["mjcf"]["floor"]:
+            command.append("--floor")
+        _run(command)
+
+        buildings_glb = buildings_dir / "buildings.glb"
+        buildings_glb_receipt = buildings_dir / "buildings-glb-receipt.json"
+        glb_command = [
+            sys.executable, str(PIPELINE / "citygml2glb.py"),
+            "--selection", str(lod1), "--out", str(buildings_glb),
+            "--receipt", str(buildings_glb_receipt),
+            "--texture-mode", cfg["glb"]["texture_mode"],
+            "--world-frame", str(world_frame),
+        ]
+        if download_manifest is not None:
+            glb_command.extend(["--download-manifest", str(download_manifest)])
+        if not offline and cfg["glb"]["texture_mode"] != "flat":
+            glb_command.append("--fetch-textures")
+        _run(glb_command)
+
+        terrain_glb = terrain_dir / "terrain.glb"
+        roads_glb = roads_dir / "roads.glb"
+        _run([
+            sys.executable, str(PIPELINE / "road_terrain_probe.py"),
+            "--roads", str(source_root), "--terrain-receipt", str(terrain_receipt),
+            "--terrain-out", str(terrain_glb), "--roads-out", str(roads_glb),
+        ])
+        markings_glb = markings_dir / "road-markings.glb"
+        _run([
+            sys.executable, str(PIPELINE / "city_furniture2glb.py"),
+            "--source", str(source_root), "--world-frame", str(world_frame),
+            "--terrain-receipt", str(terrain_receipt), "--out", str(markings_glb),
+            "--marking-vertical-offset", str(city_world["marking_vertical_offset_m"]),
+            "--allow-empty",
+        ])
+        compose_command = [
+            sys.executable, str(PIPELINE / "city_world_composer.py"),
+            "--world-frame", str(world_frame),
+            "--terrain-xml", str(terrain_xml), "--buildings-xml", str(buildings_xml),
+            "--terrain-glb", str(terrain_glb), "--roads-glb", str(roads_glb),
+            "--buildings-glb", str(buildings_glb),
+            "--out-dir", str(world_dir),
+        ]
+        if markings_glb.is_file():
+            compose_command.extend(["--extra-glb", str(markings_glb)])
+        _run(compose_command)
+        dataset_validation = world_dir / "dataset-validation.json"
+        _run([
+            sys.executable, str(PIPELINE / "city_dataset_validator.py"),
+            "--terrain-receipt", str(terrain_receipt),
+            "--buildings-receipt", str(buildings_glb_receipt),
+            "--roads-receipt", str(roads_dir / "roads-glb-receipt.json"),
+            "--markings-receipt", str(markings_dir / "road-markings-glb-receipt.json"),
+            "--out", str(dataset_validation),
+        ])
+        return {
+            "mjcf": world_dir / "city-world.xml",
+            "glb": world_dir / "city-world.glb",
+            "world_receipt": world_dir / "city-world-receipt.json",
+            "world_frame": world_frame,
+            "terrain_receipt": terrain_receipt,
+            "buildings_glb_receipt": buildings_glb_receipt,
+            "road_markings_receipt": markings_dir / "road-markings-glb-receipt.json",
+            "dataset_validation": dataset_validation,
+        }
+
+    mjcf = build_dir / f"{output_name}.xml"
     command = [
         sys.executable, str(PIPELINE / "obb2mjcf.py"),
         "--inp", str(walls), "--out", str(mjcf),
@@ -338,40 +460,64 @@ def build(manifest: Path, offline: bool = False) -> int:
     source_root.mkdir(parents=True, exist_ok=True)
     meta = _query_meta(cfg)
     (source_root / "query_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    response_path = build_dir / "plateau-catalog-response.json"
-    query_path = build_dir / "plateau-catalog-query.json"
-    if offline:
-        if not response_path.is_file():
-            raise ConfigError(f"offline build requires cached catalog response: {response_path}")
-        if not query_path.is_file():
-            raise ConfigError(f"offline build requires cached catalog query contract: {query_path}")
-        cached_query = json.loads(query_path.read_text(encoding="utf-8"))
-        if cached_query.get("third_mesh_codes") != meta["third_mesh_codes"]:
-            raise ConfigError("cached PLATEAU catalog query does not cover the current third-level meshes")
-        payload = json.loads(response_path.read_text(encoding="utf-8"))
-    else:
-        bbox = tuple(meta["bbox"][key] for key in ("west", "south", "east", "north"))
-        url = search_url(cfg["source"]["api_base_url"], cfg["source"]["feature_type"], bbox)
-        print(f"INFO: querying PLATEAU catalog: {url}")
-        payload = request_catalog(url)
-        response_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        query_path.write_text(json.dumps({
-            "schema_version": 1,
-            "url": url,
-            "third_mesh_codes": meta["third_mesh_codes"],
-        }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    selected = select_files(payload, cfg["source"]["feature_type"], cfg["source"]["year"])
     downloaded = []
-    for index, item in enumerate(selected, 1):
-        print(f"INFO: CityGML {index}/{len(selected)} city={item['city_code']} year={item['year']} mesh={item['code']} size={item['file_size']}")
+    enabled_features = [
+        name for name, enabled in cfg["source"]["feature_types"].items() if enabled
+    ]
+    bbox = tuple(meta["bbox"][key] for key in ("west", "south", "east", "north"))
+    for feature_type in enabled_features:
+        response_path = build_dir / f"plateau-catalog-response-{feature_type}.json"
+        query_path = build_dir / f"plateau-catalog-query-{feature_type}.json"
         if offline:
-            expected = source_root / f"{item['city_code']}-{item['year']}" / Path(urllib.parse.urlparse(item["url"]).path).name
-            if not expected.is_file():
-                raise ConfigError(f"offline build requires downloaded CityGML: {expected}")
-        downloaded.append(download_file(item, source_root) if not offline else {
-            **item, "path": str(expected), "bytes": expected.stat().st_size,
-            "sha256": sha256_file(expected), "mode": "offline-reused"
-        })
+            if not response_path.is_file():
+                raise ConfigError(f"offline build requires cached catalog response: {response_path}")
+            if not query_path.is_file():
+                raise ConfigError(f"offline build requires cached catalog query contract: {query_path}")
+            cached_query = json.loads(query_path.read_text(encoding="utf-8"))
+            if cached_query.get("third_mesh_codes") != meta["third_mesh_codes"]:
+                raise ConfigError(
+                    f"cached {feature_type} catalog query does not cover the current third-level meshes"
+                )
+            payload = json.loads(response_path.read_text(encoding="utf-8"))
+        else:
+            url = search_url(cfg["source"]["api_base_url"], feature_type, bbox)
+            print(f"INFO: querying PLATEAU {feature_type} catalog: {url}")
+            payload = request_catalog(url)
+            response_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
+            query_path.write_text(json.dumps({
+                "schema_version": 1,
+                "feature_type": feature_type,
+                "url": url,
+                "third_mesh_codes": meta["third_mesh_codes"],
+            }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        selected = select_files(
+            payload, feature_type, cfg["source"]["year"],
+            allow_empty=cfg["city_world"]["enabled"] and feature_type == "frn",
+        )
+        if feature_type == "frn" and not selected:
+            print(
+                "INFO: no CityFurniture dataset is available; "
+                "road markings will be omitted and reported by Dataset Validator"
+            )
+        for index, item in enumerate(selected, 1):
+            item = {**item, "feature_type": feature_type}
+            print(
+                f"INFO: {feature_type} CityGML {index}/{len(selected)} "
+                f"city={item['city_code']} year={item['year']} "
+                f"mesh={item['code']} size={item['file_size']}"
+            )
+            if offline:
+                expected = source_root / f"{item['city_code']}-{item['year']}" / Path(
+                    urllib.parse.urlparse(item["url"]).path
+                ).name
+                if not expected.is_file():
+                    raise ConfigError(f"offline build requires downloaded CityGML: {expected}")
+            downloaded.append(download_file(item, source_root) if not offline else {
+                **item, "path": str(expected), "bytes": expected.stat().st_size,
+                "sha256": sha256_file(expected), "mode": "offline-reused"
+            })
     download_manifest = {"schema_version": 1, "query": meta, "files": downloaded}
     download_manifest_path = build_dir / "download-manifest.json"
     download_manifest_path.write_text(json.dumps(download_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -390,10 +536,12 @@ def build(manifest: Path, offline: bool = False) -> int:
         "pipeline": cfg["pipeline"]["type"], "manifest": str(manifest.resolve()),
         "outputs": {kind: str(path) for kind, path in outputs.items()},
         "geom_count": geom_count,
-        "source_files": len(downloaded), "year_policy": cfg["source"]["year"],
+        "source_files": len(downloaded), "feature_types": enabled_features,
+        "year_policy": cfg["source"]["year"],
     }
     (build_dir / "build-receipt.json").write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"OK: MuJoCo wall model: {mjcf} ({geom_count} geoms)")
+    label = "MuJoCo City World" if cfg["city_world"]["enabled"] else "MuJoCo wall model"
+    print(f"OK: {label}: {mjcf} ({geom_count} geoms)")
     return 0
 
 
@@ -401,6 +549,27 @@ def install(manifest: Path) -> int:
     cfg = load_config(manifest)
     build_dir = _path(cfg["output"]["build_dir"])
     receipt = build_dir / "build-receipt.json"
+    if cfg["city_world"]["enabled"]:
+        world = build_dir / "world"
+        components = build_dir / "components"
+        if not receipt.is_file() or not (world / "city-world.xml").is_file() or not (
+            world / "city-world.glb"
+        ).is_file():
+            print("ERROR: City World build output is missing; run build first", file=sys.stderr)
+            return 1
+        destination = (
+            _path(cfg["output"]["install_dir"]) / "share" / "hakoniwa-envsim"
+            / "city" / cfg["output"]["name"]
+        )
+        if destination.exists():
+            shutil.rmtree(destination)
+        destination.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(world, destination / "world")
+        shutil.copytree(components, destination / "components")
+        for name in ("build-receipt.json", "download-manifest.json"):
+            shutil.copy2(build_dir / name, destination / name)
+        print(f"OK: installed PLATEAU City World: {destination}")
+        return 0
     source = build_dir / f"{cfg['output']['name']}.xml"
     glb = build_dir / f"{cfg['output']['name']}.glb"
     glb_receipt = build_dir / f"{cfg['output']['name']}-glb-receipt.json"

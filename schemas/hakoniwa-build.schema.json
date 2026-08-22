@@ -4,7 +4,7 @@
   "title": "Hakoniwa Envsim PLATEAU build manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "component", "pipeline", "source", "selection", "geometry", "mjcf", "glb", "output"],
+  "required": ["version", "component", "pipeline", "source", "selection", "geometry", "mjcf", "glb", "city_world", "output"],
   "properties": {
     "version": {"const": 1},
     "component": {"const": "hakoniwa-envsim"},
@@ -21,6 +21,17 @@
       "properties": {
         "api_base_url": {"type": "string", "format": "uri", "pattern": "^https://"},
         "feature_type": {"const": "bldg"},
+        "feature_types": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["bldg", "tran", "dem", "frn"],
+          "properties": {
+            "bldg": {"const": true},
+            "tran": {"type": "boolean"},
+            "dem": {"type": "boolean"},
+            "frn": {"type": "boolean"}
+          }
+        },
         "year": {"oneOf": [{"const": "latest"}, {"type": "integer", "minimum": 2000, "maximum": 9999}]}
       }
     },
@@ -72,6 +83,15 @@
         "enabled": {"type": "boolean"},
         "lod_policy": {"const": "highest_available"},
         "texture_mode": {"enum": ["embedded-if-available", "flat"]}
+      }
+    },
+    "city_world": {
+      "type": "object", "additionalProperties": false,
+      "required": ["enabled", "terrain_spacing_m", "marking_vertical_offset_m"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "terrain_spacing_m": {"type": "number", "exclusiveMinimum": 0},
+        "marking_vertical_offset_m": {"type": "number", "exclusiveMinimum": 0}
       }
     },
     "output": {

@@ -7,6 +7,11 @@ pipeline:
 source:
   api_base_url: https://api.plateauview.mlit.go.jp
   feature_type: bldg
+  feature_types:
+    bldg: true
+    tran: false
+    dem: false
+    frn: false
   year: latest
 
 selection:
@@ -31,6 +36,11 @@ glb:
   enabled: true
   lod_policy: highest_available
   texture_mode: embedded-if-available
+
+city_world:
+  enabled: false
+  terrain_spacing_m: 2
+  marking_vertical_offset_m: 0.055
 
 output:
   build_dir: .hako/build/plateau-city-mjcf

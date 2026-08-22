@@ -120,7 +120,8 @@ def _surface_polygon(polygon_element, latitude, longitude):
 
 
 def extract_transport_surfaces(
-    path: Path, latitude: float, longitude: float, ns_m: float, ew_m: float
+    path: Path, latitude: float, longitude: float, ns_m: float, ew_m: float,
+    lod_evidence: dict[str, int] | None = None,
 ):
     """Extract semantic LOD2 road surfaces and clip them to the requested area."""
     clip = box(-ns_m, -ew_m, ns_m, ew_m)
@@ -146,10 +147,12 @@ def extract_transport_surfaces(
                 polygons = feature.findall(
                     f".//{{{TRAN}}}lod3MultiSurface//{{{GML}}}Polygon"
                 )
+                selected_lod = "lod3"
                 if not polygons:
                     polygons = feature.findall(
                         f".//{{{TRAN}}}lod2MultiSurface//{{{GML}}}Polygon"
                     )
+                    selected_lod = "lod2_fallback"
                 for index, polygon_element in enumerate(polygons):
                     polygon = _surface_polygon(polygon_element, latitude, longitude)
                     if polygon is None:
@@ -163,10 +166,44 @@ def extract_transport_surfaces(
                     for part, geometry in enumerate(geometries):
                         if geometry.geom_type == "Polygon" and geometry.area > 1e-6:
                             surfaces[category].append((f"{feature_id}-{index}-{part}", geometry))
+                            if lod_evidence is not None:
+                                lod_evidence[selected_lod] = lod_evidence.get(selected_lod, 0) + 1
         road.clear()
     if not any(surfaces.values()):
         raise RoadProbeError("no classified LOD2 transport surface intersects the requested range")
     return surfaces
+
+
+def transport_source_paths(source: Path) -> list[Path]:
+    if source.is_file():
+        return [source]
+    if source.is_dir():
+        paths = sorted(source.rglob("*tran*_op.gml"))
+        if paths:
+            return paths
+    raise RoadProbeError(f"no PLATEAU transportation CityGML source found: {source}")
+
+
+def extract_all_transport_surfaces(
+    source: Path, latitude: float, longitude: float, ns_m: float, ew_m: float
+):
+    combined = {name: [] for name in SURFACE_STYLE}
+    lod_evidence: dict[str, int] = {"lod3": 0, "lod2_fallback": 0}
+    paths = transport_source_paths(source)
+    for path in paths:
+        try:
+            surfaces = extract_transport_surfaces(
+                path, latitude, longitude, ns_m, ew_m, lod_evidence
+            )
+        except RoadProbeError as exc:
+            if "no classified" in str(exc):
+                continue
+            raise
+        for category, records in surfaces.items():
+            combined[category].extend(records)
+    if not any(combined.values()):
+        raise RoadProbeError("no classified transport surface intersects the requested range")
+    return paths, combined, lod_evidence
 
 
 def _display_vertex(x, y, altitude, offset):
@@ -269,7 +306,7 @@ def main() -> int:
     nrow, ncol, samples = read_hfield(Path(receipt["hfield"]["path"]))
     center = world_frame["origin"]
     extent = world_frame["half_extent_m"]
-    surfaces = extract_transport_surfaces(
+    source_paths, surfaces, lod_evidence = extract_all_transport_surfaces(
         args.roads,
         center["latitude"],
         center["longitude"],
@@ -299,9 +336,10 @@ def main() -> int:
         _write_component(road_scene, args.roads_out, {
             **common_receipt,
             "component": "roads",
-            "source": str(args.roads.resolve()),
+            "sources": [str(path.resolve()) for path in source_paths],
             "surface_polygon_counts": {key: len(value) for key, value in surfaces.items()},
             "surface_triangle_counts": triangle_counts,
+            "lod_polygon_counts": lod_evidence,
             "surface_colors_rgba": SURFACE_STYLE,
             "road_vertical_offset_m": 0.03,
         })
@@ -315,9 +353,10 @@ def main() -> int:
         _write_component(combined, args.out, {
             **common_receipt,
             "component": "terrain-roads-legacy",
-            "source": str(args.roads.resolve()),
+            "sources": [str(path.resolve()) for path in source_paths],
             "surface_polygon_counts": {key: len(value) for key, value in surfaces.items()},
             "surface_triangle_counts": triangle_counts,
+            "lod_polygon_counts": lod_evidence,
             "surface_colors_rgba": SURFACE_STYLE,
             "road_vertical_offset_m": 0.03,
         })

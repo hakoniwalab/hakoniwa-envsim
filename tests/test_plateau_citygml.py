@@ -88,6 +88,12 @@ class PlateauCityGmlTest(unittest.TestCase):
         with self.assertRaises(PlateauError):
             select_files(payload, "bldg", "latest")
 
+    def test_optional_feature_may_have_no_catalog_files(self):
+        self.assertEqual(
+            select_files({"cities": []}, "frn", "latest", allow_empty=True),
+            [],
+        )
+
     def test_local_enu_has_meter_scale_and_axis_direction(self):
         module = load_pipeline_module()
         center_lat, center_lon = 35.0, 139.0

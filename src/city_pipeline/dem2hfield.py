@@ -57,9 +57,17 @@ def extract_triangles(path: Path, latitude: float, longitude: float, ns_m: float
         triangles.append(tuple((north_m, -east_m, altitude) for east_m, north_m, altitude in enu))
     if not envelope_seen:
         raise DemError("PLATEAU DEM has no CRS envelope")
-    if not triangles:
-        raise DemError("PLATEAU DEM contains no triangle intersecting the requested range")
     return triangles
+
+
+def source_paths(source: Path) -> list[Path]:
+    if source.is_file():
+        return [source]
+    if source.is_dir():
+        paths = sorted(source.rglob("*dem*_op.gml"))
+        if paths:
+            return paths
+    raise DemError(f"no PLATEAU DEM CityGML source found: {source}")
 
 
 def _barycentric_height(x: float, y: float, triangle, epsilon: float = 1e-8):
@@ -186,13 +194,18 @@ def main() -> int:
     # geographic bbox is only a discovery guard; exact clipping happens in
     # local MuJoCo coordinates during grid sampling.
     extraction_margin = 2.0 * args.spacing
-    triangles = extract_triangles(
-        args.source,
-        args.latitude,
-        args.longitude,
-        args.north_south + extraction_margin,
-        args.east_west + extraction_margin,
-    )
+    sources = source_paths(args.source)
+    triangles = []
+    for source in sources:
+        triangles.extend(extract_triangles(
+            source,
+            args.latitude,
+            args.longitude,
+            args.north_south + extraction_margin,
+            args.east_west + extraction_margin,
+        ))
+    if not triangles:
+        raise DemError("PLATEAU DEM contains no triangle intersecting the requested range")
     nrow, ncol, samples, gap_report = sample_heightfield(
         triangles,
         args.north_south,
@@ -207,7 +220,7 @@ def main() -> int:
     )
     receipt = {
         "schema_version": 1,
-        "source": str(args.source.resolve()),
+        "sources": [str(path.resolve()) for path in sources],
         "center": {"latitude": args.latitude, "longitude": args.longitude},
         "half_extent_m": {"north_south": args.north_south, "east_west": args.east_west},
         "coordinate_system": "X=North,Y=-East,Z=Up",

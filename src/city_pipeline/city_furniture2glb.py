@@ -75,6 +75,16 @@ def extract_material_colors(path: Path) -> dict[str, tuple[int, int, int, int]]:
     return colors
 
 
+def furniture_source_paths(source: Path) -> list[Path]:
+    if source.is_file():
+        return [source]
+    if source.is_dir():
+        paths = sorted(source.rglob("*frn*_op.gml"))
+        if paths:
+            return paths
+    raise CityFurnitureError(f"no PLATEAU CityFurniture CityGML source found: {source}")
+
+
 def _in_range(points, latitude, longitude, ns_m, ew_m) -> bool:
     enu = project_epsg6697_to_local_enu(points, latitude, longitude)
     east = [point[0] for point in enu]
@@ -115,6 +125,7 @@ def convert(
     output: Path,
     receipt_path: Path | None = None,
     marking_vertical_offset_m: float = 0.055,
+    allow_empty: bool = False,
 ) -> dict:
     frame = load_world_frame(world_frame_path)
     origin = frame["origin"]
@@ -127,65 +138,107 @@ def convert(
     terrain_receipt = json.loads(terrain_receipt_path.read_text(encoding="utf-8"))
     nrow, ncol, terrain_samples = read_hfield(Path(terrain_receipt["hfield"]["path"]))
 
-    colors = extract_material_colors(source)
+    try:
+        sources = furniture_source_paths(source)
+    except CityFurnitureError:
+        if not allow_empty:
+            raise
+        sources = []
+    colors = {}
+    for path in sources:
+        colors.update(extract_material_colors(path))
     batches = defaultdict(lambda: {"vertices": [], "faces": []})
     feature_counts = Counter()
     polygon_count = triangle_count = material_polygon_count = fallback_polygon_count = 0
 
     furniture_tag = f"{{{FRN}}}CityFurniture"
-    for _, furniture in ET.iterparse(source, events=("end",)):
-        if furniture.tag != furniture_tag:
-            continue
-        feature_class = (furniture.findtext(f"{{{FRN}}}class") or "").strip()
-        function = (furniture.findtext(f"{{{FRN}}}function") or "").strip()
-        category = ROAD_MARKING_FUNCTIONS.get(function)
-        if feature_class != TRAFFIC_FACILITY_CLASS or category is None:
+    for source_path in sources:
+        for _, furniture in ET.iterparse(source_path, events=("end",)):
+            if furniture.tag != furniture_tag:
+                continue
+            feature_class = (furniture.findtext(f"{{{FRN}}}class") or "").strip()
+            function = (furniture.findtext(f"{{{FRN}}}function") or "").strip()
+            category = ROAD_MARKING_FUNCTIONS.get(function)
+            if feature_class != TRAFFIC_FACILITY_CLASS or category is None:
+                furniture.clear()
+                continue
+
+            selected_feature = False
+            for polygon in furniture.findall(f".//{{{FRN}}}lod3Geometry//{{{GML}}}Polygon"):
+                rings_with_ids = _polygon_rings(polygon)
+                if not rings_with_ids:
+                    continue
+                source_rings = [points for _, points in rings_with_ids]
+                if not _in_range(source_rings[0], latitude, longitude, ns_m, ew_m):
+                    continue
+                polygon_id = polygon.get(GML_ID, "")
+                rgba = colors.get(polygon_id, DEFAULT_RGBA)
+                if polygon_id in colors:
+                    material_polygon_count += 1
+                else:
+                    fallback_polygon_count += 1
+                rings = [
+                    _glb_points(
+                        points,
+                        latitude,
+                        longitude,
+                        altitude_offset,
+                        terrain_samples,
+                        nrow,
+                        ncol,
+                        ns_m,
+                        ew_m,
+                        marking_vertical_offset_m,
+                    )
+                    for points in source_rings
+                ]
+                vertices, faces = triangulate_rings(rings)
+                batch = batches[(category, rgba)]
+                base = len(batch["vertices"])
+                batch["vertices"].extend(vertices.tolist())
+                batch["faces"].extend((face + base).tolist() for face in faces)
+                polygon_count += 1
+                triangle_count += len(faces)
+                selected_feature = True
+            if selected_feature:
+                feature_counts[function] += 1
             furniture.clear()
-            continue
 
-        selected_feature = False
-        for polygon in furniture.findall(f".//{{{FRN}}}lod3Geometry//{{{GML}}}Polygon"):
-            rings_with_ids = _polygon_rings(polygon)
-            if not rings_with_ids:
-                continue
-            source_rings = [points for _, points in rings_with_ids]
-            if not _in_range(source_rings[0], latitude, longitude, ns_m, ew_m):
-                continue
-            polygon_id = polygon.get(GML_ID, "")
-            rgba = colors.get(polygon_id, DEFAULT_RGBA)
-            if polygon_id in colors:
-                material_polygon_count += 1
-            else:
-                fallback_polygon_count += 1
-            rings = [
-                _glb_points(
-                    points,
-                    latitude,
-                    longitude,
-                    altitude_offset,
-                    terrain_samples,
-                    nrow,
-                    ncol,
-                    ns_m,
-                    ew_m,
-                    marking_vertical_offset_m,
-                )
-                for points in source_rings
-            ]
-            vertices, faces = triangulate_rings(rings)
-            batch = batches[(category, rgba)]
-            base = len(batch["vertices"])
-            batch["vertices"].extend(vertices.tolist())
-            batch["faces"].extend((face + base).tolist() for face in faces)
-            polygon_count += 1
-            triangle_count += len(faces)
-            selected_feature = True
-        if selected_feature:
-            feature_counts[function] += 1
-        furniture.clear()
-
+    receipt_path = receipt_path or output.with_name(output.stem + "-glb-receipt.json")
+    receipt = {
+        "schema_version": 1,
+        "component": "actual_plateau_road_markings",
+        "status": "available" if batches else "not_available",
+        "sources": [
+            {"path": str(path.resolve()), "sha256": _sha256(path)} for path in sources
+        ],
+        "world_frame": str(world_frame_path.resolve()),
+        "terrain_receipt": str(terrain_receipt_path.resolve()),
+        "selection_policy": "LOD3 polygon intersects configured horizontal range",
+        "geometry_policy": "source CityFurniture horizontal geometry draped on the shared DEM; no inferred markings",
+        "marking_vertical_offset_m": marking_vertical_offset_m,
+        "material_policy": "PLATEAU X3DMaterial diffuseColor with documented fallback",
+        "rendering_policy": "double-sided road-marking material; source winding preserved",
+        "function_labels": ROAD_MARKING_FUNCTIONS,
+        "feature_counts": dict(sorted(feature_counts.items())),
+        "polygon_count": polygon_count,
+        "triangle_count": triangle_count,
+        "material_polygon_count": material_polygon_count,
+        "fallback_polygon_count": fallback_polygon_count,
+        "fallback_rgba": list(DEFAULT_RGBA),
+    }
     if not batches:
-        raise CityFurnitureError("no actual PLATEAU road-marking geometry intersects the requested range")
+        if not allow_empty:
+            raise CityFurnitureError(
+                "no actual PLATEAU road-marking geometry intersects the requested range"
+            )
+        output.unlink(missing_ok=True)
+        receipt["reason"] = "no matching LOD3 road-marking CityFurniture geometry"
+        receipt["output"] = None
+        receipt_path.write_text(
+            json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        return receipt
 
     scene = trimesh.Scene()
     for index, ((category, rgba), batch) in enumerate(sorted(batches.items())):
@@ -209,30 +262,11 @@ def convert(
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(scene.export(file_type="glb"))
-    receipt = {
-        "schema_version": 1,
-        "component": "actual_plateau_road_markings",
-        "source": str(source.resolve()),
-        "source_sha256": _sha256(source),
-        "world_frame": str(world_frame_path.resolve()),
-        "terrain_receipt": str(terrain_receipt_path.resolve()),
-        "selection_policy": "LOD3 polygon intersects configured horizontal range",
-        "geometry_policy": "source CityFurniture horizontal geometry draped on the shared DEM; no inferred markings",
-        "marking_vertical_offset_m": marking_vertical_offset_m,
-        "material_policy": "PLATEAU X3DMaterial diffuseColor with documented fallback",
-        "rendering_policy": "double-sided road-marking material; source winding preserved",
-        "function_labels": ROAD_MARKING_FUNCTIONS,
-        "feature_counts": dict(sorted(feature_counts.items())),
-        "polygon_count": polygon_count,
-        "triangle_count": triangle_count,
-        "material_polygon_count": material_polygon_count,
-        "fallback_polygon_count": fallback_polygon_count,
-        "fallback_rgba": list(DEFAULT_RGBA),
+    receipt.update({
         "output": str(output.resolve()),
         "bytes": output.stat().st_size,
         "sha256": _sha256(output),
-    }
-    receipt_path = receipt_path or output.with_name(output.stem + "-glb-receipt.json")
+    })
     receipt_path.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return receipt
 
@@ -244,10 +278,16 @@ def main() -> int:
     parser.add_argument("--terrain-receipt", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--receipt", type=Path)
+    parser.add_argument("--marking-vertical-offset", type=float, default=0.055)
+    parser.add_argument("--allow-empty", action="store_true")
     args = parser.parse_args()
     receipt = convert(
-        args.source, args.world_frame, args.terrain_receipt, args.out, args.receipt
+        args.source, args.world_frame, args.terrain_receipt, args.out, args.receipt,
+        args.marking_vertical_offset, args.allow_empty,
     )
+    if receipt["status"] == "not_available":
+        print("INFO: no LOD3 road-marking data; road-marking GLB was omitted")
+        return 0
     print(f"OK: actual PLATEAU road-marking GLB: {args.out}")
     print("OK: features: " + ", ".join(
         f"{ROAD_MARKING_FUNCTIONS[key]}={value}" for key, value in receipt["feature_counts"].items()

@@ -65,6 +65,35 @@ class CityFurnitureGlbTest(unittest.TestCase):
             self.assertEqual(tuple(material.baseColorFactor), (255, 128, 0, 255))
             self.assertAlmostEqual(next(iter(scene.geometry.values())).bounds[0][1], 0.055)
 
+    def test_allow_empty_reports_missing_lod3_without_creating_geometry(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            frame = root / "world-frame.json"
+            frame.write_text(json.dumps({
+                "schema_version": 1,
+                "origin": {"latitude": 35.0, "longitude": 139.0, "altitude_offset_m": 5.0},
+                "half_extent_m": {"north_south": 100.0, "east_west": 100.0},
+                "coordinate_systems": {
+                    "mjcf": "X=North,Y=-East,Z=Up",
+                    "glb": "X=East,Y=Up,Z=-North"
+                },
+            }), encoding="utf-8")
+            hfield = root / "terrain.hf"
+            hfield.write_bytes(struct.pack("<ii4f", 2, 2, 5.0, 5.0, 5.0, 5.0))
+            terrain_receipt = root / "terrain-receipt.json"
+            terrain_receipt.write_text(json.dumps({
+                "hfield": {"path": str(hfield)}
+            }), encoding="utf-8")
+            output = root / "markings.glb"
+            receipt = module.convert(
+                source, frame, terrain_receipt, output, allow_empty=True
+            )
+            self.assertEqual(receipt["status"], "not_available")
+            self.assertFalse(output.exists())
+            self.assertTrue((root / "markings-glb-receipt.json").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

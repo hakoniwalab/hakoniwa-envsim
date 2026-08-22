@@ -77,7 +77,9 @@ def request_catalog(url: str, timeout_sec: int = 60) -> dict[str, Any]:
     return payload
 
 
-def select_files(payload: dict[str, Any], feature_type: str, year: str | int) -> list[dict[str, Any]]:
+def select_files(
+    payload: dict[str, Any], feature_type: str, year: str | int, *, allow_empty: bool = False
+) -> list[dict[str, Any]]:
     cities = payload.get("cities", [])
     if year == "latest":
         latest: dict[str, dict[str, Any]] = {}
@@ -119,7 +121,7 @@ def select_files(payload: dict[str, Any], feature_type: str, year: str | int) ->
                 "file_size": int(item.get("fileSize", 0)),
                 "url": url,
             })
-    if not selected:
+    if not selected and not allow_empty:
         raise PlateauError(f"no LOD1 {feature_type} CityGML files matched year={year!r}")
     return selected
 
