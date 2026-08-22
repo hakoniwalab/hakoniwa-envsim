@@ -15,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-from plateau_citygml import PlateauError, bounding_box, search_url, select_files
+from plateau_citygml import PlateauError, bounding_box, search_url, select_files, third_mesh_codes
 
 
 def load_pipeline_module():
@@ -60,9 +60,11 @@ class PlateauCityGmlTest(unittest.TestCase):
         self.assertAlmostEqual((north - south) * 111_320.0, 200.0, places=4)
         self.assertAlmostEqual((east - west) * 111_320.0 * __import__("math").cos(__import__("math").radians(35.0)), 400.0, places=4)
 
-    def test_search_url_uses_official_range_condition(self):
-        url = search_url("https://api.example", "bldg", (139.0, 35.0, 139.1, 35.1))
-        self.assertIn("/datacatalog/citygml/r:139.0000000000,35.0000000000,139.1000000000,35.1000000000", url)
+    def test_search_url_enumerates_every_intersecting_third_mesh(self):
+        bbox = bounding_box(35.6625, 139.70625, 500.0, 500.0)
+        self.assertEqual(third_mesh_codes(bbox), ["53393586", "53393596", "53394506"])
+        url = search_url("https://api.example", "bldg", bbox)
+        self.assertIn("/datacatalog/citygml/m:53393586,53393596,53394506", url)
         self.assertTrue(url.endswith("?types=bldg"))
 
     def test_latest_selects_newest_city_dataset_and_lod1(self):

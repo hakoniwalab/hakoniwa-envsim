@@ -24,6 +24,7 @@ from plateau_citygml import (
     search_url,
     select_files,
     sha256_file,
+    third_mesh_codes,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -228,6 +229,7 @@ def _query_meta(cfg: dict[str, Any]) -> dict[str, Any]:
         "center_lat": center["latitude"], "center_lon": center["longitude"],
         "ns_m": extent["north_south"], "ew_m": extent["east_west"],
         "bbox": {"west": bbox[0], "south": bbox[1], "east": bbox[2], "north": bbox[3]},
+        "third_mesh_codes": third_mesh_codes(bbox),
     }
 
 
@@ -337,9 +339,15 @@ def build(manifest: Path, offline: bool = False) -> int:
     meta = _query_meta(cfg)
     (source_root / "query_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     response_path = build_dir / "plateau-catalog-response.json"
+    query_path = build_dir / "plateau-catalog-query.json"
     if offline:
         if not response_path.is_file():
             raise ConfigError(f"offline build requires cached catalog response: {response_path}")
+        if not query_path.is_file():
+            raise ConfigError(f"offline build requires cached catalog query contract: {query_path}")
+        cached_query = json.loads(query_path.read_text(encoding="utf-8"))
+        if cached_query.get("third_mesh_codes") != meta["third_mesh_codes"]:
+            raise ConfigError("cached PLATEAU catalog query does not cover the current third-level meshes")
         payload = json.loads(response_path.read_text(encoding="utf-8"))
     else:
         bbox = tuple(meta["bbox"][key] for key in ("west", "south", "east", "north"))
@@ -347,6 +355,11 @@ def build(manifest: Path, offline: bool = False) -> int:
         print(f"INFO: querying PLATEAU catalog: {url}")
         payload = request_catalog(url)
         response_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        query_path.write_text(json.dumps({
+            "schema_version": 1,
+            "url": url,
+            "third_mesh_codes": meta["third_mesh_codes"],
+        }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     selected = select_files(payload, cfg["source"]["feature_type"], cfg["source"]["year"])
     downloaded = []
     for index, item in enumerate(selected, 1):

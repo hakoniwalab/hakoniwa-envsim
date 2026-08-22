@@ -28,10 +28,41 @@ def bounding_box(latitude: float, longitude: float, ns_m: float, ew_m: float) ->
 
 
 def search_url(api_base_url: str, feature_type: str, bbox: tuple[float, float, float, float]) -> str:
-    west, south, east, north = bbox
-    condition = "r:" + ",".join(f"{value:.10f}" for value in (west, south, east, north))
+    condition = "m:" + ",".join(third_mesh_codes(bbox))
     query = urllib.parse.urlencode({"types": feature_type})
     return f"{api_base_url.rstrip('/')}/datacatalog/citygml/{condition}?{query}"
+
+
+def third_mesh_codes(bbox: tuple[float, float, float, float]) -> list[str]:
+    """Enumerate every Japanese third-level mesh intersecting a lon/lat bbox.
+
+    The PLATEAU ``r:`` rectangle endpoint has been observed returning only the
+    mesh files containing the two boundary coordinates.  Explicit ``m:``
+    discovery prevents intermediate meshes from disappearing from a range.
+    """
+    west, south, east, north = bbox
+    if not (west < east and south < north):
+        raise PlateauError(f"invalid bbox ordering: {bbox}")
+    # Third-level latitude cells are 30 arcseconds (1/120 degree), and
+    # longitude cells are 45 arcseconds (1/80 degree). Treat the north/east
+    # limits as exclusive so an exact cell boundary does not add another mesh.
+    lat_first = math.floor(south * 120.0)
+    lat_last = math.floor(math.nextafter(north, -math.inf) * 120.0)
+    lon_first = math.floor((west - 100.0) * 80.0)
+    lon_last = math.floor((math.nextafter(east, -math.inf) - 100.0) * 80.0)
+    codes = []
+    for lat_index in range(lat_first, lat_last + 1):
+        first_lat, lat_remainder = divmod(lat_index, 80)
+        second_lat, third_lat = divmod(lat_remainder, 10)
+        for lon_index in range(lon_first, lon_last + 1):
+            first_lon, lon_remainder = divmod(lon_index, 80)
+            second_lon, third_lon = divmod(lon_remainder, 10)
+            codes.append(
+                f"{first_lat:02d}{first_lon:02d}{second_lat}{second_lon}{third_lat}{third_lon}"
+            )
+    if not codes:
+        raise PlateauError(f"bbox resolved to no third-level mesh: {bbox}")
+    return codes
 
 
 def request_catalog(url: str, timeout_sec: int = 60) -> dict[str, Any]:
