@@ -28,8 +28,20 @@ def bounding_box(latitude: float, longitude: float, ns_m: float, ew_m: float) ->
     return longitude - lon_delta, latitude - lat_delta, longitude + lon_delta, latitude + lat_delta
 
 
-def search_url(api_base_url: str, feature_type: str, bbox: tuple[float, float, float, float]) -> str:
-    condition = "m:" + ",".join(third_mesh_codes(bbox))
+def search_url(
+    api_base_url: str,
+    feature_type: str,
+    bbox: tuple[float, float, float, float],
+    *,
+    mesh_level: int = 3,
+) -> str:
+    if mesh_level == 3:
+        mesh_codes = third_mesh_codes(bbox)
+    elif mesh_level == 2:
+        mesh_codes = second_mesh_codes(bbox)
+    else:
+        raise PlateauError(f"unsupported catalog mesh level: {mesh_level}")
+    condition = "m:" + ",".join(mesh_codes)
     query = urllib.parse.urlencode({"types": feature_type})
     return f"{api_base_url.rstrip('/')}/datacatalog/citygml/{condition}?{query}"
 
@@ -66,6 +78,16 @@ def third_mesh_codes(bbox: tuple[float, float, float, float]) -> list[str]:
     return codes
 
 
+def second_mesh_codes(bbox: tuple[float, float, float, float]) -> list[str]:
+    """Return second-level mesh codes intersecting a bbox.
+
+    Some sparse PLATEAU feature catalogs, including bridge models, are indexed
+    at the broader second-level mesh even though the returned files retain
+    third-level mesh codes.
+    """
+    return sorted({code[:6] for code in third_mesh_codes(bbox)})
+
+
 def request_catalog(
     url: str, timeout_sec: int = 60, *, allow_not_found: bool = False
 ) -> dict[str, Any]:
@@ -94,7 +116,8 @@ def request_catalog(
 
 
 def select_files(
-    payload: dict[str, Any], feature_type: str, year: str | int, *, allow_empty: bool = False
+    payload: dict[str, Any], feature_type: str, year: str | int, *,
+    allow_empty: bool = False, min_lod: int = 1,
 ) -> list[dict[str, Any]]:
     cities = payload.get("cities", [])
     if year == "latest":
@@ -123,7 +146,7 @@ def select_files(
             parsed = urllib.parse.urlparse(url)
             if parsed.scheme != "https" or not parsed.netloc:
                 raise PlateauError(f"refusing non-HTTPS PLATEAU asset URL: {url!r}")
-            if int(item.get("maxLod", 0)) < 1:
+            if int(item.get("maxLod", 0)) < min_lod:
                 continue
             seen_urls.add(url)
             selected.append({
@@ -138,7 +161,9 @@ def select_files(
                 "url": url,
             })
     if not selected and not allow_empty:
-        raise PlateauError(f"no LOD1 {feature_type} CityGML files matched year={year!r}")
+        raise PlateauError(
+            f"no LOD{min_lod} {feature_type} CityGML files matched year={year!r}"
+        )
     return selected
 
 

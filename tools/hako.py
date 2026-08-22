@@ -21,6 +21,7 @@ from plateau_citygml import (
     bounding_box,
     download_file,
     request_catalog,
+    second_mesh_codes,
     search_url,
     select_files,
     sha256_file,
@@ -38,7 +39,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "source": {
         "api_base_url": "https://api.plateauview.mlit.go.jp",
         "feature_type": "bldg",
-        "feature_types": {"bldg": True, "tran": False, "dem": False, "frn": False},
+        "feature_types": {
+            "bldg": True, "tran": False, "dem": False, "frn": False,
+            "brid": False,
+        },
         "year": "latest",
     },
     "selection": {
@@ -49,6 +53,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "base_epsilon_m": 0.2,
         "waste_threshold": 1.0,
         "wall_thickness_m": 0.1,
+        "roof_collision_thickness_m": 0.02,
     },
     "mjcf": {"model_name": "plateau_city", "collision": "all", "floor": False},
     "glb": {
@@ -60,6 +65,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "enabled": False,
         "terrain_spacing_m": 2.0,
         "marking_vertical_offset_m": 0.055,
+        "bridge_collision_thickness_m": 0.02,
+        "bridge_max_surface_slope_deg": 60.0,
     },
     "output": {
         "build_dir": ".hako/build/plateau-city-mjcf",
@@ -168,7 +175,10 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
     if cfg["source"]["feature_type"] != "bldg":
         raise ConfigError("source.feature_type currently supports only bldg")
     feature_types = cfg["source"]["feature_types"]
-    if not all(isinstance(feature_types[name], bool) for name in ("bldg", "tran", "dem", "frn")):
+    if not all(
+        isinstance(feature_types[name], bool)
+        for name in ("bldg", "tran", "dem", "frn", "brid")
+    ):
         raise ConfigError("source.feature_types values must be boolean")
     if not feature_types["bldg"]:
         raise ConfigError("source.feature_types.bldg must be true")
@@ -187,7 +197,7 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
         value = cfg["selection"]["half_extent_m"][key]
         if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
             raise ConfigError(f"selection.half_extent_m.{key} must be positive")
-    for key in ("base_epsilon_m", "wall_thickness_m"):
+    for key in ("base_epsilon_m", "wall_thickness_m", "roof_collision_thickness_m"):
         value = cfg["geometry"][key]
         if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
             raise ConfigError(f"geometry.{key} must be positive")
@@ -210,11 +220,17 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
         raise ConfigError("glb.texture_mode must be embedded-if-available or flat")
     if not isinstance(cfg["city_world"]["enabled"], bool):
         raise ConfigError("city_world.enabled must be true or false")
-    for key in ("terrain_spacing_m", "marking_vertical_offset_m"):
+    for key in ("terrain_spacing_m", "marking_vertical_offset_m", "bridge_collision_thickness_m"):
         value = cfg["city_world"][key]
         if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
             raise ConfigError(f"city_world.{key} must be positive")
-    if cfg["city_world"]["enabled"] and not all(feature_types.values()):
+    slope = cfg["city_world"]["bridge_max_surface_slope_deg"]
+    if not isinstance(slope, (int, float)) or isinstance(slope, bool) or not 0 < slope < 90:
+        raise ConfigError("city_world.bridge_max_surface_slope_deg must be in (0, 90)")
+    required_world_features = ("bldg", "tran", "dem", "frn")
+    if cfg["city_world"]["enabled"] and not all(
+        feature_types[name] for name in required_world_features
+    ):
         raise ConfigError("city_world.enabled requires bldg, tran, dem, and frn feature types")
     for key in ("build_dir", "install_dir", "name"):
         if not isinstance(cfg["output"][key], str) or not cfg["output"][key]:
@@ -283,7 +299,8 @@ def doctor(manifest: Path) -> int:
     if cfg["city_world"]["enabled"]:
         scripts.extend([
             "dem2hfield.py", "road_terrain_probe.py", "city_furniture2glb.py",
-            "city_world_composer.py", "city_dataset_validator.py", "world_frame.py",
+            "bridge2glb.py", "bridge2mjcf.py", "city_world_composer.py", "city_dataset_validator.py",
+            "world_frame.py",
         ])
     for script in scripts:
         if not (PIPELINE / script).is_file():
@@ -330,9 +347,12 @@ def _convert(
         terrain_dir = components / "terrain"
         roads_dir = components / "roads"
         markings_dir = components / "road-markings"
+        bridges_dir = components / "bridges"
         buildings_dir = components / "buildings"
         world_dir = build_dir / "world"
-        for directory in (terrain_dir, roads_dir, markings_dir, buildings_dir, world_dir):
+        for directory in (
+            terrain_dir, roads_dir, markings_dir, bridges_dir, buildings_dir, world_dir
+        ):
             directory.mkdir(parents=True, exist_ok=True)
 
         terrain_xml = terrain_dir / "terrain.xml"
@@ -354,6 +374,7 @@ def _convert(
             "--inp", str(walls), "--zsrc", str(lod1), "--out", str(buildings_xml),
             "--model-name", cfg["mjcf"]["model_name"],
             "--collide", cfg["mjcf"]["collision"],
+            "--roof-thickness", str(geometry["roof_collision_thickness_m"]),
             "--world-frame", str(world_frame),
         ]
         if cfg["mjcf"]["floor"]:
@@ -390,6 +411,25 @@ def _convert(
             "--marking-vertical-offset", str(city_world["marking_vertical_offset_m"]),
             "--allow-empty",
         ])
+        bridges_glb = bridges_dir / "bridges.glb"
+        bridges_receipt = bridges_dir / "bridges-glb-receipt.json"
+        _run([
+            sys.executable, str(PIPELINE / "bridge2glb.py"),
+            "--source", str(source_root), "--world-frame", str(world_frame),
+            "--out", str(bridges_glb), "--receipt", str(bridges_receipt),
+            "--allow-empty",
+        ])
+        bridges_xml = bridges_dir / "bridges.xml"
+        bridge_physics_receipt = bridges_dir / "receipt.json"
+        _run([
+            sys.executable, str(PIPELINE / "bridge2mjcf.py"),
+            "--source", str(source_root), "--world-frame", str(world_frame),
+            "--terrain-receipt", str(terrain_receipt),
+            "--out", str(bridges_xml), "--receipt", str(bridge_physics_receipt),
+            "--collision-thickness", str(city_world["bridge_collision_thickness_m"]),
+            "--max-slope-deg", str(city_world["bridge_max_surface_slope_deg"]),
+            "--collide", cfg["mjcf"]["collision"],
+        ])
         compose_command = [
             sys.executable, str(PIPELINE / "city_world_composer.py"),
             "--world-frame", str(world_frame),
@@ -400,6 +440,10 @@ def _convert(
         ]
         if markings_glb.is_file():
             compose_command.extend(["--extra-glb", str(markings_glb)])
+        if bridges_glb.is_file():
+            compose_command.extend(["--extra-glb", str(bridges_glb)])
+        if json.loads(bridge_physics_receipt.read_text(encoding="utf-8"))["status"] == "available":
+            compose_command.extend(["--extra-mjcf", str(bridges_xml)])
         _run(compose_command)
         dataset_validation = world_dir / "dataset-validation.json"
         _run([
@@ -408,6 +452,8 @@ def _convert(
             "--buildings-receipt", str(buildings_glb_receipt),
             "--roads-receipt", str(roads_dir / "roads-glb-receipt.json"),
             "--markings-receipt", str(markings_dir / "road-markings-glb-receipt.json"),
+            "--bridges-receipt", str(bridges_receipt),
+            "--bridge-physics-receipt", str(bridge_physics_receipt),
             "--out", str(dataset_validation),
         ])
         return {
@@ -418,6 +464,8 @@ def _convert(
             "terrain_receipt": terrain_receipt,
             "buildings_glb_receipt": buildings_glb_receipt,
             "road_markings_receipt": markings_dir / "road-markings-glb-receipt.json",
+            "bridges_glb_receipt": bridges_receipt,
+            "bridges_physics_receipt": bridge_physics_receipt,
             "dataset_validation": dataset_validation,
         }
 
@@ -427,6 +475,7 @@ def _convert(
         "--inp", str(walls), "--out", str(mjcf),
         "--model-name", cfg["mjcf"]["model_name"],
         "--collide", cfg["mjcf"]["collision"],
+        "--roof-thickness", str(geometry["roof_collision_thickness_m"]),
     ]
     if cfg["mjcf"]["floor"]:
         command.append("--floor")
@@ -479,13 +528,29 @@ def build(manifest: Path, offline: bool = False) -> int:
                 raise ConfigError(
                     f"cached {feature_type} catalog query does not cover the current third-level meshes"
                 )
+            if feature_type == "brid" and (
+                cached_query.get("mesh_level") != 2
+                or cached_query.get("mesh_codes") != second_mesh_codes(bbox)
+            ):
+                raise ConfigError(
+                    "cached brid catalog query does not match the current second-level meshes"
+                )
             payload = json.loads(response_path.read_text(encoding="utf-8"))
         else:
-            url = search_url(cfg["source"]["api_base_url"], feature_type, bbox)
+            mesh_level = 2 if feature_type == "brid" else 3
+            mesh_codes = (
+                second_mesh_codes(bbox) if mesh_level == 2 else meta["third_mesh_codes"]
+            )
+            url = search_url(
+                cfg["source"]["api_base_url"], feature_type, bbox,
+                mesh_level=mesh_level,
+            )
             print(f"INFO: querying PLATEAU {feature_type} catalog: {url}")
             payload = request_catalog(
                 url,
-                allow_not_found=cfg["city_world"]["enabled"] and feature_type == "frn",
+                allow_not_found=(
+                    cfg["city_world"]["enabled"] and feature_type in {"frn", "brid"}
+                ),
             )
             response_path.write_text(
                 json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -494,16 +559,31 @@ def build(manifest: Path, offline: bool = False) -> int:
                 "schema_version": 1,
                 "feature_type": feature_type,
                 "url": url,
+                "mesh_level": mesh_level,
+                "mesh_codes": mesh_codes,
                 "third_mesh_codes": meta["third_mesh_codes"],
             }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         selected = select_files(
             payload, feature_type, cfg["source"]["year"],
-            allow_empty=cfg["city_world"]["enabled"] and feature_type == "frn",
+            allow_empty=(
+                cfg["city_world"]["enabled"] and feature_type in {"frn", "brid"}
+            ),
+            min_lod=3 if feature_type == "brid" else 1,
         )
+        if feature_type == "brid":
+            selected = [
+                item for item in selected
+                if len(item["code"]) != 8 or item["code"] in meta["third_mesh_codes"]
+            ]
         if feature_type == "frn" and not selected:
             print(
                 "INFO: no CityFurniture dataset is available; "
                 "road markings will be omitted and reported by Dataset Validator"
+            )
+        if feature_type == "brid" and not selected:
+            print(
+                "INFO: no Bridge dataset is available; "
+                "bridge visualization will be omitted and reported by Dataset Validator"
             )
         catalog_status[feature_type] = payload.get(
             "_catalog_status",

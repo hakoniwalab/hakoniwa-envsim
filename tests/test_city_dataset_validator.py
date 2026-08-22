@@ -33,8 +33,13 @@ class CityDatasetValidatorTest(unittest.TestCase):
             )
             self.assertEqual(report["status"], "ready")
             self.assertFalse(report["capabilities"]["road_marking_visualization"])
+            self.assertFalse(report["capabilities"]["bridge_visualization"])
+            self.assertFalse(report["capabilities"]["bridge_collision"])
             self.assertTrue(report["summary"]["fallback_used"])
-            self.assertEqual(report["summary"]["unavailable_components"], ["road_markings"])
+            self.assertEqual(
+                report["summary"]["unavailable_components"],
+                ["road_markings", "bridges"],
+            )
             self.assertEqual(
                 report["components"]["road_surfaces"]["lod_resolution"]["effective_lod"],
                 "LOD2",
@@ -46,6 +51,7 @@ class CityDatasetValidatorTest(unittest.TestCase):
                     "Buildings     : LOD2 (4), LOD1 fallback (3)",
                     "Road surfaces : LOD2 (LOD3 not available, fallback)",
                     "Road markings : NOT AVAILABLE (LOD3 absent; no surface markings, no inference)",
+                    "Bridges       : NOT AVAILABLE (no inferred geometry)",
                 ],
             )
             output = root / "dataset-validation.json"
@@ -93,6 +99,61 @@ class CityDatasetValidatorTest(unittest.TestCase):
             report["components"]["road_surfaces"]["lod_resolution"]["fallback_lod"],
             "LOD2",
         )
+
+    def test_reports_lod3_bridge_as_visual_only(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+
+            def receipt(name, data):
+                path = root / name
+                path.write_text(json.dumps({"schema_version": 1, **data}), encoding="utf-8")
+                return path
+
+            report = module.validate_dataset(
+                receipt("terrain.json", {"nrow": 11, "ncol": 11}),
+                receipt("buildings.json", {"buildings": {"lod2": 1, "lod1_fallback": 0}}),
+                receipt("roads.json", {
+                    "lod_polygon_counts": {"lod3": 1},
+                    "surface_polygon_counts": {"roadway": 1},
+                }),
+                receipt("markings.json", {"status": "available", "polygon_count": 1,
+                    "feature_counts": {"1110": 1}}),
+                receipt("bridges.json", {"status": "available", "bridge_count": 1,
+                    "polygon_count": 42, "rejected_polygon_count": 2,
+                    "geometry_policy": "source altitude preserved"}),
+            )
+            self.assertTrue(report["capabilities"]["bridge_visualization"])
+            self.assertFalse(report["capabilities"]["bridge_collision"])
+            self.assertEqual(report["components"]["bridges"]["physics_collision"], "not_generated")
+            self.assertEqual(report["components"]["bridges"]["rejected_polygon_count"], 2)
+            self.assertIn(
+                "Bridges       : LOD3 (1 bridges, 42 polygons; visual only)",
+                module.format_report(report),
+            )
+
+    def test_reports_bridge_visual_and_collision_capabilities_separately(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+
+            def receipt(name, data):
+                path = root / name
+                path.write_text(json.dumps({"schema_version": 1, **data}), encoding="utf-8")
+                return path
+
+            report = module.validate_dataset(
+                receipt("terrain.json", {"nrow": 11, "ncol": 11}),
+                receipt("buildings.json", {"buildings": {"lod2": 1, "lod1_fallback": 0}}),
+                receipt("roads.json", {"lod_polygon_counts": {"lod3": 1}}),
+                receipt("markings.json", {"status": "not_available", "polygon_count": 0}),
+                receipt("bridges.json", {"status": "available", "bridge_count": 1,
+                    "polygon_count": 42}),
+                receipt("bridge-physics.json", {"status": "available",
+                    "physics_geom_count": 17}),
+            )
+            self.assertTrue(report["capabilities"]["bridge_visualization"])
+            self.assertTrue(report["capabilities"]["bridge_collision"])
+            self.assertEqual(report["components"]["bridges"]["physics_geom_count"], 17)
+            self.assertIn("visual + collision 17 geoms", module.format_report(report)[-1])
 
 
 if __name__ == "__main__":

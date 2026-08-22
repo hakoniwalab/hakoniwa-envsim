@@ -29,7 +29,8 @@
             "bldg": {"const": true},
             "tran": {"type": "boolean"},
             "dem": {"type": "boolean"},
-            "frn": {"type": "boolean"}
+            "frn": {"type": "boolean"},
+            "brid": {"type": "boolean"}
           }
         },
         "year": {"oneOf": [{"const": "latest"}, {"type": "integer", "minimum": 2000, "maximum": 9999}]}
@@ -60,11 +61,12 @@
     },
     "geometry": {
       "type": "object", "additionalProperties": false,
-      "required": ["base_epsilon_m", "waste_threshold", "wall_thickness_m"],
+      "required": ["base_epsilon_m", "waste_threshold", "wall_thickness_m", "roof_collision_thickness_m"],
       "properties": {
         "base_epsilon_m": {"type": "number", "exclusiveMinimum": 0},
         "waste_threshold": {"type": "number", "minimum": 0, "maximum": 1},
-        "wall_thickness_m": {"type": "number", "exclusiveMinimum": 0}
+        "wall_thickness_m": {"type": "number", "exclusiveMinimum": 0},
+        "roof_collision_thickness_m": {"type": "number", "exclusiveMinimum": 0}
       }
     },
     "mjcf": {
@@ -91,7 +93,9 @@
       "properties": {
         "enabled": {"type": "boolean"},
         "terrain_spacing_m": {"type": "number", "exclusiveMinimum": 0},
-        "marking_vertical_offset_m": {"type": "number", "exclusiveMinimum": 0}
+        "marking_vertical_offset_m": {"type": "number", "exclusiveMinimum": 0},
+        "bridge_collision_thickness_m": {"type": "number", "exclusiveMinimum": 0},
+        "bridge_max_surface_slope_deg": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 90}
       }
     },
     "output": {

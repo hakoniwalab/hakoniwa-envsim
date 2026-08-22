@@ -56,17 +56,37 @@ def validate_dataset(
     buildings_receipt_path: Path,
     roads_receipt_path: Path,
     markings_receipt_path: Path,
+    bridges_receipt_path: Path | None = None,
+    bridge_physics_receipt_path: Path | None = None,
 ) -> dict:
     terrain = _load(terrain_receipt_path, "terrain")
     buildings = _load(buildings_receipt_path, "buildings")
     roads = _load(roads_receipt_path, "roads")
     markings = _load(markings_receipt_path, "road markings")
+    bridges = (
+        _load(bridges_receipt_path, "bridges")
+        if bridges_receipt_path is not None else {
+            "status": "not_available", "bridge_count": 0,
+            "reason": "bridge conversion was not requested",
+        }
+    )
+    bridge_physics = (
+        _load(bridge_physics_receipt_path, "bridge physics")
+        if bridge_physics_receipt_path is not None else {"status": "not_generated"}
+    )
 
     building_lods = buildings.get("buildings") or {}
     road_lods = roads.get("lod_polygon_counts") or {}
     marking_available = markings.get("status") == "available" and int(
         markings.get("polygon_count", 0)
     ) > 0
+    bridge_available = bridges.get("status") == "available" and int(
+        bridges.get("polygon_count", 0)
+    ) > 0
+    bridge_collision_available = (
+        bridge_physics.get("status") == "available"
+        and int(bridge_physics.get("physics_geom_count", 0)) > 0
+    )
     building_resolution = _lod_resolution([
         ("LOD2", int(building_lods.get("lod2", 0))),
         ("LOD1", int(building_lods.get("lod1_fallback", 0))),
@@ -109,12 +129,26 @@ def validate_dataset(
                 "fallback_used": False,
                 "missing_behavior": None if marking_available else "omitted_without_inference",
             },
+            "bridges": {
+                "status": "available" if bridge_available else "not_available",
+                "source_lod": "LOD3" if bridge_available else None,
+                "bridge_count": int(bridges.get("bridge_count", 0)),
+                "polygon_count": int(bridges.get("polygon_count", 0)),
+                "rejected_polygon_count": int(bridges.get("rejected_polygon_count", 0)),
+                "reason": bridges.get("reason") if not bridge_available else None,
+                "geometry_policy": bridges.get("geometry_policy"),
+                "physics_collision": "available" if bridge_collision_available else "not_generated",
+                "physics_geom_count": int(bridge_physics.get("physics_geom_count", 0)),
+                "physics_reason": bridge_physics.get("reason") if not bridge_collision_available else None,
+            },
         },
         "capabilities": {
             "terrain_collision": True,
             "building_collision": True,
             "road_surface_visualization": True,
             "road_marking_visualization": marking_available,
+            "bridge_visualization": bridge_available,
+            "bridge_collision": bridge_collision_available,
         },
         "policy": {
             "missing_lod3_road_markings": "omit without inference",
@@ -125,7 +159,8 @@ def validate_dataset(
                 building_resolution["fallback_used"] or road_resolution["fallback_used"]
             ),
             "unavailable_components": (
-                [] if marking_available else ["road_markings"]
+                ([] if marking_available else ["road_markings"])
+                + ([] if bridge_available else ["bridges"])
             ),
         },
     }
@@ -138,6 +173,7 @@ def format_report(report: dict) -> list[str]:
     buildings = components["buildings"]
     roads = components["road_surfaces"]
     markings = components["road_markings"]
+    bridges = components.get("bridges", {"status": "not_available"})
     grid = terrain["grid"]
     def lod_line(label: str, component: dict, level_keys: list[tuple[str, str]]) -> str:
         resolution = component.get("lod_resolution") or _lod_resolution([
@@ -193,6 +229,17 @@ def format_report(report: dict) -> list[str]:
             f"{'Road markings':<14}: NOT AVAILABLE "
             "(LOD3 absent; no surface markings, no inference)"
         )
+    if bridges["status"] == "available":
+        suffix = (
+            f"visual + collision {bridges['physics_geom_count']} geoms"
+            if bridges.get("physics_collision") == "available" else "visual only"
+        )
+        lines.append(
+            f"{'Bridges':<14}: LOD3 ({bridges['bridge_count']} bridges, "
+            f"{bridges['polygon_count']} polygons; {suffix})"
+        )
+    else:
+        lines.append(f"{'Bridges':<14}: NOT AVAILABLE (no inferred geometry)")
     return lines
 
 
@@ -216,6 +263,8 @@ def main() -> int:
     parser.add_argument("--buildings-receipt", type=Path)
     parser.add_argument("--roads-receipt", type=Path)
     parser.add_argument("--markings-receipt", type=Path)
+    parser.add_argument("--bridges-receipt", type=Path)
+    parser.add_argument("--bridge-physics-receipt", type=Path)
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
     if args.input:
@@ -235,6 +284,8 @@ def main() -> int:
         report = validate_dataset(
             args.terrain_receipt, args.buildings_receipt,
             args.roads_receipt, args.markings_receipt,
+            args.bridges_receipt,
+            args.bridge_physics_receipt,
         )
         output_path = args.out
         text_path = write_report(report, output_path)

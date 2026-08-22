@@ -59,6 +59,26 @@ class CityWorldComposerTest(unittest.TestCase):
             self.assertEqual(sum(counts.values()), 3)
             self.assertEqual(len(trimesh.load(output, force="scene").geometry), 3)
 
+    def test_composes_independent_bridge_physics_component(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            terrain = root / "terrain.xml"
+            buildings = root / "buildings.xml"
+            bridges = root / "bridges.xml"
+            output = root / "world" / "city-world.xml"
+            terrain.write_text('<mujoco><worldbody><geom name="terrain" type="box" size="1 1 1"/></worldbody></mujoco>')
+            buildings.write_text('<mujoco><worldbody><geom name="building" type="box" size="1 1 1"/></worldbody></mujoco>')
+            bridges.write_text(
+                '<mujoco><asset><mesh name="bridge_mesh" '
+                'vertex="0 0 1 1 0 1 0 1 1 0 0 .9 1 0 .9 0 1 .9" '
+                'face="0 1 2 5 4 3 0 3 4 0 4 1 1 4 5 1 5 2 2 5 3 2 3 0"/>'
+                '</asset><worldbody><geom name="bridge" type="mesh" mesh="bridge_mesh"/></worldbody></mujoco>'
+            )
+            composer.compose_mjcf(terrain, buildings, output, [bridges])
+            parsed = ET.parse(output).getroot()
+            self.assertIsNotNone(parsed.find("asset/mesh[@name='bridge_mesh']"))
+            self.assertIsNotNone(parsed.find("worldbody/geom[@name='bridge']"))
+
 
 if __name__ == "__main__":
     unittest.main()

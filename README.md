@@ -12,6 +12,11 @@
 `hakoniwa-build.yaml` に指定すると、国土交通省PLATEAU配信サービスから
 該当する建築物LOD1 CityGMLを取得し、MuJoCo MJCFの壁モデルへ変換します。
 
+`city_world.enabled: true` の構成では、DEM地形、道路、建物を統合し、任意で
+CityFurnitureの路面標示とLOD3橋梁を加えられます。橋梁のGLB表示と、実データの
+`OuterFloorSurface`から生成する軽量なMJCF橋面collisionは独立componentです。
+利用可能な橋面がない場合は形状を推定せず、Dataset Validatorがscoped outとして報告します。
+
 ```bash
 python -m pip install -r requirements.txt
 python tools/hako.py doctor

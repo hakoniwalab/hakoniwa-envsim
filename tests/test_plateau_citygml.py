@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 from plateau_citygml import (
     PlateauError, bounding_box, request_catalog, search_url, select_files,
-    third_mesh_codes,
+    second_mesh_codes, third_mesh_codes,
 )
 
 
@@ -73,6 +73,12 @@ class PlateauCityGmlTest(unittest.TestCase):
         self.assertIn("/datacatalog/citygml/m:53393586,53393596,53394506", url)
         self.assertTrue(url.endswith("?types=bldg"))
 
+    def test_bridge_search_uses_broader_second_mesh_catalog_index(self):
+        bbox = bounding_box(34.39870318724743, 132.47669631395575, 100.0, 100.0)
+        self.assertEqual(second_mesh_codes(bbox), ["513243"])
+        url = search_url("https://api.example", "brid", bbox, mesh_level=2)
+        self.assertIn("/datacatalog/citygml/m:513243?types=brid", url)
+
     def test_latest_selects_newest_city_dataset_and_lod1(self):
         def city(year, files):
             return {"cityCode": "13113", "cityName": "Shibuya", "year": year, "registrationYear": year, "spec": "5.0", "files": {"bldg": files}}
@@ -99,6 +105,17 @@ class PlateauCityGmlTest(unittest.TestCase):
             select_files({"cities": []}, "frn", "latest", allow_empty=True),
             [],
         )
+
+    def test_bridge_selection_requires_lod3(self):
+        payload = {"cities": [{
+            "cityCode": "34100", "year": 2024, "registrationYear": 2024,
+            "files": {"brid": [
+                {"code": "lod2", "maxLod": 2, "url": "https://example/lod2.gml", "fileSize": 1},
+                {"code": "lod3", "maxLod": 3, "url": "https://example/lod3.gml", "fileSize": 2},
+            ]},
+        }]}
+        selected = select_files(payload, "brid", "latest", min_lod=3)
+        self.assertEqual([item["code"] for item in selected], ["lod3"])
 
     def test_optional_catalog_404_is_reported_as_not_available(self):
         error = urllib.error.HTTPError(
@@ -202,8 +219,17 @@ class PlateauCityGmlTest(unittest.TestCase):
             self.assertEqual(len(outputs[0.2]), 6)
             self.assertTrue(all(record["mode"] == "wall" for record in outputs[0.2]))
             self.assertEqual([record["edge_index"] for record in outputs[0.2]], list(range(6)))
+            wall_output = json.loads(
+                (Path(temporary) / "walls-0.2.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(len(wall_output["wall_roofs"]), 1)
+            self.assertEqual(wall_output["wall_roofs"][0]["vertices"], polygon["vertices"])
             self.assertEqual(len(outputs[0.3]), 1)
             self.assertEqual(outputs[0.3][0]["mode"], "obb")
+            obb_output = json.loads(
+                (Path(temporary) / "walls-0.3.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(obb_output["wall_roofs"], [])
             self.assertEqual(len(outputs[1.0]), 1)
             self.assertAlmostEqual(outputs[1.0][0]["waste_ratio"], 0.25)
 
@@ -233,6 +259,40 @@ class PlateauCityGmlTest(unittest.TestCase):
             self.assertEqual(sum(r["boundary_kind"] == "exterior" for r in records), 4)
             self.assertEqual(sum(r["boundary_kind"] == "interior" for r in records), 4)
             self.assertAlmostEqual(records[0]["waste_ratio"], 0.25)
+
+            mjcf = Path(temporary) / "buildings.xml"
+            subprocess.run([
+                sys.executable,
+                str(ROOT / "src" / "city_pipeline" / "obb2mjcf.py"),
+                "--inp", str(output), "--out", str(mjcf),
+                "--collide", "drone", "--roof-thickness", "0.02",
+            ], cwd=ROOT, check=True, capture_output=True, text=True)
+            parsed = ET.parse(mjcf).getroot()
+            roof_meshes = parsed.findall("asset/mesh")
+            roof_geoms = [
+                geom for geom in parsed.findall("worldbody/body/geom")
+                if geom.get("name", "").startswith("roof_")
+            ]
+            self.assertEqual(len(roof_meshes), len(roof_geoms))
+            self.assertGreater(len(roof_meshes), 0)
+            self.assertTrue(all(
+                (geom.get("contype"), geom.get("conaffinity")) == ("1", "2")
+                for geom in roof_geoms
+            ))
+
+            # Triangulated roof area is exterior 4x4 minus the 2x2 courtyard.
+            area = 0.0
+            for mesh in roof_meshes:
+                values = [float(value) for value in mesh.get("vertex").split()]
+                top = [values[index:index + 3] for index in range(0, 9, 3)]
+                area += abs(
+                    (top[1][0] - top[0][0]) * (top[2][1] - top[0][1])
+                    - (top[1][1] - top[0][1]) * (top[2][0] - top[0][0])
+                ) / 2.0
+                self.assertTrue(all(point[2] == 5.0 for point in top))
+                bottom_z = [values[index] for index in (11, 14, 17)]
+                self.assertTrue(all(value == 4.98 for value in bottom_z))
+            self.assertAlmostEqual(area, 12.0)
 
     def test_waste_threshold_configuration_is_a_zero_to_one_ratio(self):
         hako = load_hako_module()

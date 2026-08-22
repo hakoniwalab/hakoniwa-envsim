@@ -13,7 +13,7 @@ gml2obb.py
     * 相対座標・絶対座標どちらもそのまま処理
     * --waste-threshold で OBB内の空白面積 / OBB面積 (0..1) の閾値を指定
         - 閾値以下: 従来どおり 1枚の OBB (mode="obb")
-        - 閾値超え: ポリゴンの各辺を薄いBOXで表現 (mode="wall")
+        - 閾値超え: ポリゴンの各辺を薄いBOXで表現し、屋根用footprintを保持 (mode="wall")
     * --wall-thickness で壁BOXの厚みを指定
 
   依存:
@@ -336,6 +336,7 @@ def main():
     bounds = data.get("bounds")
 
     results_after = []
+    wall_roofs = []
 
     for poly in polys_in:
         pid = poly.get("id", "poly")
@@ -408,14 +409,30 @@ def main():
                 results_after.append(rec)
             else:
                 results_after.extend(wall_records)
+                wall_roof = {
+                    "id": pid,
+                    "vertices": pts.tolist(),
+                    "interior_rings": [ring.tolist() for ring in interior_rings],
+                    "waste_ratio": float(waste_ratio),
+                }
+                if zmin is not None:
+                    wall_roof["zmin"] = float(zmin)
+                if zmax is not None:
+                    wall_roof["zmax"] = float(zmax)
+                if height is not None:
+                    wall_roof["height"] = float(height)
+                if source is not None:
+                    wall_roof["source_gml"] = source
+                wall_roofs.append(wall_roof)
 
     out = {
-        "version": "0.6",
+        "version": "0.7",
         "mode": "after",
         "source": str(in_path),
         "crs": crs,
         "coordinate_system": coordinate_system,
         "results": results_after,
+        "wall_roofs": wall_roofs,
     }
 
     # origin / bounds があれば引き継ぐ

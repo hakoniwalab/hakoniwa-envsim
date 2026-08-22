@@ -5,6 +5,7 @@ OBB JSON (center, half_size, yaw) -> MJCF (MuJoCo XML)
 
 機能（シンプル版）:
 - OBB結果JSONを読み、各建物を geom type="box" として出力
+- wall mode建物は元footprintを三角形分割し、薄い屋根collision meshで閉じる
 - --zsrc で LOD1 の zmin/zmax/height を id 突合して高さを補完
 - --collide {all,drone,none} で接触設定を一括付与
 - --floor で z=0 の無限平面を追加
@@ -16,6 +17,11 @@ import argparse, json, math
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
+import numpy as np
+
+from citygml2glb import GlbError, triangulate_rings
+from mjcf_collision import collision_attributes
+from mjcf_prism import format_numbers, triangular_prism
 from world_frame import load_world_frame
 
 
@@ -72,8 +78,54 @@ def coordinate_transform(coordinate_system: str):
     )
 
 
+def add_wall_roofs(asset, world, roof_specs, thickness_m, collide_mode, pos_fn,
+                   fallback_height, fallback_zmin, rgba):
+    """Close wall-mode buildings with footprint-preserving thin roof meshes."""
+    piece_count = 0
+    for roof in roof_specs:
+        gid = str(roof.get("id", f"building_{piece_count}"))
+        if "zmax" in roof:
+            zmax = float(roof["zmax"])
+        else:
+            zmin = float(roof.get("zmin", fallback_zmin))
+            zmax = zmin + float(roof.get("height", fallback_height))
+
+        rings = []
+        for ring in [roof.get("vertices", []), *roof.get("interior_rings", [])]:
+            if len(ring) >= 3:
+                rings.append([[float(x), float(y), zmax] for x, y in ring])
+        if not rings:
+            continue
+        try:
+            vertices, faces = triangulate_rings(rings)
+        except (GlbError, ValueError) as error:
+            raise ValueError(f"failed to triangulate wall roof {gid}: {error}") from error
+
+        body = ET.SubElement(world, "body", {"name": f"body_{gid}_roof", "pos": "0 0 0"})
+        for roof_piece_index, face in enumerate(faces):
+            triangle = np.asarray([pos_fn(*vertices[index]) for index in face], dtype=float)
+            prism, prism_faces = triangular_prism(triangle, thickness_m)
+            piece_id = f"roof_{gid}_piece_{roof_piece_index:04d}"
+            ET.SubElement(asset, "mesh", {
+                "name": piece_id,
+                "vertex": format_numbers(prism.reshape(-1)),
+                "face": " ".join(str(int(value)) for value in prism_faces.reshape(-1)),
+            })
+            ET.SubElement(body, "geom", {
+                "name": piece_id,
+                "type": "mesh",
+                "mesh": piece_id,
+                "rgba": " ".join(map(f4, rgba)),
+                **collision_attributes(collide_mode),
+            })
+            piece_count += 1
+    return piece_count
+
+
 def make_mjcf(
     items,
+    wall_roofs=(),
+    roof_thickness_m=0.02,
     default_density=None,
     default_rgba=(0.82, 0.82, 0.86, 1.0),
     fallback_height=5.0,
@@ -96,6 +148,7 @@ def make_mjcf(
         "nstack": "40000000",
         "nconmax": "500000",
     })
+    asset = ET.SubElement(mujoco, "asset")
     world = ET.SubElement(mujoco, "worldbody")
 
 
@@ -149,22 +202,20 @@ def make_mjcf(
             "pos": f"{f4(px)} {f4(py)} {f4(pz)}",
             "euler": f"0 0 {f4(yaw)}",
             "rgba": " ".join(map(f4, rgba)),
-            "contype": "1",
-            "conaffinity": "0",
+            **collision_attributes(collide_mode),
         }
-
-        # 衝突設定
-        if collide_mode == "none":
-            attrib["contype"] = "0"; attrib["conaffinity"] = "0"
-        elif collide_mode == "drone":
-            # 建物 = (1,2) に設定。ドローン側は contype=2 conaffinity=1 を付与してください。
-            attrib["contype"] = "1"; attrib["conaffinity"] = "2"
-        # "all" は contype=1 conaffinity=0 のまま（既定 = 全部当たる）
 
         if density is not None:
             attrib["density"] = f4(density)
 
         ET.SubElement(body, "geom", attrib)
+
+    roof_piece_count = add_wall_roofs(
+        asset, world, wall_roofs, roof_thickness_m, collide_mode, pos_fn,
+        fallback_height, fallback_zmin, default_rgba,
+    )
+    if roof_piece_count == 0:
+        mujoco.remove(asset)
 
     return mujoco
 
@@ -183,6 +234,8 @@ def main():
     ap.add_argument("--model-name", default="obb_world")
     ap.add_argument("--collide", choices=["all", "drone", "none"], default="all",
                     help="Contact setting for buildings")
+    ap.add_argument("--roof-thickness", type=float, default=0.02,
+                    help="Downward numerical collision thickness for wall-mode roofs")
     ap.add_argument("--world-frame", type=Path,
                     help="Shared city world-frame.json; uses its altitude offset instead of building minimum")
 
@@ -191,8 +244,11 @@ def main():
     # 読み込み
     data = json.loads(Path(args.inp).read_text(encoding="utf-8"))
     items = data.get("results", data.get("polygons", []))
+    wall_roofs = data.get("wall_roofs", [])
     if not items:
         raise SystemExit("[ERR] No items found in --inp (expects key 'results' or 'polygons').")
+    if args.roof_thickness <= 0:
+        raise SystemExit("[ERR] --roof-thickness must be positive")
 
     # 座標系情報を表示
     coordinate_system = data.get("coordinate_system", "unknown")
@@ -245,6 +301,11 @@ def main():
             if "zmax" in it:
                 it["zmax"] = float(it["zmax"]) - z_offset
             # height は変更不要（差分に基づくため）
+        for roof in wall_roofs:
+            if "zmin" in roof:
+                roof["zmin"] = float(roof["zmin"]) - z_offset
+            if "zmax" in roof:
+                roof["zmax"] = float(roof["zmax"]) - z_offset
 
 
     default_rgba = tuple(args.rgba) if args.rgba else (0.82, 0.82, 0.86, 1.0)
@@ -255,6 +316,8 @@ def main():
 
     root = make_mjcf(
         items=items,
+        wall_roofs=wall_roofs,
+        roof_thickness_m=args.roof_thickness,
         default_density=args.density,
         default_rgba=default_rgba,
         fallback_height=args.height,

@@ -12,6 +12,7 @@ source:
     tran: false
     dem: false
     frn: false
+    brid: false
   year: latest
 
 selection:
@@ -26,6 +27,7 @@ geometry:
   base_epsilon_m: 0.2
   waste_threshold: 1.0
   wall_thickness_m: 0.1
+  roof_collision_thickness_m: 0.02
 
 mjcf:
   model_name: plateau_city
@@ -41,6 +43,8 @@ city_world:
   enabled: false
   terrain_spacing_m: 2
   marking_vertical_offset_m: 0.055
+  bridge_collision_thickness_m: 0.02
+  bridge_max_surface_slope_deg: 60
 
 output:
   build_dir: .hako/build/plateau-city-mjcf

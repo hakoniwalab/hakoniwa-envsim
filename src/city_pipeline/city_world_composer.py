@@ -57,9 +57,15 @@ def _copy_with_rebased_files(element: ET.Element, source_xml: Path, output_xml: 
     return cloned
 
 
-def compose_mjcf(terrain_xml: Path, buildings_xml: Path, output_xml: Path) -> None:
+def compose_mjcf(
+    terrain_xml: Path,
+    buildings_xml: Path,
+    output_xml: Path,
+    extra_mjcf: list[Path] | None = None,
+) -> None:
     roots = [(terrain_xml, ET.parse(terrain_xml).getroot()),
              (buildings_xml, ET.parse(buildings_xml).getroot())]
+    roots.extend((path, ET.parse(path).getroot()) for path in (extra_mjcf or []))
     for source, root in roots:
         if root.tag != "mujoco":
             raise ComposerError(f"MJCF component root must be <mujoco>: {source}")
@@ -138,6 +144,7 @@ def main() -> int:
     parser.add_argument("--terrain-glb", type=Path, required=True)
     parser.add_argument("--roads-glb", type=Path, required=True)
     parser.add_argument("--buildings-glb", type=Path, required=True)
+    parser.add_argument("--extra-mjcf", type=Path, action="append", default=[])
     parser.add_argument("--extra-glb", type=Path, action="append", default=[])
     parser.add_argument("--out-dir", type=Path, required=True)
     args = parser.parse_args()
@@ -145,7 +152,7 @@ def main() -> int:
     frame = load_world_frame(args.world_frame)
     output_xml = args.out_dir / "city-world.xml"
     output_glb = args.out_dir / "city-world.glb"
-    compose_mjcf(args.terrain_xml, args.buildings_xml, output_xml)
+    compose_mjcf(args.terrain_xml, args.buildings_xml, output_xml, args.extra_mjcf)
     components = [args.terrain_glb, args.roads_glb, args.buildings_glb, *args.extra_glb]
     geometry_counts = compose_glb(components, output_glb)
     receipt = {
@@ -161,6 +168,7 @@ def main() -> int:
         "components": {
             "terrain_xml": str(args.terrain_xml.resolve()),
             "buildings_xml": str(args.buildings_xml.resolve()),
+            "extra_mjcf": [str(path.resolve()) for path in args.extra_mjcf],
             "glb_geometry_counts": geometry_counts,
         },
     }
