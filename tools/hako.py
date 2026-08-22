@@ -33,7 +33,7 @@ DEFAULT_MANIFEST = ROOT / "hakoniwa-build.yaml"
 DEFAULT_CONFIG: dict[str, Any] = {
     "version": 1,
     "component": "hakoniwa-envsim",
-    "pipeline": {"type": "plateau-citygml-to-mjcf"},
+    "pipeline": {"type": "plateau-citygml-to-assets"},
     "source": {
         "api_base_url": "https://api.plateauview.mlit.go.jp",
         "feature_type": "bldg",
@@ -156,8 +156,8 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
     cfg = _merge_known(DEFAULT_CONFIG, raw)
     if cfg["version"] != 1 or cfg["component"] != "hakoniwa-envsim":
         raise ConfigError("version must be 1 and component must be hakoniwa-envsim")
-    if cfg["pipeline"]["type"] != "plateau-citygml-to-mjcf":
-        raise ConfigError("pipeline.type must be plateau-citygml-to-mjcf")
+    if cfg["pipeline"]["type"] != "plateau-citygml-to-assets":
+        raise ConfigError("pipeline.type must be plateau-citygml-to-assets")
     if cfg["source"]["feature_type"] != "bldg":
         raise ConfigError("source.feature_type currently supports only bldg")
     if not isinstance(cfg["source"]["api_base_url"], str) or not cfg["source"]["api_base_url"].startswith("https://"):

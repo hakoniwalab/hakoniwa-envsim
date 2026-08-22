@@ -2,7 +2,7 @@ version: 1
 component: hakoniwa-envsim
 
 pipeline:
-  type: plateau-citygml-to-mjcf
+  type: plateau-citygml-to-assets
 
 source:
   api_base_url: https://api.plateauview.mlit.go.jp

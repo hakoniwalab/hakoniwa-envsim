@@ -12,7 +12,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["type"],
-      "properties": {"type": {"const": "plateau-citygml-to-mjcf"}}
+      "properties": {"type": {"const": "plateau-citygml-to-assets"}}
     },
     "source": {
       "type": "object",
