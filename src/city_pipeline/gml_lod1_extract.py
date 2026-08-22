@@ -17,7 +17,6 @@ Example::
 
 import argparse
 import json
-import math
 import re
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -25,6 +24,8 @@ from xml.etree import ElementTree as ET
 from shapely.geometry import Polygon
 from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
+
+from geodesy import project_epsg6697_to_local_enu
 
 NS = {
     "gml":  "http://www.opengis.net/gml",
@@ -63,44 +64,6 @@ def validate_epsg6697_contract(root, gml_path):
                 "EPSG:6697 CityGML must declare srsDimension=3; "
                 f"found {envelope.get('srsDimension')!r}: {gml_path}"
             )
-
-
-def project_epsg6697_to_local_enu(points, center_lat, center_lon):
-    """Geographic coordinates to query-centered local ENU meters.
-
-    PLATEAU EPSG:6697 uses JGD2011 geographic latitude/longitude/height. For a
-    small simulation world, its horizontal coordinates can be converted with
-    the WGS84/JGD2011-compatible ellipsoid to ECEF and rotated into a local
-    tangent plane. The original CityGML altitude is preserved as Z.
-    """
-    semi_major = 6378137.0
-    inv_flattening = 298.257222101  # GRS80, used by JGD2011
-    flattening = 1.0 / inv_flattening
-    eccentricity_sq = flattening * (2.0 - flattening)
-
-    def ecef(lat_deg, lon_deg):
-        lat = math.radians(lat_deg)
-        lon = math.radians(lon_deg)
-        sin_lat, cos_lat = math.sin(lat), math.cos(lat)
-        radius = semi_major / math.sqrt(1.0 - eccentricity_sq * sin_lat * sin_lat)
-        return (
-            radius * cos_lat * math.cos(lon),
-            radius * cos_lat * math.sin(lon),
-            radius * (1.0 - eccentricity_sq) * sin_lat,
-        )
-
-    origin = ecef(center_lat, center_lon)
-    lat0, lon0 = math.radians(center_lat), math.radians(center_lon)
-    sin_lat0, cos_lat0 = math.sin(lat0), math.cos(lat0)
-    sin_lon0, cos_lon0 = math.sin(lon0), math.cos(lon0)
-    output = []
-    for lat, lon, z in points:
-        point = ecef(lat, lon)
-        dx, dy, dz = (point[i] - origin[i] for i in range(3))
-        east = -sin_lon0 * dx + cos_lon0 * dy
-        north = -sin_lat0 * cos_lon0 * dx - sin_lat0 * sin_lon0 * dy + cos_lat0 * dz
-        output.append((east, north, z))
-    return output
 
 
 def _open_ring(points):

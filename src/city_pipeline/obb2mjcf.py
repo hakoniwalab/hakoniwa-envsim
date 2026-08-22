@@ -16,6 +16,8 @@ import argparse, json, math
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
+from world_frame import load_world_frame
+
 
 def f4(x):  # コンパクトな小数表記
     return f"{float(x):.6f}".rstrip("0").rstrip(".")
@@ -181,6 +183,8 @@ def main():
     ap.add_argument("--model-name", default="obb_world")
     ap.add_argument("--collide", choices=["all", "drone", "none"], default="all",
                     help="Contact setting for buildings")
+    ap.add_argument("--world-frame", type=Path,
+                    help="Shared city world-frame.json; uses its altitude offset instead of building minimum")
 
     args = ap.parse_args()
 
@@ -227,7 +231,10 @@ def main():
             all_zmin.append(float(args.zmin))
 
     if all_zmin:
-        z_offset = min(all_zmin)
+        z_offset = (
+            float(load_world_frame(args.world_frame)["origin"]["altitude_offset_m"])
+            if args.world_frame else min(all_zmin)
+        )
         print(f"[INFO] Global z-offset = {-z_offset} (min z = {z_offset})")
 
         # 全オブジェクトの zmin/zmax をオフセットして 0 基準にそろえる

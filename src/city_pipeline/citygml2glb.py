@@ -34,6 +34,7 @@ from gml_lod1_extract import (  # noqa: E402
     project_epsg6697_to_local_enu,
     validate_epsg6697_contract,
 )
+from world_frame import load_world_frame  # noqa: E402
 
 NS = {
     **BASE_NS,
@@ -267,8 +268,10 @@ def build_glb(
     download_manifest: Path | None,
     fetch_textures: bool,
     texture_mode: str,
+    altitude_offset_m: float | None = None,
 ) -> dict:
-    selected, z_offset, center_lat, center_lon = _selection(selection_path)
+    selected, selection_z_offset, center_lat, center_lon = _selection(selection_path)
+    z_offset = selection_z_offset if altitude_offset_m is None else float(altitude_offset_m)
     resolver = TextureResolver(_source_urls(download_manifest), fetch_textures, texture_mode != "flat")
     batches = defaultdict(lambda: {"vertices": [], "faces": [], "uv": []})
     lod1_buildings = lod2_buildings = textured_surfaces = flat_surfaces = 0
@@ -390,11 +393,16 @@ def main() -> int:
     parser.add_argument("--download-manifest", type=Path)
     parser.add_argument("--fetch-textures", action="store_true")
     parser.add_argument("--texture-mode", choices=("embedded-if-available", "flat"), default="embedded-if-available")
+    parser.add_argument("--world-frame", type=Path,
+                        help="Shared city world-frame.json; uses its common altitude offset")
     args = parser.parse_args()
     try:
+        altitude_offset = None
+        if args.world_frame:
+            altitude_offset = load_world_frame(args.world_frame)["origin"]["altitude_offset_m"]
         receipt = build_glb(
             args.selection, args.out, args.receipt, args.download_manifest,
-            args.fetch_textures, args.texture_mode,
+            args.fetch_textures, args.texture_mode, altitude_offset,
         )
         print(f"[OK] GLB: {args.out} ({receipt['triangles']} triangles, {len(receipt['textures'])} textures)")
         return 0

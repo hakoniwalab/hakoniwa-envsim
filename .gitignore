@@ -9,6 +9,7 @@ __pycache__/
 *.gml
 !tests/fixtures/*.gml
 .hako/
+work/
 
 # Distribution / packaging
 .Python
