@@ -54,6 +54,15 @@ def load_gml2obb_module():
     return module
 
 
+def load_citygml2glb_module():
+    path = ROOT / "src" / "city_pipeline" / "citygml2glb.py"
+    spec = importlib.util.spec_from_file_location("citygml2glb", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_hako_module():
     path = ROOT / "tools" / "hako.py"
     spec = importlib.util.spec_from_file_location("envsim_hako", path)
@@ -73,6 +82,35 @@ def load_collider_glb_module():
 
 
 class PlateauCityGmlTest(unittest.TestCase):
+    def test_texture_resolver_populates_and_reuses_shared_source_cache(self):
+        module = load_citygml2glb_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            gml = root / "job" / "source" / "city.gml"
+            gml.parent.mkdir(parents=True)
+            gml.write_text("fixture", encoding="utf-8")
+            cached_gml = root / "cache" / "objects" / "source-key" / "city.gml"
+            cached_gml.parent.mkdir(parents=True)
+            cached_gml.write_text("fixture", encoding="utf-8")
+            sources = {gml.resolve(): {
+                "url": "https://assets.example/dataset/udx/bldg/city.gml",
+                "cache_path": str(cached_gml),
+            }}
+            resolver = module.TextureResolver(sources, fetch=True, enabled=True)
+            texture = resolver.resolve(gml, "city_appearance/wall.jpg")
+            self.assertFalse(texture.is_file())
+            with mock.patch("urllib.request.urlopen", return_value=io.BytesIO(b"jpeg-fixture")):
+                resolver.fetch_pending()
+            self.assertTrue(texture.is_file())
+            self.assertIn(root / "cache" / "objects" / "source-key" / "textures", texture.parents)
+            self.assertEqual(resolver.records[str(texture)]["mode"], "cache-populated")
+
+            reused = module.TextureResolver(sources, fetch=True, enabled=True)
+            with mock.patch("urllib.request.urlopen") as urlopen:
+                self.assertEqual(reused.resolve(gml, "city_appearance/wall.jpg"), texture)
+            urlopen.assert_not_called()
+            self.assertEqual(reused.records[str(texture)]["mode"], "cache-reused")
+
     def test_mjcf_collider_debug_glb_converts_box_mesh_and_hfield(self):
         converter = load_collider_glb_module()
         with tempfile.TemporaryDirectory() as temporary:

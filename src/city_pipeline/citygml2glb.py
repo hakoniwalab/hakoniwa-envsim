@@ -153,11 +153,12 @@ def triangulate_rings(rings: list[list[tuple[float, float, float]]]):
 
 
 class TextureResolver:
-    def __init__(self, source_urls: dict[Path, str], fetch: bool, enabled: bool):
-        self.source_urls = source_urls
+    def __init__(self, sources: dict[Path, dict], fetch: bool, enabled: bool):
+        self.sources = sources
         self.fetch = fetch
         self.enabled = enabled
         self.records = {}
+        self.pending = {}
 
     def resolve(self, gml_path: Path, image_uri: str) -> Path | None:
         if not self.enabled:
@@ -171,25 +172,29 @@ class TextureResolver:
             destination.relative_to(gml_path.parent.resolve())
         except ValueError as exc:
             raise GlbError(f"texture escapes its CityGML source directory: {image_uri}") from exc
-        base_url = self.source_urls.get(gml_path.resolve())
+        source = self.sources.get(gml_path.resolve(), {})
+        base_url = source.get("url")
         url = urllib.parse.urljoin(base_url, image_uri) if base_url else None
+        cache_source = source.get("cache_path")
+        if url and cache_source:
+            suffix = Path(parsed_ref.path).suffix.lower()
+            cache_key = hashlib.sha256(url.encode("utf-8")).hexdigest()
+            cached = Path(cache_source).parent / "textures" / f"{cache_key}{suffix}"
+            destination = cached
         reused = destination.is_file()
         if not reused:
             if not self.fetch:
                 return None
             if not url or urllib.parse.urlparse(url).scheme != "https":
                 raise GlbError(f"cannot resolve an HTTPS texture URL for {gml_path}: {image_uri}")
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            temporary = destination.with_suffix(destination.suffix + ".part")
-            request = urllib.request.Request(url, headers={"User-Agent": "hakoniwa-envsim/plateau-glb"})
-            try:
-                with urllib.request.urlopen(request, timeout=180) as response, temporary.open("wb") as output:
-                    while chunk := response.read(1024 * 1024):
-                        output.write(chunk)
-                os.replace(temporary, destination)
-            except Exception as exc:
-                temporary.unlink(missing_ok=True)
-                raise GlbError(f"PLATEAU texture download failed: {url}: {exc}") from exc
+            self.pending[str(destination)] = {
+                "destination": destination,
+                "source_gml": gml_path,
+                "image_uri": image_uri,
+                "url": url,
+                "shared_cache": bool(cache_source),
+            }
+            return destination
         key = str(destination)
         self.records[key] = {
             "path": key,
@@ -199,16 +204,79 @@ class TextureResolver:
             "bytes": destination.stat().st_size,
             "sha256": sha256_file(destination),
             "mime_type": mimetypes.guess_type(destination.name)[0] or "application/octet-stream",
-            "mode": "reused" if reused and self.fetch else "offline-reused" if reused else "downloaded",
+            "mode": (
+                "cache-reused" if cache_source and destination != (gml_path.parent / Path(*parts)).resolve()
+                else "reused" if reused and self.fetch else "offline-reused" if reused else "downloaded"
+            ),
         }
         return destination
 
+    def fetch_pending(self) -> None:
+        """Fetch the exact set of textures referenced by selected surfaces.
 
-def _source_urls(download_manifest: Path | None) -> dict[Path, str]:
+        Resolution is intentionally separated from download so the caller can
+        report an exact current/total count instead of an open-ended spinner.
+        """
+        reused_count = len(self.records)
+        total = reused_count + len(self.pending)
+        if not total:
+            print('[HAKO_PROGRESS] {"phase":"texture_download","current":0,"total":0}', flush=True)
+            return
+        print(
+            "[HAKO_PROGRESS] " + json.dumps({
+                "phase": "texture_download", "current": reused_count, "total": total,
+            }, separators=(",", ":")),
+            flush=True,
+        )
+        for downloaded_count, key in enumerate(sorted(self.pending), 1):
+            current = reused_count + downloaded_count
+            item = self.pending[key]
+            destination = item["destination"]
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            temporary = destination.with_suffix(destination.suffix + ".part")
+            request = urllib.request.Request(
+                item["url"], headers={"User-Agent": "hakoniwa-envsim/plateau-glb"}
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=180) as response, temporary.open("wb") as output:
+                    while chunk := response.read(1024 * 1024):
+                        output.write(chunk)
+                os.replace(temporary, destination)
+            except Exception as exc:
+                temporary.unlink(missing_ok=True)
+                raise GlbError(f"PLATEAU texture download failed: {item['url']}: {exc}") from exc
+            self.records[key] = {
+                "path": key,
+                "source_gml": str(item["source_gml"]),
+                "image_uri": item["image_uri"],
+                "url": item["url"],
+                "bytes": destination.stat().st_size,
+                "sha256": sha256_file(destination),
+                "mime_type": mimetypes.guess_type(destination.name)[0] or "application/octet-stream",
+                "mode": "cache-populated" if item["shared_cache"] else "downloaded",
+            }
+            if downloaded_count == 1 or current == total or downloaded_count % 25 == 0:
+                print(
+                    "[HAKO_PROGRESS] " + json.dumps({
+                        "phase": "texture_download", "current": current, "total": total,
+                    }, separators=(",", ":")),
+                    flush=True,
+                )
+        self.pending.clear()
+
+
+def _source_records(download_manifest: Path | None) -> dict[Path, dict]:
     if download_manifest is None or not download_manifest.is_file():
         return {}
     data = json.loads(download_manifest.read_text(encoding="utf-8"))
-    return {Path(item["path"]).resolve(): item["url"] for item in data.get("files", [])}
+    records = {}
+    for item in data.get("files", []):
+        cache = item.get("cache") or {}
+        records[Path(item["path"]).resolve()] = {
+            "url": item["url"],
+            "cache_path": cache.get("path"),
+        }
+    return records
 
 
 def _three_coordinates(points, center_lat, center_lon, z_offset):
@@ -276,7 +344,7 @@ def build_glb(
 ) -> dict:
     selected, selection_z_offset, center_lat, center_lon, extraction = _selection(selection_path)
     z_offset = selection_z_offset if altitude_offset_m is None else float(altitude_offset_m)
-    resolver = TextureResolver(_source_urls(download_manifest), fetch_textures, texture_mode != "flat")
+    resolver = TextureResolver(_source_records(download_manifest), fetch_textures, texture_mode != "flat")
     batches = defaultdict(lambda: {"vertices": [], "faces": [], "uv": []})
     lod1_buildings = lod2_buildings = textured_surfaces = flat_surfaces = 0
 
@@ -330,6 +398,8 @@ def build_glb(
                 for part in parts:
                     _append_lod1_part(batches, part, z_offset)
 
+    resolver.fetch_pending()
+    print('[HAKO_PROGRESS] {"phase":"building_glb","message":"building GLB export"}', flush=True)
     scene = trimesh.Scene()
     total_triangles = 0
     all_vertices = []

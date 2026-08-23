@@ -249,6 +249,15 @@ def _path(value: str) -> Path:
     return path.resolve() if path.is_absolute() else (ROOT / path).resolve()
 
 
+def _emit_progress(phase: str, **detail: Any) -> None:
+    print(
+        "[HAKO_PROGRESS] " + json.dumps(
+            {"phase": phase, **detail}, ensure_ascii=False, separators=(",", ":")
+        ),
+        flush=True,
+    )
+
+
 def load_config(manifest: Path) -> dict[str, Any]:
     if not manifest.is_file():
         raise ConfigError(f"build manifest not found: {manifest}")
@@ -256,6 +265,24 @@ def load_config(manifest: Path) -> dict[str, Any]:
 
 
 def _run(command: list[str]) -> None:
+    script_phases = {
+        "gml_lod1_extract.py": "geometry_extract",
+        "gml2obb.py": "building_collision",
+        "dem2hfield.py": "terrain",
+        "obb2mjcf.py": "building_mjcf",
+        "citygml2glb.py": "building_visual",
+        "road_terrain_probe.py": "roads",
+        "city_furniture2glb.py": "road_markings",
+        "bridge2glb.py": "bridges_visual",
+        "bridge2mjcf.py": "bridges_physics",
+        "city_world_composer.py": "compose",
+        "city_dataset_validator.py": "dataset_validation",
+    }
+    for argument in command:
+        phase = script_phases.get(Path(argument).name)
+        if phase is not None:
+            _emit_progress(phase)
+            break
     print("+", " ".join(command))
     subprocess.run(command, cwd=ROOT, check=True)
 
@@ -600,6 +627,10 @@ def build(manifest: Path, offline: bool = False) -> int:
         )
         for index, item in enumerate(selected, 1):
             item = {**item, "feature_type": feature_type}
+            _emit_progress(
+                "source_download", feature=feature_type,
+                current=index, total=len(selected),
+            )
             print(
                 f"INFO: {feature_type} CityGML {index}/{len(selected)} "
                 f"city={item['city_code']} year={item['year']} "
@@ -618,6 +649,10 @@ def build(manifest: Path, offline: bool = False) -> int:
                 "sha256": sha256_file(expected), "mode": "offline-reused"
             }
             downloaded.append(record)
+            _emit_progress(
+                "source_download", feature=feature_type,
+                current=index, total=len(selected), mode=record["mode"],
+            )
             print(
                 f"INFO: PLATEAU source mode={record['mode']} "
                 f"bytes={record['bytes']} sha256={record['sha256']}"
