@@ -187,8 +187,9 @@ P2/P3ではなく、次のいずれかへ該当した建物です。
 採用するPhysics:
 
 - 従来のLOD1 colliderを建物単位で除外
-- LOD2 `WallSurface`と`RoofSurface`を三角形分割
-- 各三角形を薄い凸prismとしてMuJoCo mesh geomへ変換
+- LOD2 `WallSurface`と`RoofSurface`を解析
+- 穴がなく、同一平面上で凸なsource polygonは、polygon全体を1個の薄い凸prismへ変換
+- 凹形状、穴あり、非平面polygonは、形状を変えず三角prismへフォールバック
 - `GroundSurface`はDEMと重複するため生成しない
 
 既知の注意:
@@ -209,15 +210,17 @@ P3ではなく、次のいずれかへ該当した建物です。
 
 採用するPhysics:
 
-- P1と同じくLOD2 `WallSurface`と`RoofSurface`を薄い凸prismへ変換
+- P1と同じくLOD2 `WallSurface`と`RoofSurface`を薄い凸prismへ変換する。
+  穴なし・平面・凸polygonは1 Colliderへ統合し、それ以外は三角prismを維持する
 - 全高を1つのLOD1 prismにしないため、setbackや階層ごとの輪郭を保持できる
-- 正解性優先のため、surfaceが細かい建物ではgeom数が大きくなる
+- source polygon自体が細かい、凹、穴あり、または非平面の建物ではgeom数が大きくなる
 
 既知の注意:
 
 - WallSurface数は高さ別断面を直接比較した値ではない。データ作成時のpolygon分割方法でも増える
 - `G > L`でP2になってもGroundSurface自体はDEMとの二重collisionを避けるため生成しない
-- 札幌実例は従来37 geomsから548 geomsへ増えた。軽量化は未実装
+- 札幌実例の従来値は37 geomsから548 geomsへ増えていた。現在は安全に統合できる
+  source polygonを1 Colliderへまとめ、削減率をReceiptへ記録する
 
 ### P3: 張り出し下面または高架床を保持する
 
@@ -258,6 +261,17 @@ P1〜P3では次の規則を共有します。
 - 面積が`1e-6 m²`未満、または`2*area/max_edge² < 1e-6`の三角形は数値的退化として除外する
 - 除外数はsurface種別ごとに`building-physics-application.json`へ記録する
 - source polygonにinterior ringがある場合、triangulationで穴を保持する
+- P1/P2では、同一source polygonが穴なし・平面・凸の場合だけ、そのpolygon全体を
+  1個のconvex prismにする。建物やsemantic surfaceを跨いだ統合はしない
+- 凹polygon、interior ring付きpolygon、非平面polygonは三角prismへフォールバックする。
+  convex hullで凹みや穴を埋める近似は行わない
+- P3は空洞・張り出し保持を優先し、現在は三角prismのままとする
+
+`building-physics-application.json`の`collider_optimization`には、クラスごとに
+`triangles_before`、`colliders_after`、`merged_group_count`、
+`rejected_concave_count`、`triangles_eliminated`、`reduction_ratio`、および
+フォールバック理由を記録します。`reduction_ratio=0.5`は、従来の三角prism数と
+比較してCollider数が50%減ったことを意味します。
 
 ## 7. 現在、判定・Physics化していないもの
 
@@ -271,7 +285,7 @@ P1〜P3では次の規則を共有します。
 - polygonの自己交差、surface間の隙間、watertight性の包括検証
 - sourceの法線向きが全surfaceで統一されていることの検証
 - 実際の経路探索による通行可能性の証明
-- 複数の隣接三角形をまとめるconvex decompositionまたはgeom数最適化
+- 複数のsource polygonを跨ぐconvex decompositionや、P3のgeom数最適化
 - P1の「複数だが実質同一平面の屋根」をP0へ戻す判定
 - P2の高さ別cross-sectionを直接比較する判定
 

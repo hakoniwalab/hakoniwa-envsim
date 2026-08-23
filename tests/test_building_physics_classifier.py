@@ -7,6 +7,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import numpy as np
+import trimesh
 
 
 SCRIPT = Path(__file__).parents[1] / "src" / "city_pipeline" / "building_physics_classifier.py"
@@ -170,8 +171,23 @@ class BuildingPhysicsClassifierTest(unittest.TestCase):
             self.assertEqual({piece["surface_kind"] for piece in pieces}, {
                 "WallSurface", "RoofSurface"
             })
-            # Four wall quads plus one roof quad, each triangulated into two pieces.
-            self.assertEqual(len(pieces), 10)
+            # Four planar wall quads become one prism each. The deliberately
+            # twisted roof remains two triangles rather than being flattened.
+            self.assertEqual(len(pieces), 6)
+            self.assertEqual(
+                prepared.collider_optimization["triangles_before"], 10
+            )
+            self.assertEqual(prepared.collider_optimization["colliders_after"], 6)
+            self.assertEqual(
+                prepared.collider_optimization["triangles_eliminated"], 4
+            )
+            self.assertAlmostEqual(
+                prepared.collider_optimization["reduction_ratio"], 0.4
+            )
+            self.assertEqual(
+                prepared.collider_optimization["fallback_polygon_counts"],
+                {"non_planar": 1},
+            )
             source_max_z = max(
                 vertex[2] for piece in pieces for vertex in piece["source_vertices"]
             )
@@ -179,12 +195,16 @@ class BuildingPhysicsClassifierTest(unittest.TestCase):
             self.assertLess(source_max_z, 15.0)  # LOD1 zmax-offset must not leak into P1.
             wall = next(piece for piece in pieces if piece["surface_kind"] == "WallSurface")
             wall_vertices = wall["vertices"]
-            offset = wall_vertices[0] - wall_vertices[3]
+            offset = wall_vertices[0] - wall_vertices[len(wall["source_vertices"])]
             self.assertAlmostEqual(float(np.linalg.norm(offset)), 0.02, places=6)
             edge_a = wall_vertices[1] - wall_vertices[0]
             edge_b = wall_vertices[2] - wall_vertices[0]
             self.assertAlmostEqual(float(np.dot(offset, edge_a)), 0.0, places=6)
             self.assertAlmostEqual(float(np.dot(offset, edge_b)), 0.0, places=6)
+            wall_mesh = trimesh.Trimesh(
+                vertices=wall["vertices"], faces=wall["faces"], process=False
+            )
+            self.assertTrue(wall_mesh.is_watertight)
 
             classification.write_text(json.dumps({
                 "buildings": [{"building_id": "p1-building", "class": "P2"}]
@@ -193,7 +213,7 @@ class BuildingPhysicsClassifierTest(unittest.TestCase):
                 selection, classification, frame, roof_thickness_m=0.02
             )
             p2_pieces = p2_geometry.pieces
-            self.assertEqual(len(p2_pieces), 10)
+            self.assertEqual(len(p2_pieces), 6)
             self.assertTrue(all(piece["id"].startswith("p2_surface_") for piece in p2_pieces))
 
             classification.write_text(json.dumps({
@@ -207,6 +227,29 @@ class BuildingPhysicsClassifierTest(unittest.TestCase):
                 {piece["surface_kind"] for piece in p3_geometry.pieces},
                 {"WallSurface", "RoofSurface", "OuterCeilingSurface"},
             )
+            self.assertEqual(
+                p3_geometry.collider_optimization["fallback_polygon_counts"],
+                {"class_not_enabled": 6},
+            )
+
+    def test_convex_planar_ring_rejects_concavity_and_non_planarity(self):
+        convex, reason = LOD2_MODULE._convex_planar_ring([
+            (0, 0, 2), (2, 0, 2), (2, 1, 2), (0, 1, 2),
+        ])
+        self.assertIsNone(reason)
+        self.assertEqual(convex.shape, (4, 3))
+
+        merged, reason = LOD2_MODULE._convex_planar_ring([
+            (0, 0, 2), (2, 0, 2), (1, 0.5, 2), (2, 1, 2), (0, 1, 2),
+        ])
+        self.assertIsNone(merged)
+        self.assertEqual(reason, "concave")
+
+        merged, reason = LOD2_MODULE._convex_planar_ring([
+            (0, 0, 2), (2, 0, 2), (2, 1, 2.1), (0, 1, 2),
+        ])
+        self.assertIsNone(merged)
+        self.assertEqual(reason, "non_planar")
 
     def test_p2_application_receipt_records_source_replacement(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -227,6 +270,12 @@ class BuildingPhysicsClassifierTest(unittest.TestCase):
                 output,
                 root / "application.json",
                 p2_surface_piece_count=1,
+                p2_collider_optimization={
+                    "triangles_before": 2,
+                    "colliders_after": 1,
+                    "triangles_eliminated": 1,
+                    "reduction_ratio": 0.5,
+                },
             )
             self.assertEqual(receipt["class_status"]["P2"], "applied")
             self.assertTrue(receipt["physics_modified_by_classification"])
@@ -234,6 +283,9 @@ class BuildingPhysicsClassifierTest(unittest.TestCase):
             self.assertEqual(
                 receipt["buildings"][0]["actual_strategy"],
                 "lod2-height-profile-surface-prisms",
+            )
+            self.assertEqual(
+                receipt["collider_optimization"]["P2"]["reduction_ratio"], 0.5
             )
 
     def test_p3_application_receipt_records_void_preserving_strategy(self):

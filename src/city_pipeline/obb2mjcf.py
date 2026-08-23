@@ -89,6 +89,9 @@ def write_physics_application_receipt(
     p1_skipped_degenerate=None,
     p2_skipped_degenerate=None,
     p3_skipped_degenerate=None,
+    p1_collider_optimization=None,
+    p2_collider_optimization=None,
+    p3_collider_optimization=None,
     max_physics_level=3,
 ):
     """Prove which classified buildings are represented by the current MJCF."""
@@ -187,6 +190,15 @@ def write_physics_application_receipt(
             "total": sum(collider_geom_counts.values()),
             "by_class": collider_geom_counts,
         },
+        "collider_optimization": {
+            class_id: optimization
+            for class_id, optimization in (
+                ("P1", p1_collider_optimization),
+                ("P2", p2_collider_optimization),
+                ("P3", p3_collider_optimization),
+            )
+            if optimization is not None
+        },
         "buildings": records,
         "derived_geometry": [
             {
@@ -207,8 +219,10 @@ def write_physics_application_receipt(
                     } if class_id == "P3" else {}),
                 },
                 "purpose": (
-                    "make each selected source semantic-surface triangle a "
-                    "watertight convex collision mesh"
+                    "make each selected source semantic surface a watertight "
+                    "convex collision mesh; P1/P2 merge a hole-free planar "
+                    "convex source polygon into one prism and otherwise retain "
+                    "triangular prisms"
                 ),
             }
             for class_id, piece_count in (
@@ -219,7 +233,7 @@ def write_physics_application_receipt(
             if piece_count
         ],
         "limitations": [
-            "P2/P3 prioritize source-shape fidelity; collider-count optimization is pending",
+            "P3 and non-convex or holed P1/P2 polygons retain per-triangle colliders",
             "interior building partitions and structural solids are outside the collision scope",
         ],
     }
@@ -460,6 +474,9 @@ def main():
     p1_skipped_degenerate = {}
     p2_skipped_degenerate = {}
     p3_skipped_degenerate = {}
+    p1_collider_optimization = None
+    p2_collider_optimization = None
+    p3_collider_optimization = None
     if args.classification:
         class_data = json.loads(args.classification.read_text(encoding="utf-8"))
         if int(class_data.get("max_level", 3)) != args.max_physics_level:
@@ -494,25 +511,33 @@ def main():
         if class_ids["P1"]:
             p1_surface_pieces = prepared["P1"].pieces
             p1_skipped_degenerate = prepared["P1"].skipped_degenerate_by_surface
+            p1_collider_optimization = prepared["P1"].collider_optimization
             print(
                 f"[INFO] P1 class collider: buildings={len(class_ids['P1'])} "
                 f"surface_pieces={len(p1_surface_pieces)} "
+                f"source_triangles={p1_collider_optimization['triangles_before']} "
+                f"reduction={p1_collider_optimization['reduction_ratio']:.1%} "
                 f"skipped_degenerate={sum(p1_skipped_degenerate.values())}"
             )
         if class_ids["P2"]:
             p2_surface_pieces = prepared["P2"].pieces
             p2_skipped_degenerate = prepared["P2"].skipped_degenerate_by_surface
+            p2_collider_optimization = prepared["P2"].collider_optimization
             print(
                 f"[INFO] P2 class collider: buildings={len(class_ids['P2'])} "
                 f"surface_pieces={len(p2_surface_pieces)} "
+                f"source_triangles={p2_collider_optimization['triangles_before']} "
+                f"reduction={p2_collider_optimization['reduction_ratio']:.1%} "
                 f"skipped_degenerate={sum(p2_skipped_degenerate.values())}"
             )
         if class_ids["P3"]:
             p3_surface_pieces = prepared["P3"].pieces
             p3_skipped_degenerate = prepared["P3"].skipped_degenerate_by_surface
+            p3_collider_optimization = prepared["P3"].collider_optimization
             print(
                 f"[INFO] P3 class collider: buildings={len(class_ids['P3'])} "
                 f"surface_pieces={len(p3_surface_pieces)} "
+                f"source_triangles={p3_collider_optimization['triangles_before']} "
                 f"skipped_degenerate={sum(p3_skipped_degenerate.values())}"
             )
 
@@ -621,6 +646,9 @@ def main():
             p1_skipped_degenerate=p1_skipped_degenerate,
             p2_skipped_degenerate=p2_skipped_degenerate,
             p3_skipped_degenerate=p3_skipped_degenerate,
+            p1_collider_optimization=p1_collider_optimization,
+            p2_collider_optimization=p2_collider_optimization,
+            p3_collider_optimization=p3_collider_optimization,
             max_physics_level=args.max_physics_level,
         )
         print(

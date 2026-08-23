@@ -19,7 +19,12 @@ import numpy as np
 
 from citygml2glb import GML_ID, NS, _polygon_rings, triangulate_rings
 from geodesy import project_epsg6697_to_local_enu
-from mjcf_prism import triangular_prism, triangular_prism_along_normal
+from mjcf_prism import (
+    polygon_prism,
+    polygon_prism_along_normal,
+    triangular_prism,
+    triangular_prism_along_normal,
+)
 from gml_lod1_extract import validate_epsg6697_contract
 from world_frame import load_world_frame
 
@@ -27,6 +32,8 @@ B = "{http://www.opengis.net/citygml/building/2.0}"
 GML_POLYGON = "{http://www.opengis.net/gml}Polygon"
 MIN_TRIANGLE_AREA_M2 = 1e-6
 MIN_TRIANGLE_SHAPE_RATIO = 1e-6
+PLANAR_ABSOLUTE_TOLERANCE_M = 1e-5
+PLANAR_RELATIVE_TOLERANCE = 1e-8
 CLASS_SURFACE_KINDS = {
     "P1": ("WallSurface", "RoofSurface"),
     "P2": ("WallSurface", "RoofSurface"),
@@ -41,6 +48,77 @@ class BuildingLod2ColliderError(RuntimeError):
 class PreparedSurfaceGeometry(NamedTuple):
     pieces: list[dict]
     skipped_degenerate_by_surface: dict[str, int]
+    collider_optimization: dict
+
+
+def _convex_planar_ring(points):
+    """Return a cleaned convex planar ring, or a reason it must stay triangulated."""
+    values = np.asarray(points, dtype=float)
+    if values.ndim != 2 or values.shape[1] != 3 or len(values) < 3:
+        return None, "invalid_ring"
+    cleaned = []
+    for point in values:
+        if not cleaned or float(np.linalg.norm(point - cleaned[-1])) > 1e-9:
+            cleaned.append(point)
+    if len(cleaned) > 2 and float(np.linalg.norm(cleaned[0] - cleaned[-1])) <= 1e-9:
+        cleaned.pop()
+    if len(cleaned) < 3:
+        return None, "degenerate_ring"
+    values = np.asarray(cleaned, dtype=float)
+
+    normal = np.zeros(3, dtype=float)
+    for index, current in enumerate(values):
+        normal += np.cross(current, values[(index + 1) % len(values)])
+    normal_length = float(np.linalg.norm(normal))
+    if normal_length <= 1e-12:
+        return None, "degenerate_ring"
+    unit_normal = normal / normal_length
+    scale = max(float(np.ptp(values, axis=0).max()), 1.0)
+    tolerance = max(PLANAR_ABSOLUTE_TOLERANCE_M, scale * PLANAR_RELATIVE_TOLERANCE)
+    distances = np.abs((values - values[0]) @ unit_normal)
+    if float(distances.max()) > tolerance:
+        return None, "non_planar"
+
+    drop_axis = int(np.argmax(np.abs(unit_normal)))
+    projected = np.delete(values, drop_axis, axis=1)
+
+    def cross_2d(first, second):
+        return float(first[0] * second[1] - first[1] * second[0])
+
+    changed = True
+    while changed and len(projected) > 3:
+        changed = False
+        keep = []
+        for index in range(len(projected)):
+            previous = projected[index - 1]
+            current = projected[index]
+            following = projected[(index + 1) % len(projected)]
+            cross = cross_2d(current - previous, following - current)
+            edge_scale = max(
+                float(np.linalg.norm(current - previous)),
+                float(np.linalg.norm(following - current)),
+                1.0,
+            )
+            if abs(cross) <= 1e-10 * edge_scale * edge_scale:
+                changed = True
+            else:
+                keep.append(index)
+        if len(keep) < 3:
+            return None, "degenerate_ring"
+        values = values[keep]
+        projected = projected[keep]
+
+    turns = []
+    for index in range(len(projected)):
+        previous = projected[index - 1]
+        current = projected[index]
+        following = projected[(index + 1) % len(projected)]
+        turns.append(cross_2d(current - previous, following - current))
+    positive = any(value > 0 for value in turns)
+    negative = any(value < 0 for value in turns)
+    if positive and negative:
+        return None, "concave"
+    return values, None
 
 
 def _selected_class(selection_path: Path, classification_path: Path, class_id: str):
@@ -105,6 +183,18 @@ def _surface_pieces_for_classes(
     pieces = {class_id: [] for class_id in class_ids}
     counters = {class_id: CounterLike() for class_id in class_ids}
     skipped = {class_id: defaultdict(int) for class_id in class_ids}
+    optimization = {
+        class_id: {
+            "triangles_before": 0,
+            "colliders_after": 0,
+            "convex_polygon_collider_count": 0,
+            "triangular_fallback_collider_count": 0,
+            "merged_group_count": 0,
+            "triangles_eliminated": 0,
+            "fallback_polygon_counts": defaultdict(int),
+        }
+        for class_id in class_ids
+    }
     ordered_sources = sorted(by_source.items(), key=lambda item: str(item[0]))
     for source_index, (source, classes) in enumerate(ordered_sources, start=1):
         root = ET.parse(source).getroot()
@@ -140,6 +230,7 @@ def _surface_pieces_for_classes(
                                     for east, north, altitude in enu
                                 ])
                             vertices, faces = triangulate_rings(rings)
+                            valid_triangles = []
                             for face in faces:
                                 triangle = np.asarray(vertices[face], dtype=float)
                                 edges = [
@@ -162,10 +253,61 @@ def _surface_pieces_for_classes(
                                 ):
                                     skipped[class_id][surface_kind] += 1
                                     continue
+                                valid_triangles.append(triangle)
+
+                            stats = optimization[class_id]
+                            stats["triangles_before"] += len(valid_triangles)
+                            merged_ring = None
+                            fallback_reason = None
+                            if class_id in {"P1", "P2"}:
+                                if len(rings) == 1:
+                                    merged_ring, fallback_reason = _convex_planar_ring(
+                                        rings[0]
+                                    )
+                                else:
+                                    fallback_reason = "interior_ring"
+                            else:
+                                fallback_reason = "class_not_enabled"
+
+                            if merged_ring is not None and valid_triangles:
+                                prism, prism_faces = (
+                                    polygon_prism(merged_ring, thickness_m)
+                                    if surface_kind == "RoofSurface"
+                                    else polygon_prism_along_normal(
+                                        merged_ring, thickness_m
+                                    )
+                                )
+                                piece_index = counters[class_id].next(building_id)
+                                pieces[class_id].append({
+                                    "id": (
+                                        f"{class_id.lower()}_surface_{building_id}_"
+                                        f"piece_{piece_index:04d}"
+                                    ),
+                                    "building_id": building_id,
+                                    "surface_kind": surface_kind,
+                                    "source_polygon_id": str(polygon_key),
+                                    "source_vertices": merged_ring.tolist(),
+                                    "vertices": prism,
+                                    "faces": prism_faces,
+                                })
+                                stats["colliders_after"] += 1
+                                stats["convex_polygon_collider_count"] += 1
+                                if len(valid_triangles) > 1:
+                                    stats["merged_group_count"] += 1
+                                    stats["triangles_eliminated"] += (
+                                        len(valid_triangles) - 1
+                                    )
+                                continue
+
+                            if fallback_reason:
+                                stats["fallback_polygon_counts"][fallback_reason] += 1
+                            for triangle in valid_triangles:
                                 prism, prism_faces = (
                                     triangular_prism(triangle, thickness_m)
                                     if surface_kind == "RoofSurface"
-                                    else triangular_prism_along_normal(triangle, thickness_m)
+                                    else triangular_prism_along_normal(
+                                        triangle, thickness_m
+                                    )
                                 )
                                 piece_index = counters[class_id].next(building_id)
                                 pieces[class_id].append({
@@ -180,6 +322,8 @@ def _surface_pieces_for_classes(
                                     "vertices": prism,
                                     "faces": prism_faces,
                                 })
+                                stats["colliders_after"] += 1
+                                stats["triangular_fallback_collider_count"] += 1
                 if counters[class_id].value(building_id) == 0:
                     raise BuildingLod2ColliderError(
                         f"{class_id} building has no usable source collision surfaces: "
@@ -197,6 +341,26 @@ def _surface_pieces_for_classes(
         class_id: PreparedSurfaceGeometry(
             pieces=pieces[class_id],
             skipped_degenerate_by_surface=dict(sorted(skipped[class_id].items())),
+            collider_optimization={
+                **{
+                    key: value
+                    for key, value in optimization[class_id].items()
+                    if key != "fallback_polygon_counts"
+                },
+                "fallback_polygon_counts": dict(sorted(
+                    optimization[class_id]["fallback_polygon_counts"].items()
+                )),
+                "rejected_concave_count": optimization[class_id][
+                    "fallback_polygon_counts"
+                ].get("concave", 0),
+                "reduction_ratio": (
+                    1.0 - (
+                        optimization[class_id]["colliders_after"]
+                        / optimization[class_id]["triangles_before"]
+                    )
+                    if optimization[class_id]["triangles_before"] else 0.0
+                ),
+            },
         )
         for class_id in class_ids
     }
