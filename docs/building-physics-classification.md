@@ -66,11 +66,11 @@ PLATEAU建物をすべてLOD2 mesh collisionへ変換すると、MuJoCoのgeom�
 | mesh | 頂点と三角形面から構成する形状 |
 | triangulation | polygonを複数の三角形へ分割する処理 |
 | convex / 凸 | 任意の2点を結ぶ線分が形状内部から出ない形。MuJoCoで安全に扱いやすい |
-| prism / 柱体 | 2次元の面へ厚みを付けた立体。この実装では三角形へ薄い厚みを付ける |
+| prism / 柱体 | 2次元の面へ厚みを付けた立体。この実装では安全な凸polygon、またはその三角分割へ薄い厚みを付ける |
 | OBB | Oriented Bounding Box。建物を向き付き直方体1個で近似する軽量表現 |
 | wall mode | OBBで空白を埋めすぎる場合、LOD1底面外周の各辺を薄いbox wallへ変換する方式 |
 | source normal | 元polygonの頂点順から計算する面の垂直方向。壁や下面へ数値的な厚みを付ける方向に使う |
-| watertight | 面の継ぎ目に穴がなく、閉じた立体になっている状態。現在は各三角prism単位では閉じるが、建物shell全体のwatertight性は保証しない |
+| watertight | 面の継ぎ目に穴がなく、閉じた立体になっている状態。現在は各prism単位では閉じるが、建物shell全体のwatertight性は保証しない |
 | heuristic / ヒューリスティック | 完全な幾何証明ではなく、surface数などから実用的に推定する判定規則 |
 | Receipt | 入力、判定理由、生成数、除外数などをJSONで残す監査記録 |
 
@@ -256,16 +256,17 @@ P1〜P3では次の規則を共有します。
 - CRSはEPSG:6697を必須とし、query中心のlocal ENUからMJCF
   `X=North, Y=-East, Z=Up`へ変換する
 - RoofSurfaceはworld Zの負方向へ厚みを付ける
-- Wall/OuterCeiling/OuterFloorはsource三角形の法線方向へ厚みを付ける
+- Wall/OuterCeiling/OuterFloorはsource polygonまたはfallback三角形の法線方向へ厚みを付ける
 - 現在の厚みは0.02m。歴史的なCLI名`--roof-thickness`が全semantic surfaceの厚みを兼ねる
 - 面積が`1e-6 m²`未満、または`2*area/max_edge² < 1e-6`の三角形は数値的退化として除外する
 - 除外数はsurface種別ごとに`building-physics-application.json`へ記録する
 - source polygonにinterior ringがある場合、triangulationで穴を保持する
-- P1/P2では、同一source polygonが穴なし・平面・凸の場合だけ、そのpolygon全体を
+- P1/P2/P3では、同一source polygonが穴なし・平面・凸の場合だけ、そのpolygon全体を
   1個のconvex prismにする。建物やsemantic surfaceを跨いだ統合はしない
 - 凹polygon、interior ring付きpolygon、非平面polygonは三角prismへフォールバックする。
   convex hullで凹みや穴を埋める近似は行わない
-- P3は空洞・張り出し保持を優先し、現在は三角prismのままとする
+- P3も各source polygon内だけで統合するため、OuterCeiling/OuterFloorが表す
+  空洞・張り出しをsurface間の統合で塞がない
 
 `building-physics-application.json`の`collider_optimization`には、クラスごとに
 `triangles_before`、`colliders_after`、`merged_group_count`、
@@ -285,7 +286,7 @@ P1〜P3では次の規則を共有します。
 - polygonの自己交差、surface間の隙間、watertight性の包括検証
 - sourceの法線向きが全surfaceで統一されていることの検証
 - 実際の経路探索による通行可能性の証明
-- 複数のsource polygonを跨ぐconvex decompositionや、P3のgeom数最適化
+- 複数のsource polygonを跨ぐconvex decomposition
 - P1の「複数だが実質同一平面の屋根」をP0へ戻す判定
 - P2の高さ別cross-sectionを直接比較する判定
 

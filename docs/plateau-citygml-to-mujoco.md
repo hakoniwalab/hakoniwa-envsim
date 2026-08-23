@@ -101,7 +101,7 @@ City World buildは、建物をP0〜P3へ分類し、classに対応するcollisi
 [`building-physics-classification.md`](building-physics-classification.md)を正本とします。
 本書では重複して定義しません。
 
-P1/P2のLOD2 surfaceは、穴なし・同一平面・凸のsource polygonに限り、polygon単位の
+P1/P2/P3のLOD2 surfaceは、穴なし・同一平面・凸のsource polygonに限り、polygon単位の
 convex prismへ統合します。凹形状、穴あり、非平面polygonは三角prismのまま残し、
 存在しないcollision領域を作りません。統合前後の個数と削減率は
 `building-physics-application.json`の`collider_optimization`で確認できます。

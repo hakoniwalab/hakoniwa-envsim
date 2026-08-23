@@ -220,7 +220,7 @@ def write_physics_application_receipt(
                 },
                 "purpose": (
                     "make each selected source semantic surface a watertight "
-                    "convex collision mesh; P1/P2 merge a hole-free planar "
+                    "convex collision mesh; P1/P2/P3 merge a hole-free planar "
                     "convex source polygon into one prism and otherwise retain "
                     "triangular prisms"
                 ),
@@ -233,7 +233,7 @@ def write_physics_application_receipt(
             if piece_count
         ],
         "limitations": [
-            "P3 and non-convex or holed P1/P2 polygons retain per-triangle colliders",
+            "non-convex, holed, or non-planar source polygons retain per-triangle colliders",
             "interior building partitions and structural solids are outside the collision scope",
         ],
     }

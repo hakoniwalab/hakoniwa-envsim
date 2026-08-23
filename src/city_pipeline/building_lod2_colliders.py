@@ -1,8 +1,8 @@
 """Class-specific LOD2 building collider helpers.
 
 P1 and P2 replace a legacy LOD1 approximation with thin convex prisms derived
-from source LOD2 WallSurface and RoofSurface triangles. P3 includes the same
-outer profile plus source OuterCeilingSurface and OuterFloorSurface triangles
+from source LOD2 WallSurface and RoofSurface polygons. P3 includes the same
+outer profile plus source OuterCeilingSurface and OuterFloorSurface polygons
 so that overhang undersides are represented without filling the space below.
 GroundSurface is omitted because the city terrain owns the floor.
 """
@@ -259,15 +259,12 @@ def _surface_pieces_for_classes(
                             stats["triangles_before"] += len(valid_triangles)
                             merged_ring = None
                             fallback_reason = None
-                            if class_id in {"P1", "P2"}:
-                                if len(rings) == 1:
-                                    merged_ring, fallback_reason = _convex_planar_ring(
-                                        rings[0]
-                                    )
-                                else:
-                                    fallback_reason = "interior_ring"
+                            if len(rings) == 1:
+                                merged_ring, fallback_reason = _convex_planar_ring(
+                                    rings[0]
+                                )
                             else:
-                                fallback_reason = "class_not_enabled"
+                                fallback_reason = "interior_ring"
 
                             if merged_ring is not None and valid_triangles:
                                 prism, prism_faces = (

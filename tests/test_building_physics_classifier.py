@@ -222,14 +222,43 @@ class BuildingPhysicsClassifierTest(unittest.TestCase):
             p3_geometry = LOD2_MODULE.prepare_p3_geometry(
                 selection, classification, frame, roof_thickness_m=0.02
             )
-            self.assertEqual(len(p3_geometry.pieces), 12)
+            self.assertEqual(len(p3_geometry.pieces), 7)
             self.assertEqual(
                 {piece["surface_kind"] for piece in p3_geometry.pieces},
                 {"WallSurface", "RoofSurface", "OuterCeilingSurface"},
             )
+            outer_ceilings = [
+                piece for piece in p3_geometry.pieces
+                if piece["surface_kind"] == "OuterCeilingSurface"
+            ]
+            self.assertEqual(len(outer_ceilings), 1)
+            self.assertEqual(len(outer_ceilings[0]["source_vertices"]), 4)
+            underside_z = {
+                round(float(vertex[2]), 6)
+                for vertex in outer_ceilings[0]["source_vertices"]
+            }
+            self.assertEqual(len(underside_z), 1)
+            underside_mesh = trimesh.Trimesh(
+                vertices=outer_ceilings[0]["vertices"],
+                faces=outer_ceilings[0]["faces"],
+                process=False,
+            )
+            self.assertTrue(underside_mesh.is_watertight)
             self.assertEqual(
                 p3_geometry.collider_optimization["fallback_polygon_counts"],
-                {"class_not_enabled": 6},
+                {"non_planar": 1},
+            )
+            self.assertEqual(
+                p3_geometry.collider_optimization["triangles_before"], 12
+            )
+            self.assertEqual(
+                p3_geometry.collider_optimization["colliders_after"], 7
+            )
+            self.assertEqual(
+                p3_geometry.collider_optimization["merged_group_count"], 5
+            )
+            self.assertAlmostEqual(
+                p3_geometry.collider_optimization["reduction_ratio"], 5 / 12
             )
 
     def test_convex_planar_ring_rejects_concavity_and_non_planarity(self):
