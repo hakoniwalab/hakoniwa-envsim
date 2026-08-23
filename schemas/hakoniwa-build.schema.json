@@ -82,7 +82,8 @@
         "model_name": {"type": "string", "minLength": 1},
         "collision": {"enum": ["all", "drone", "none"]},
         "floor": {"type": "boolean"},
-        "building_physics_level": {"type": "integer", "minimum": 0, "maximum": 3, "default": 3}
+        "building_physics_level": {"type": "integer", "minimum": 0, "maximum": 3, "default": 3},
+        "building_collider_reduction": {"enum": ["safe", "coplanar-union", "convex-decompose"], "default": "safe"}
       }
     },
     "glb": {

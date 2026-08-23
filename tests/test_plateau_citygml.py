@@ -197,6 +197,16 @@ class PlateauCityGmlTest(unittest.TestCase):
             self.assertEqual(receipt["triangle_count"], 15)
             self.assertTrue(receipt_path.is_file())
 
+    def test_mjcf_collider_debug_glb_honors_xyaxes(self):
+        converter = load_collider_glb_module()
+        transform = converter._element_transform(ET.fromstring(
+            '<geom pos="1 2 3" xyaxes="0 1 0 -1 0 0"/>'
+        ))
+        self.assertEqual(list(transform[:3, 3]), [1.0, 2.0, 3.0])
+        self.assertEqual(list(transform[:3, 0]), [0.0, 1.0, 0.0])
+        self.assertEqual(list(transform[:3, 1]), [-1.0, 0.0, 0.0])
+        self.assertEqual(list(transform[:3, 2]), [0.0, -0.0, 1.0])
+
     def test_shared_download_cache_reuses_verified_object_across_build_roots(self):
         payload = b"cached-citygml"
         item = {

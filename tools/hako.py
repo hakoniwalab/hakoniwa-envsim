@@ -60,6 +60,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "mjcf": {
         "model_name": "plateau_city", "collision": "all", "floor": False,
         "building_physics_level": 3,
+        "building_collider_reduction": "safe",
     },
     "glb": {
         "enabled": True,
@@ -225,6 +226,13 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
     physics_level = cfg["mjcf"]["building_physics_level"]
     if isinstance(physics_level, bool) or not isinstance(physics_level, int) or not 0 <= physics_level <= 3:
         raise ConfigError("mjcf.building_physics_level must be an integer in [0, 3]")
+    if cfg["mjcf"]["building_collider_reduction"] not in {
+        "safe", "coplanar-union", "convex-decompose"
+    }:
+        raise ConfigError(
+            "mjcf.building_collider_reduction must be safe, coplanar-union, "
+            "or convex-decompose"
+        )
     if not isinstance(cfg["glb"]["enabled"], bool):
         raise ConfigError("glb.enabled must be true or false")
     if cfg["glb"]["lod_policy"] != "highest_available":
@@ -541,6 +549,8 @@ def _convert(
             "--classification", str(building_physics_classification),
             "--application-receipt", str(building_physics_application),
             "--max-physics-level", str(cfg["mjcf"]["building_physics_level"]),
+            "--building-collider-reduction",
+            cfg["mjcf"]["building_collider_reduction"],
         ]
         if cfg["mjcf"]["floor"]:
             buildings_mjcf_command.append("--floor")

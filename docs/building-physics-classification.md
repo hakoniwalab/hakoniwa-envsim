@@ -268,11 +268,31 @@ P1〜P3では次の規則を共有します。
 - P3も各source polygon内だけで統合するため、OuterCeiling/OuterFloorが表す
   空洞・張り出しをsurface間の統合で塞がない
 
+`mjcf.building_collider_reduction`は次の3モードです。
+
+| mode | 統合範囲 |
+|---|---|
+| `safe` | 上記のとおり、同一source polygon内だけ |
+| `coplanar-union` | すでに凸なsource polygon Colliderについて、同一建物・surface種別・向き・平面の隣接面も統合 |
+| `convex-decompose` | `coplanar-union`に加え、凹・穴ありsource polygonの三角Colliderを同一source polygon内で少数の凸領域へ再構成 |
+
+後二者も、隣接する2形状の幾何学的和集合が単一の穴なし凸polygonになる組だけを段階的に
+置換します。凸包、頂点snap、隙間補間は使いません。したがって空白領域を新たなcollisionで
+埋めません。`convex-decompose`は決定的なgreedy統合であり、数学的な最小分割は保証しません。
+
+生成した凸prismのうち、元面が厳密な長方形で、全頂点の厚み方向が一致し、厚みが面へ直交する
+ものはMuJoCo `geom type="box"`として書き出します。傾斜面をworld-Z方向へ厚くしたsheared prism、
+長方形でない凸polygon、数値条件を満たさないものはmeshを維持します。これにより形状を変えず、
+MuJoCoのprimitive collisionを利用します。クラス別box/mesh数は
+`building-physics-application.json`の`collider_geom_types.by_class`へ記録します。
+
 `building-physics-application.json`の`collider_optimization`には、クラスごとに
 `triangles_before`、`colliders_after`、`merged_group_count`、
 `rejected_concave_count`、`triangles_eliminated`、`reduction_ratio`、および
 フォールバック理由を記録します。`reduction_ratio=0.5`は、従来の三角prism数と
 比較してCollider数が50%減ったことを意味します。
+削減モードではさらに`reduction_mode`、`colliders_before_reduction`、`convex_merge_count`、
+`convex_merge_colliders_eliminated`、拒否理由数を記録します。
 
 ## 7. 現在、判定・Physics化していないもの
 
@@ -286,7 +306,7 @@ P1〜P3では次の規則を共有します。
 - polygonの自己交差、surface間の隙間、watertight性の包括検証
 - sourceの法線向きが全surfaceで統一されていることの検証
 - 実際の経路探索による通行可能性の証明
-- 複数のsource polygonを跨ぐconvex decomposition
+- 凹形状を複数の凸形状へ再分割するconvex decomposition
 - P1の「複数だが実質同一平面の屋根」をP0へ戻す判定
 - P2の高さ別cross-sectionを直接比較する判定
 

@@ -35,6 +35,7 @@ mjcf:
   collision: all
   floor: false
   building_physics_level: 3
+  building_collider_reduction: safe
 
 glb:
   enabled: true

@@ -89,5 +89,51 @@ def triangular_prism_along_normal(vertices: np.ndarray, thickness_m: float):
     return np.vstack((surface, surface - offset)), PRISM_FACES.copy()
 
 
+def prism_as_box(surface_vertices, prism_vertices):
+    """Return an exact oriented-box description for a rectangular prism.
+
+    The test is intentionally strict: the source face must be a rectangle and
+    every extrusion vector must be equal and perpendicular to both face axes.
+    A skewed roof prism therefore remains a mesh.
+    """
+    surface = np.asarray(surface_vertices, dtype=float)
+    prism = np.asarray(prism_vertices, dtype=float)
+    if surface.shape != (4, 3) or prism.shape != (8, 3):
+        return None
+    scale = max(float(np.ptp(prism, axis=0).max()), 1.0)
+    tolerance = max(1e-6, scale * 1e-8)
+    bottom = prism[4:]
+    if not np.allclose(prism[:4], surface, atol=tolerance, rtol=0):
+        return None
+    extrusion = bottom - surface
+    if not np.allclose(extrusion, extrusion[0], atol=tolerance, rtol=0):
+        return None
+    edge_x = surface[1] - surface[0]
+    edge_y = surface[2] - surface[1]
+    opposite_x = surface[3] - surface[2]
+    opposite_y = surface[0] - surface[3]
+    length_x = float(np.linalg.norm(edge_x))
+    length_y = float(np.linalg.norm(edge_y))
+    thickness = float(np.linalg.norm(extrusion[0]))
+    if min(length_x, length_y, thickness) <= tolerance:
+        return None
+    if not np.allclose(edge_x, -opposite_x, atol=tolerance, rtol=0):
+        return None
+    if not np.allclose(edge_y, -opposite_y, atol=tolerance, rtol=0):
+        return None
+    orthogonal_tolerance = 1e-7
+    if abs(float(edge_x @ edge_y)) > orthogonal_tolerance * length_x * length_y:
+        return None
+    if abs(float(edge_x @ extrusion[0])) > orthogonal_tolerance * length_x * thickness:
+        return None
+    if abs(float(edge_y @ extrusion[0])) > orthogonal_tolerance * length_y * thickness:
+        return None
+    return {
+        "pos": prism.mean(axis=0),
+        "size": np.asarray((length_x / 2, length_y / 2, thickness / 2)),
+        "xyaxes": np.concatenate((edge_x / length_x, edge_y / length_y)),
+    }
+
+
 def format_numbers(values) -> str:
     return " ".join(f"{float(value):.9g}" for value in values)

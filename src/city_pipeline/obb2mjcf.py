@@ -25,7 +25,7 @@ from building_lod2_colliders import (
     prepare_classes_geometry,
 )
 from mjcf_collision import collision_attributes
-from mjcf_prism import format_numbers, triangular_prism
+from mjcf_prism import format_numbers, prism_as_box, triangular_prism
 from world_frame import load_world_frame
 
 
@@ -93,6 +93,7 @@ def write_physics_application_receipt(
     p2_collider_optimization=None,
     p3_collider_optimization=None,
     max_physics_level=3,
+    building_collider_reduction="safe",
 ):
     """Prove which classified buildings are represented by the current MJCF."""
     classification = json.loads(Path(classification_path).read_text(encoding="utf-8"))
@@ -111,6 +112,7 @@ def write_physics_application_receipt(
         if item.get("id")
     }
     geom_counts = defaultdict(int)
+    geom_type_counts = defaultdict(lambda: defaultdict(int))
     for geom in root.findall(".//geom"):
         name = geom.get("name", "")
         building_id = exact_geom_owners.get(name)
@@ -121,6 +123,7 @@ def write_physics_application_receipt(
                     break
         if building_id in classified:
             geom_counts[building_id] += 1
+            geom_type_counts[building_id][geom.get("type", "sphere")] += 1
     represented = set(input_counts) | {key for key, value in geom_counts.items() if value > 0}
     missing = sorted(set(classified) - represented)
     unknown = sorted(set(input_counts) - set(classified))
@@ -168,6 +171,16 @@ def write_physics_application_receipt(
         )
         for class_id in ("P0", "P1", "P2", "P3")
     }
+    collider_geom_types = {
+        class_id: dict(sorted(Counter({
+            geom_type: sum(
+                geom_type_counts[record["building_id"]].get(geom_type, 0)
+                for record in records if record["class"] == class_id
+            )
+            for geom_type in {"box", "mesh"}
+        }).items()))
+        for class_id in ("P0", "P1", "P2", "P3")
+    }
     output = Path(output_path)
     receipt = {
         "schema_version": 1,
@@ -177,6 +190,7 @@ def write_physics_application_receipt(
         ),
         "policy": "incremental-building-physics-v1",
         "max_physics_level": max_physics_level,
+        "building_collider_reduction": building_collider_reduction,
         "precedence": [f"P{level}" for level in range(max_physics_level, -1, -1)],
         "classification": str(Path(classification_path)),
         "mjcf": {"path": str(output), "bytes": output.stat().st_size, "sha256": _sha256(output)},
@@ -190,6 +204,7 @@ def write_physics_application_receipt(
             "total": sum(collider_geom_counts.values()),
             "by_class": collider_geom_counts,
         },
+        "collider_geom_types": {"by_class": collider_geom_types},
         "collider_optimization": {
             class_id: optimization
             for class_id, optimization in (
@@ -305,13 +320,24 @@ def add_lod2_surface_pieces(root, pieces, collide_mode, rgba):
     """Add independent convex prisms from source LOD2 Wall/Roof surfaces."""
     if not pieces:
         return 0
-    asset = root.find("asset")
-    if asset is None:
-        asset = ET.Element("asset")
-        world = root.find("worldbody")
-        root.insert(list(root).index(world), asset)
     world = root.find("worldbody")
     for piece in pieces:
+        box = prism_as_box(piece["source_vertices"], piece["vertices"])
+        if box is not None:
+            ET.SubElement(world, "geom", {
+                "name": piece["id"],
+                "type": "box",
+                "pos": format_numbers(box["pos"]),
+                "size": format_numbers(box["size"]),
+                "xyaxes": format_numbers(box["xyaxes"]),
+                "rgba": " ".join(map(f4, rgba)),
+                **collision_attributes(collide_mode),
+            })
+            continue
+        asset = root.find("asset")
+        if asset is None:
+            asset = ET.Element("asset")
+            root.insert(list(root).index(world), asset)
         ET.SubElement(asset, "mesh", {
             "name": piece["id"],
             "vertex": format_numbers(piece["vertices"].reshape(-1)),
@@ -449,6 +475,12 @@ def main():
                     help="Write class-to-MJCF application provenance; requires --classification")
     ap.add_argument("--max-physics-level", type=int, choices=range(4), default=3,
                     help="Maximum applied building Physics class (P0..P3)")
+    ap.add_argument(
+        "--building-collider-reduction",
+        choices=("safe", "coplanar-union", "convex-decompose"),
+        default="safe",
+        help="Optional exact union across adjacent coplanar source polygons",
+    )
 
     args = ap.parse_args()
 
@@ -507,6 +539,7 @@ def main():
             Path(args.zsrc), args.classification, args.world_frame,
             class_ids=requested_classes,
             roof_thickness_m=args.roof_thickness,
+            collider_reduction=args.building_collider_reduction,
         ) if requested_classes else {}
         if class_ids["P1"]:
             p1_surface_pieces = prepared["P1"].pieces
@@ -650,6 +683,7 @@ def main():
             p2_collider_optimization=p2_collider_optimization,
             p3_collider_optimization=p3_collider_optimization,
             max_physics_level=args.max_physics_level,
+            building_collider_reduction=args.building_collider_reduction,
         )
         print(
             "[OK] Building Physics application: "

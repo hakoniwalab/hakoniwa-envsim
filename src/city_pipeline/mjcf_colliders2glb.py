@@ -37,10 +37,21 @@ def _floats(value: str | None, count: int, default: tuple[float, ...]) -> list[f
 
 def _element_transform(element: ET.Element) -> np.ndarray:
     position = _floats(element.get("pos"), 3, (0.0, 0.0, 0.0))
-    euler = _floats(element.get("euler"), 3, (0.0, 0.0, 0.0))
-    matrix = trimesh.transformations.euler_matrix(
-        *(math.radians(value) for value in euler), axes="sxyz",
-    )
+    if element.get("xyaxes") is not None:
+        xyaxes = np.asarray(_floats(element.get("xyaxes"), 6, ()), dtype=float)
+        axis_x = xyaxes[:3]
+        axis_y = xyaxes[3:]
+        axis_x /= np.linalg.norm(axis_x)
+        axis_y -= axis_x * float(axis_x @ axis_y)
+        axis_y /= np.linalg.norm(axis_y)
+        axis_z = np.cross(axis_x, axis_y)
+        matrix = np.eye(4)
+        matrix[:3, :3] = np.column_stack((axis_x, axis_y, axis_z))
+    else:
+        euler = _floats(element.get("euler"), 3, (0.0, 0.0, 0.0))
+        matrix = trimesh.transformations.euler_matrix(
+            *(math.radians(value) for value in euler), axes="sxyz",
+        )
     matrix[:3, 3] = position
     return matrix
 

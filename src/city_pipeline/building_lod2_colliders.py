@@ -16,6 +16,8 @@ from typing import NamedTuple
 from xml.etree import ElementTree as ET
 
 import numpy as np
+from shapely.geometry import Polygon
+from shapely.ops import unary_union
 
 from citygml2glb import GML_ID, NS, _polygon_rings, triangulate_rings
 from geodesy import project_epsg6697_to_local_enu
@@ -34,6 +36,10 @@ MIN_TRIANGLE_AREA_M2 = 1e-6
 MIN_TRIANGLE_SHAPE_RATIO = 1e-6
 PLANAR_ABSOLUTE_TOLERANCE_M = 1e-5
 PLANAR_RELATIVE_TOLERANCE = 1e-8
+COPLANAR_NORMAL_DECIMALS = 6
+COPLANAR_OFFSET_DECIMALS = 4
+UNION_AREA_TOLERANCE_M2 = 1e-6
+COLLIDER_REDUCTION_MODES = {"safe", "coplanar-union", "convex-decompose"}
 CLASS_SURFACE_KINDS = {
     "P1": ("WallSurface", "RoofSurface"),
     "P2": ("WallSurface", "RoofSurface"),
@@ -121,6 +127,165 @@ def _convex_planar_ring(points):
     return values, None
 
 
+def _oriented_plane(points):
+    values = np.asarray(points, dtype=float)
+    normal = np.zeros(3, dtype=float)
+    for index, current in enumerate(values):
+        normal += np.cross(current, values[(index + 1) % len(values)])
+    length = float(np.linalg.norm(normal))
+    if length <= 1e-12:
+        return None
+    normal /= length
+    return normal, float(normal @ values[0])
+
+
+def _plane_basis(normal):
+    reference = np.asarray(
+        (1.0, 0.0, 0.0) if abs(float(normal[0])) < 0.9 else (0.0, 1.0, 0.0)
+    )
+    axis_u = np.cross(normal, reference)
+    axis_u /= np.linalg.norm(axis_u)
+    axis_v = np.cross(normal, axis_u)
+    return axis_u, axis_v
+
+
+def _is_convex_polygon(polygon):
+    if polygon.is_empty or not polygon.is_valid or polygon.interiors:
+        return False
+    return polygon.convex_hull.area - polygon.area <= max(
+        UNION_AREA_TOLERANCE_M2, polygon.area * 1e-9
+    )
+
+
+def _apply_coplanar_union(
+    pieces, thickness_m, stats, *, include_triangulated_fallback: bool = False
+):
+    """Exactly merge adjacent source polygons when their union is one convex face.
+
+    This deliberately does not snap vertices or take a convex hull. Any gap,
+    hole, concavity, different semantic surface kind, or different plane keeps
+    the existing safe colliders unchanged.
+    """
+    groups = defaultdict(list)
+    retained = []
+    for piece in pieces:
+        eligible = piece.pop("_coplanar_union_eligible", False)
+        scope = piece.pop("_coplanar_union_scope", None)
+        if not eligible or (scope is not None and not include_triangulated_fallback):
+            piece.pop("_coplanar_union_scope", None)
+            retained.append(piece)
+            continue
+        ring = np.asarray(piece["source_vertices"], dtype=float)
+        plane = _oriented_plane(ring)
+        if plane is None:
+            retained.append(piece)
+            continue
+        normal, offset = plane
+        key = (
+            piece["building_id"],
+            piece["surface_kind"],
+            scope,
+            *(round(float(value), COPLANAR_NORMAL_DECIMALS) for value in normal),
+            round(offset, COPLANAR_OFFSET_DECIMALS),
+        )
+        groups[key].append((piece, ring, normal, offset))
+
+    merged = []
+    rejected_non_convex = 0
+    rejected_holes = 0
+    for group in groups.values():
+        if len(group) < 2:
+            merged.extend(item[0] for item in group)
+            continue
+        normal = group[0][2]
+        offset = group[0][3]
+        axis_u, axis_v = _plane_basis(normal)
+        projected = [
+            Polygon([(float(point @ axis_u), float(point @ axis_v)) for point in ring])
+            for _, ring, _, _ in group
+        ]
+        candidates = [
+            {"polygon": polygon, "pieces": [item[0]]}
+            for item, polygon in zip(group, projected)
+        ]
+        changed = True
+        while changed:
+            changed = False
+            for left in range(len(candidates)):
+                for right in range(left + 1, len(candidates)):
+                    first_polygon = candidates[left]["polygon"]
+                    second_polygon = candidates[right]["polygon"]
+                    if first_polygon.boundary.intersection(
+                        second_polygon.boundary
+                    ).length <= UNION_AREA_TOLERANCE_M2:
+                        continue
+                    component = unary_union([first_polygon, second_polygon])
+                    if component.geom_type != "Polygon":
+                        continue
+                    if component.interiors:
+                        rejected_holes += 1
+                        continue
+                    if not _is_convex_polygon(component):
+                        rejected_non_convex += 1
+                        continue
+                    candidates[left] = {
+                        "polygon": component,
+                        "pieces": (
+                            candidates[left]["pieces"] + candidates[right]["pieces"]
+                        ),
+                    }
+                    del candidates[right]
+                    stats["convex_merge_count"] += 1
+                    stats["convex_merge_colliders_eliminated"] += 1
+                    changed = True
+                    break
+                if changed:
+                    break
+
+        for candidate in candidates:
+            component = candidate["polygon"]
+            first = candidate["pieces"][0]
+            # Unchanged candidates preserve their original prism exactly.
+            matching_original = next(
+                (item[0] for item, polygon in zip(group, projected)
+                 if polygon.equals(component)),
+                None,
+            )
+            if matching_original is not None:
+                merged.append(matching_original)
+                continue
+            coordinates = list(component.exterior.coords)[:-1]
+            ring = np.asarray([
+                axis_u * x + axis_v * y + normal * offset for x, y in coordinates
+            ])
+            ring, cleanup_reason = _convex_planar_ring(ring)
+            if cleanup_reason is not None:
+                merged.extend(candidate["pieces"])
+                continue
+            oriented = _oriented_plane(ring)
+            if oriented is None:
+                merged.extend(candidate["pieces"])
+                continue
+            if float(oriented[0] @ normal) < 0:
+                ring = ring[::-1]
+            prism, prism_faces = (
+                polygon_prism(ring, thickness_m)
+                if first["surface_kind"] == "RoofSurface"
+                else polygon_prism_along_normal(ring, thickness_m)
+            )
+            merged.append({
+                **first,
+                "source_vertices": ring.tolist(),
+                "vertices": prism,
+                "faces": prism_faces,
+                "_collider_origin": "coplanar-union",
+            })
+
+    stats["convex_merge_rejected_non_convex_count"] = rejected_non_convex
+    stats["convex_merge_rejected_hole_count"] = rejected_holes
+    return retained + merged
+
+
 def _selected_class(selection_path: Path, classification_path: Path, class_id: str):
     selected, center_lat, center_lon = _selected_classes(
         selection_path, classification_path, (class_id,)
@@ -165,18 +330,21 @@ def _selected_classes(selection_path: Path, classification_path: Path, class_ids
 
 
 def _surface_pieces(
-    by_source, center_lat, center_lon, frame, thickness_m: float, class_id: str
+    by_source, center_lat, center_lon, frame, thickness_m: float, class_id: str,
+    collider_reduction: str = "safe",
 ):
     wrapped = {
         source: {class_id: buildings} for source, buildings in by_source.items()
     }
     return _surface_pieces_for_classes(
-        wrapped, center_lat, center_lon, frame, thickness_m, (class_id,)
+        wrapped, center_lat, center_lon, frame, thickness_m, (class_id,),
+        collider_reduction,
     )[class_id]
 
 
 def _surface_pieces_for_classes(
-    by_source, center_lat, center_lon, frame, thickness_m: float, class_ids
+    by_source, center_lat, center_lon, frame, thickness_m: float, class_ids,
+    collider_reduction: str = "safe",
 ):
     """Prepare all requested classes while parsing each source GML only once."""
     offset = float(frame["origin"]["altitude_offset_m"])
@@ -192,6 +360,10 @@ def _surface_pieces_for_classes(
             "merged_group_count": 0,
             "triangles_eliminated": 0,
             "fallback_polygon_counts": defaultdict(int),
+            "reduction_mode": collider_reduction,
+            "colliders_before_reduction": 0,
+            "convex_merge_count": 0,
+            "convex_merge_colliders_eliminated": 0,
         }
         for class_id in class_ids
     }
@@ -286,6 +458,9 @@ def _surface_pieces_for_classes(
                                     "source_vertices": merged_ring.tolist(),
                                     "vertices": prism,
                                     "faces": prism_faces,
+                                    "_coplanar_union_eligible": True,
+                                    "_coplanar_union_scope": None,
+                                    "_collider_origin": "convex-polygon",
                                 })
                                 stats["colliders_after"] += 1
                                 stats["convex_polygon_collider_count"] += 1
@@ -318,6 +493,9 @@ def _surface_pieces_for_classes(
                                     "source_vertices": triangle.tolist(),
                                     "vertices": prism,
                                     "faces": prism_faces,
+                                    "_coplanar_union_eligible": True,
+                                    "_coplanar_union_scope": str(polygon_key),
+                                    "_collider_origin": "triangular-fallback",
                                 })
                                 stats["colliders_after"] += 1
                                 stats["triangular_fallback_collider_count"] += 1
@@ -334,6 +512,37 @@ def _surface_pieces_for_classes(
             }, separators=(",", ":")),
             flush=True,
         )
+    if collider_reduction in {"coplanar-union", "convex-decompose"}:
+        for class_id in class_ids:
+            stats = optimization[class_id]
+            stats["colliders_before_reduction"] = len(pieces[class_id])
+            pieces[class_id] = _apply_coplanar_union(
+                pieces[class_id], thickness_m, stats,
+                include_triangulated_fallback=(
+                    collider_reduction == "convex-decompose"
+                ),
+            )
+            stats["colliders_after"] = len(pieces[class_id])
+            stats["convex_polygon_collider_count"] = sum(
+                piece.get("_collider_origin") != "triangular-fallback"
+                for piece in pieces[class_id]
+            )
+            stats["triangular_fallback_collider_count"] = sum(
+                piece.get("_collider_origin") == "triangular-fallback"
+                for piece in pieces[class_id]
+            )
+            for piece in pieces[class_id]:
+                piece.pop("_collider_origin", None)
+    else:
+        for class_id in class_ids:
+            optimization[class_id]["colliders_before_reduction"] = len(
+                pieces[class_id]
+            )
+            for piece in pieces[class_id]:
+                piece.pop("_coplanar_union_eligible", None)
+                piece.pop("_coplanar_union_scope", None)
+                piece.pop("_collider_origin", None)
+
     return {
         class_id: PreparedSurfaceGeometry(
             pieces=pieces[class_id],
@@ -383,6 +592,7 @@ def prepare_class_geometry(
     *,
     class_id: str,
     roof_thickness_m: float,
+    collider_reduction: str = "safe",
 ):
     if class_id not in CLASS_SURFACE_KINDS:
         raise BuildingLod2ColliderError(f"unsupported LOD2 collider class: {class_id}")
@@ -390,12 +600,17 @@ def prepare_class_geometry(
         raise BuildingLod2ColliderError(
             f"{class_id} surface collision thickness must be positive"
         )
+    if collider_reduction not in COLLIDER_REDUCTION_MODES:
+        raise BuildingLod2ColliderError(
+            f"unsupported building collider reduction: {collider_reduction}"
+        )
     by_source, center_lat, center_lon = _selected_class(
         selection_path, classification_path, class_id
     )
     frame = load_world_frame(world_frame_path)
     geometry = _surface_pieces(
-        by_source, center_lat, center_lon, frame, roof_thickness_m, class_id
+        by_source, center_lat, center_lon, frame, roof_thickness_m, class_id,
+        collider_reduction,
     )
     return geometry
 
@@ -407,6 +622,7 @@ def prepare_classes_geometry(
     *,
     class_ids,
     roof_thickness_m: float,
+    collider_reduction: str = "safe",
 ):
     class_ids = tuple(class_ids)
     if any(class_id not in CLASS_SURFACE_KINDS for class_id in class_ids):
@@ -415,12 +631,17 @@ def prepare_classes_geometry(
         raise BuildingLod2ColliderError(
             "surface collision thickness must be positive"
         )
+    if collider_reduction not in COLLIDER_REDUCTION_MODES:
+        raise BuildingLod2ColliderError(
+            f"unsupported building collider reduction: {collider_reduction}"
+        )
     by_source, center_lat, center_lon = _selected_classes(
         selection_path, classification_path, class_ids
     )
     frame = load_world_frame(world_frame_path)
     return _surface_pieces_for_classes(
-        by_source, center_lat, center_lon, frame, roof_thickness_m, class_ids
+        by_source, center_lat, center_lon, frame, roof_thickness_m, class_ids,
+        collider_reduction,
     )
 
 
@@ -430,6 +651,7 @@ def prepare_p1_geometry(
     world_frame_path: Path,
     *,
     roof_thickness_m: float,
+    collider_reduction: str = "safe",
 ):
     return prepare_class_geometry(
         selection_path,
@@ -437,6 +659,7 @@ def prepare_p1_geometry(
         world_frame_path,
         class_id="P1",
         roof_thickness_m=roof_thickness_m,
+        collider_reduction=collider_reduction,
     )
 
 
@@ -446,6 +669,7 @@ def prepare_p2_geometry(
     world_frame_path: Path,
     *,
     roof_thickness_m: float,
+    collider_reduction: str = "safe",
 ):
     return prepare_class_geometry(
         selection_path,
@@ -453,6 +677,7 @@ def prepare_p2_geometry(
         world_frame_path,
         class_id="P2",
         roof_thickness_m=roof_thickness_m,
+        collider_reduction=collider_reduction,
     )
 
 
@@ -462,6 +687,7 @@ def prepare_p3_geometry(
     world_frame_path: Path,
     *,
     roof_thickness_m: float,
+    collider_reduction: str = "safe",
 ):
     return prepare_class_geometry(
         selection_path,
@@ -469,4 +695,5 @@ def prepare_p3_geometry(
         world_frame_path,
         class_id="P3",
         roof_thickness_m=roof_thickness_m,
+        collider_reduction=collider_reduction,
     )

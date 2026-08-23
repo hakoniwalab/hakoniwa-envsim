@@ -274,11 +274,114 @@ class BuildingPhysicsClassifierTest(unittest.TestCase):
         self.assertIsNone(merged)
         self.assertEqual(reason, "concave")
 
+    def test_coplanar_union_merges_only_an_exact_convex_union(self):
+        def piece(identifier, ring):
+            prism, faces = LOD2_MODULE.polygon_prism(ring, 0.02)
+            return {
+                "id": identifier,
+                "building_id": "building",
+                "surface_kind": "RoofSurface",
+                "source_polygon_id": identifier,
+                "source_vertices": ring,
+                "vertices": prism,
+                "faces": faces,
+                "_coplanar_union_eligible": True,
+            }
+
+        stats = {
+            "convex_merge_count": 0,
+            "convex_merge_colliders_eliminated": 0,
+        }
+        merged = LOD2_MODULE._apply_coplanar_union([
+            piece("left", [[0, 0, 2], [1, 0, 2], [1, 1, 2], [0, 1, 2]]),
+            piece("right", [[1, 0, 2], [2, 0, 2], [2, 1, 2], [1, 1, 2]]),
+        ], 0.02, stats)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(stats["convex_merge_count"], 1)
+        self.assertEqual(stats["convex_merge_colliders_eliminated"], 1)
+        self.assertEqual(len(merged[0]["source_vertices"]), 4)
+
+        stats = {
+            "convex_merge_count": 0,
+            "convex_merge_colliders_eliminated": 0,
+        }
+        concave = LOD2_MODULE._apply_coplanar_union([
+            piece("bottom", [[0, 0, 2], [2, 0, 2], [2, 1, 2], [0, 1, 2]]),
+            piece("upper-left", [[0, 1, 2], [1, 1, 2], [1, 2, 2], [0, 2, 2]]),
+        ], 0.02, stats)
+        self.assertEqual(len(concave), 2)
+        self.assertEqual(stats["convex_merge_count"], 0)
+        self.assertEqual(stats["convex_merge_rejected_non_convex_count"], 1)
+
         merged, reason = LOD2_MODULE._convex_planar_ring([
             (0, 0, 2), (2, 0, 2), (2, 1, 2.1), (0, 1, 2),
         ])
         self.assertIsNone(merged)
         self.assertEqual(reason, "non_planar")
+
+    def test_convex_decompose_adds_triangle_recomposition(self):
+        def triangle(identifier, ring):
+            prism, faces = LOD2_MODULE.triangular_prism(ring, 0.02)
+            return {
+                "id": identifier,
+                "building_id": "building",
+                "surface_kind": "RoofSurface",
+                "source_polygon_id": "concave-source",
+                "source_vertices": ring,
+                "vertices": prism,
+                "faces": faces,
+                "_coplanar_union_eligible": True,
+                "_coplanar_union_scope": "concave-source",
+            }
+
+        pieces = [
+            triangle("a", [[0, 0, 2], [1, 0, 2], [1, 1, 2]]),
+            triangle("b", [[0, 0, 2], [1, 1, 2], [0, 1, 2]]),
+        ]
+        safe_stats = {
+            "convex_merge_count": 0,
+            "convex_merge_colliders_eliminated": 0,
+        }
+        coplanar = LOD2_MODULE._apply_coplanar_union(
+            [dict(piece) for piece in pieces], 0.02, safe_stats,
+            include_triangulated_fallback=False,
+        )
+        self.assertEqual(len(coplanar), 2)
+
+        decompose_stats = {
+            "convex_merge_count": 0,
+            "convex_merge_colliders_eliminated": 0,
+        }
+        decomposed = LOD2_MODULE._apply_coplanar_union(
+            [dict(piece) for piece in pieces], 0.02, decompose_stats,
+            include_triangulated_fallback=True,
+        )
+        self.assertEqual(len(decomposed), 1)
+        self.assertEqual(decompose_stats["convex_merge_count"], 1)
+
+    def test_rectangular_prism_uses_box_but_skewed_roof_stays_mesh(self):
+        rectangle = np.asarray([
+            [0, 0, 2], [2, 0, 2], [2, 1, 2], [0, 1, 2],
+        ], dtype=float)
+        prism, faces = LOD2_MODULE.polygon_prism(rectangle, 0.02)
+        self.assertIsNotNone(OBB_MODULE.prism_as_box(rectangle, prism))
+
+        tilted = rectangle.copy()
+        tilted[2:, 2] = 3
+        skewed_prism, _ = LOD2_MODULE.polygon_prism(tilted, 0.02)
+        self.assertIsNone(OBB_MODULE.prism_as_box(tilted, skewed_prism))
+
+        root = ET.Element("mujoco")
+        ET.SubElement(root, "worldbody")
+        OBB_MODULE.add_lod2_surface_pieces(root, [{
+            "id": "rectangular-roof",
+            "source_vertices": rectangle,
+            "vertices": prism,
+            "faces": faces,
+        }], "all", (1, 1, 1, 1))
+        geom = root.find("./worldbody/geom")
+        self.assertEqual(geom.get("type"), "box")
+        self.assertIsNone(root.find("asset"))
 
     def test_p2_application_receipt_records_source_replacement(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -289,7 +392,10 @@ class BuildingPhysicsClassifierTest(unittest.TestCase):
             }), encoding="utf-8")
             mjcf = ET.Element("mujoco")
             world = ET.SubElement(mjcf, "worldbody")
-            ET.SubElement(world, "geom", {"name": "p2_surface_profile_piece_0000"})
+            ET.SubElement(world, "geom", {
+                "name": "p2_surface_profile_piece_0000",
+                "type": "box",
+            })
             output = root / "buildings.xml"
             output.write_text(ET.tostring(mjcf, encoding="unicode"), encoding="utf-8")
             receipt = OBB_MODULE.write_physics_application_receipt(
@@ -309,6 +415,10 @@ class BuildingPhysicsClassifierTest(unittest.TestCase):
             self.assertEqual(receipt["class_status"]["P2"], "applied")
             self.assertTrue(receipt["physics_modified_by_classification"])
             self.assertEqual(receipt["collider_geom_counts"]["by_class"]["P2"], 1)
+            self.assertEqual(
+                receipt["collider_geom_types"]["by_class"]["P2"],
+                {"box": 1, "mesh": 0},
+            )
             self.assertEqual(
                 receipt["buildings"][0]["actual_strategy"],
                 "lod2-height-profile-surface-prisms",
