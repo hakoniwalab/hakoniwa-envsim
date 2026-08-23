@@ -13,13 +13,19 @@ OBB JSON (center, half_size, yaw) -> MJCF (MuJoCo XML)
 - 入力が ENU 座標系の場合、MJCF 座標系 (X=North, Y=-East, Z=Up) に変換して出力
 """
 
-import argparse, json, math
+import argparse, hashlib, json, math
+from collections import Counter, defaultdict
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
 import numpy as np
 
 from citygml2glb import GlbError, triangulate_rings
+from building_lod2_colliders import (
+    prepare_p1_geometry,
+    prepare_p2_geometry,
+    prepare_p3_geometry,
+)
 from mjcf_collision import collision_attributes
 from mjcf_prism import format_numbers, triangular_prism
 from world_frame import load_world_frame
@@ -62,6 +68,163 @@ def load_zmap(zsrc_path: str):
         if e:
             zmap[gid] = e
     return zmap
+
+
+def _sha256(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_physics_application_receipt(
+    classification_path,
+    items,
+    root,
+    output_path,
+    receipt_path,
+    *,
+    p1_surface_piece_count=0,
+    p2_surface_piece_count=0,
+    p3_surface_piece_count=0,
+    p1_skipped_degenerate=None,
+    p2_skipped_degenerate=None,
+    p3_skipped_degenerate=None,
+    max_physics_level=3,
+):
+    """Prove which classified buildings are represented by the current MJCF."""
+    classification = json.loads(Path(classification_path).read_text(encoding="utf-8"))
+    classified = {
+        record["building_id"]: record for record in classification.get("buildings", [])
+    }
+    input_counts = Counter(
+        str(item.get("parent_id") or item.get("id", "")).split("__part_", 1)[0]
+        for item in items
+    )
+    geom_counts = defaultdict(int)
+    for geom in root.findall(".//geom"):
+        name = geom.get("name", "")
+        for building_id in classified:
+            if (
+                name == f"geom_{building_id}"
+                or name.startswith(f"geom_{building_id}_")
+                or name.startswith(f"roof_{building_id}_piece_")
+                or name.startswith(f"p1_surface_{building_id}_piece_")
+                or name.startswith(f"p2_surface_{building_id}_piece_")
+                or name.startswith(f"p3_surface_{building_id}_piece_")
+            ):
+                geom_counts[building_id] += 1
+                break
+    represented = set(input_counts) | {key for key, value in geom_counts.items() if value > 0}
+    missing = sorted(set(classified) - represented)
+    unknown = sorted(set(input_counts) - set(classified))
+    if missing or unknown:
+        raise ValueError(
+            "classification/collider building identity mismatch: "
+            f"missing={missing}, unknown={unknown}"
+        )
+    records = []
+    classified_counts = Counter(record["class"] for record in classified.values())
+    class_status = {}
+    for class_id in ("P0", "P1", "P2", "P3"):
+        if class_id == "P0":
+            class_status[class_id] = "applied"
+        elif class_id in {"P1", "P2", "P3"}:
+            piece_count = {
+                "P1": p1_surface_piece_count,
+                "P2": p2_surface_piece_count,
+                "P3": p3_surface_piece_count,
+            }[class_id]
+            class_status[class_id] = (
+                "applied" if classified_counts[class_id] == 0 or piece_count > 0
+                else "pending"
+            )
+        else:
+            class_status[class_id] = "pending"
+    for building_id, record in sorted(classified.items()):
+        class_id = record["class"]
+        records.append({
+            "building_id": building_id,
+            "class": class_id,
+            "status": class_status[class_id],
+            "actual_strategy": (
+                "lod1-approved" if class_id == "P0"
+                else "lod2-wall-and-roof-surface-prisms" if class_id == "P1"
+                else "lod2-height-profile-surface-prisms" if class_id == "P2"
+                else "lod2-void-preserving-exterior-surface-prisms"
+            ),
+            "input_primitive_count": input_counts[building_id],
+            "mjcf_geom_count": geom_counts[building_id],
+        })
+    collider_geom_counts = {
+        class_id: sum(
+            record["mjcf_geom_count"] for record in records if record["class"] == class_id
+        )
+        for class_id in ("P0", "P1", "P2", "P3")
+    }
+    output = Path(output_path)
+    receipt = {
+        "schema_version": 1,
+        "status": (
+            "complete" if all(value == "applied" for value in class_status.values())
+            else "partial"
+        ),
+        "policy": "incremental-building-physics-v1",
+        "max_physics_level": max_physics_level,
+        "precedence": [f"P{level}" for level in range(max_physics_level, -1, -1)],
+        "classification": str(Path(classification_path)),
+        "mjcf": {"path": str(output), "bytes": output.stat().st_size, "sha256": _sha256(output)},
+        "physics_modified_by_classification": (
+            p1_surface_piece_count > 0 or p2_surface_piece_count > 0
+            or p3_surface_piece_count > 0
+        ),
+        "class_status": class_status,
+        "counts": dict(Counter(record["class"] for record in records)),
+        "collider_geom_counts": {
+            "total": sum(collider_geom_counts.values()),
+            "by_class": collider_geom_counts,
+        },
+        "buildings": records,
+        "derived_geometry": [
+            {
+                "class": class_id,
+                "type": "surface_collision_thickness",
+                "piece_count": piece_count,
+                "skipped_numerically_degenerate_triangles": (
+                    p1_skipped_degenerate if class_id == "P1"
+                    else p2_skipped_degenerate if class_id == "P2"
+                    else p3_skipped_degenerate
+                ) or {},
+                "direction": {
+                    "RoofSurface": "negative_world_z",
+                    "WallSurface": "source_triangle_normal",
+                    **({
+                        "OuterCeilingSurface": "source_triangle_normal",
+                        "OuterFloorSurface": "source_triangle_normal",
+                    } if class_id == "P3" else {}),
+                },
+                "purpose": (
+                    "make each selected source semantic-surface triangle a "
+                    "watertight convex collision mesh"
+                ),
+            }
+            for class_id, piece_count in (
+                ("P1", p1_surface_piece_count),
+                ("P2", p2_surface_piece_count),
+                ("P3", p3_surface_piece_count),
+            )
+            if piece_count
+        ],
+        "limitations": [
+            "P2/P3 prioritize source-shape fidelity; collider-count optimization is pending",
+            "interior building partitions and structural solids are outside the collision scope",
+        ],
+    }
+    target = Path(receipt_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return receipt
 
 
 def coordinate_transform(coordinate_system: str):
@@ -120,6 +283,32 @@ def add_wall_roofs(asset, world, roof_specs, thickness_m, collide_mode, pos_fn,
             })
             piece_count += 1
     return piece_count
+
+
+def add_lod2_surface_pieces(root, pieces, collide_mode, rgba):
+    """Add independent convex prisms from source LOD2 Wall/Roof surfaces."""
+    if not pieces:
+        return 0
+    asset = root.find("asset")
+    if asset is None:
+        asset = ET.Element("asset")
+        world = root.find("worldbody")
+        root.insert(list(root).index(world), asset)
+    world = root.find("worldbody")
+    for piece in pieces:
+        ET.SubElement(asset, "mesh", {
+            "name": piece["id"],
+            "vertex": format_numbers(piece["vertices"].reshape(-1)),
+            "face": " ".join(str(int(value)) for value in piece["faces"].reshape(-1)),
+        })
+        ET.SubElement(world, "geom", {
+            "name": piece["id"],
+            "type": "mesh",
+            "mesh": piece["id"],
+            "rgba": " ".join(map(f4, rgba)),
+            **collision_attributes(collide_mode),
+        })
+    return len(pieces)
 
 
 def make_mjcf(
@@ -238,6 +427,12 @@ def main():
                     help="Downward numerical collision thickness for wall-mode roofs")
     ap.add_argument("--world-frame", type=Path,
                     help="Shared city world-frame.json; uses its altitude offset instead of building minimum")
+    ap.add_argument("--classification", type=Path,
+                    help="P0-P3 building classification used to audit incremental Physics application")
+    ap.add_argument("--application-receipt", type=Path,
+                    help="Write class-to-MJCF application provenance; requires --classification")
+    ap.add_argument("--max-physics-level", type=int, choices=range(4), default=3,
+                    help="Maximum applied building Physics class (P0..P3)")
 
     args = ap.parse_args()
 
@@ -247,8 +442,81 @@ def main():
     wall_roofs = data.get("wall_roofs", [])
     if not items:
         raise SystemExit("[ERR] No items found in --inp (expects key 'results' or 'polygons').")
+    # Preserve the pre-classification input for provenance. P1 primitives are
+    # replaced below, but the receipt should record what was superseded.
+    receipt_items = list(items)
     if args.roof_thickness <= 0:
         raise SystemExit("[ERR] --roof-thickness must be positive")
+    if bool(args.classification) != bool(args.application_receipt):
+        raise SystemExit("[ERR] --classification and --application-receipt must be used together")
+    if args.classification and (not args.zsrc or not args.world_frame):
+        raise SystemExit("[ERR] class-specific Physics requires --zsrc and --world-frame")
+
+    p1_surface_pieces = []
+    p2_surface_pieces = []
+    p3_surface_pieces = []
+    p1_skipped_degenerate = {}
+    p2_skipped_degenerate = {}
+    p3_skipped_degenerate = {}
+    if args.classification:
+        class_data = json.loads(args.classification.read_text(encoding="utf-8"))
+        if int(class_data.get("max_level", 3)) != args.max_physics_level:
+            raise SystemExit(
+                "[ERR] classification max_level does not match --max-physics-level"
+            )
+        class_ids = {
+            class_id: {
+                record["building_id"]
+                for record in class_data.get("buildings", [])
+                if record.get("class") == class_id
+            }
+            for class_id in ("P1", "P2", "P3")
+        }
+        replaced_ids = class_ids["P1"] | class_ids["P2"] | class_ids["P3"]
+        if replaced_ids:
+            def item_building_id(item):
+                return str(item.get("parent_id") or item.get("id", "")).split("__part_", 1)[0]
+            items = [item for item in items if item_building_id(item) not in replaced_ids]
+            wall_roofs = [
+                roof for roof in wall_roofs
+                if str(roof.get("id", "")).split("__part_", 1)[0] not in replaced_ids
+            ]
+        if class_ids["P1"]:
+            p1_geometry = prepare_p1_geometry(
+                Path(args.zsrc), args.classification, args.world_frame,
+                roof_thickness_m=args.roof_thickness,
+            )
+            p1_surface_pieces = p1_geometry.pieces
+            p1_skipped_degenerate = p1_geometry.skipped_degenerate_by_surface
+            print(
+                f"[INFO] P1 class collider: buildings={len(class_ids['P1'])} "
+                f"surface_pieces={len(p1_surface_pieces)} "
+                f"skipped_degenerate={sum(p1_skipped_degenerate.values())}"
+            )
+        if class_ids["P2"]:
+            p2_geometry = prepare_p2_geometry(
+                Path(args.zsrc), args.classification, args.world_frame,
+                roof_thickness_m=args.roof_thickness,
+            )
+            p2_surface_pieces = p2_geometry.pieces
+            p2_skipped_degenerate = p2_geometry.skipped_degenerate_by_surface
+            print(
+                f"[INFO] P2 class collider: buildings={len(class_ids['P2'])} "
+                f"surface_pieces={len(p2_surface_pieces)} "
+                f"skipped_degenerate={sum(p2_skipped_degenerate.values())}"
+            )
+        if class_ids["P3"]:
+            p3_geometry = prepare_p3_geometry(
+                Path(args.zsrc), args.classification, args.world_frame,
+                roof_thickness_m=args.roof_thickness,
+            )
+            p3_surface_pieces = p3_geometry.pieces
+            p3_skipped_degenerate = p3_geometry.skipped_degenerate_by_surface
+            print(
+                f"[INFO] P3 class collider: buildings={len(class_ids['P3'])} "
+                f"surface_pieces={len(p3_surface_pieces)} "
+                f"skipped_degenerate={sum(p3_skipped_degenerate.values())}"
+            )
 
     # 座標系情報を表示
     coordinate_system = data.get("coordinate_system", "unknown")
@@ -329,10 +597,34 @@ def main():
         yaw_fn=yaw_fn,
         sxy_fn=sxy_fn,
     )
+    add_lod2_surface_pieces(
+        root, p1_surface_pieces, args.collide, (0.95, 0.72, 0.18, 1.0)
+    )
+    add_lod2_surface_pieces(
+        root, p2_surface_pieces, args.collide, (0.94, 0.42, 0.12, 1.0)
+    )
+    add_lod2_surface_pieces(
+        root, p3_surface_pieces, args.collide, (0.62, 0.36, 0.80, 1.0)
+    )
 
     indent(root)
     Path(args.out).write_text(ET.tostring(root, encoding="utf-8").decode("utf-8"), encoding="utf-8")
     print(f"[OK] Saved MJCF → {args.out}")
+    if args.classification:
+        receipt = write_physics_application_receipt(
+            args.classification, receipt_items, root, args.out, args.application_receipt,
+            p1_surface_piece_count=len(p1_surface_pieces),
+            p2_surface_piece_count=len(p2_surface_pieces),
+            p3_surface_piece_count=len(p3_surface_pieces),
+            p1_skipped_degenerate=p1_skipped_degenerate,
+            p2_skipped_degenerate=p2_skipped_degenerate,
+            p3_skipped_degenerate=p3_skipped_degenerate,
+            max_physics_level=args.max_physics_level,
+        )
+        print(
+            "[OK] Building Physics application: "
+            f"P0/P1/P2/P3=applied → {args.application_receipt}"
+        )
 
 
 if __name__ == "__main__":

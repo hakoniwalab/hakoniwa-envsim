@@ -62,10 +62,20 @@ def compose_mjcf(
     buildings_xml: Path,
     output_xml: Path,
     extra_mjcf: list[Path] | None = None,
-) -> None:
+) -> dict[str, int]:
     roots = [(terrain_xml, ET.parse(terrain_xml).getroot()),
              (buildings_xml, ET.parse(buildings_xml).getroot())]
     roots.extend((path, ET.parse(path).getroot()) for path in (extra_mjcf or []))
+    geom_counts = {
+        "terrain": len(roots[0][1].findall(".//geom")),
+        "buildings": len(roots[1][1].findall(".//geom")),
+    }
+    for index, (path, root) in enumerate(roots[2:], 1):
+        key = path.stem or f"extra_{index}"
+        if key in geom_counts:
+            key = f"{key}_{index}"
+        geom_counts[key] = len(root.findall(".//geom"))
+    geom_counts["total"] = sum(geom_counts.values())
     for source, root in roots:
         if root.tag != "mujoco":
             raise ComposerError(f"MJCF component root must be <mujoco>: {source}")
@@ -102,6 +112,7 @@ def compose_mjcf(
     ET.ElementTree(result).write(output_xml, encoding="unicode", xml_declaration=False)
     with output_xml.open("a", encoding="utf-8") as stream:
         stream.write("\n")
+    return geom_counts
 
 
 def _as_scene(path: Path) -> trimesh.Scene:
@@ -152,7 +163,9 @@ def main() -> int:
     frame = load_world_frame(args.world_frame)
     output_xml = args.out_dir / "city-world.xml"
     output_glb = args.out_dir / "city-world.glb"
-    compose_mjcf(args.terrain_xml, args.buildings_xml, output_xml, args.extra_mjcf)
+    mjcf_geom_counts = compose_mjcf(
+        args.terrain_xml, args.buildings_xml, output_xml, args.extra_mjcf
+    )
     components = [args.terrain_glb, args.roads_glb, args.buildings_glb, *args.extra_glb]
     geometry_counts = compose_glb(components, output_glb)
     receipt = {
@@ -169,6 +182,7 @@ def main() -> int:
             "terrain_xml": str(args.terrain_xml.resolve()),
             "buildings_xml": str(args.buildings_xml.resolve()),
             "extra_mjcf": [str(path.resolve()) for path in args.extra_mjcf],
+            "mjcf_geom_counts": mjcf_geom_counts,
             "glb_geometry_counts": geometry_counts,
         },
     }

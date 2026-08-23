@@ -39,7 +39,10 @@ class CityWorldComposerTest(unittest.TestCase):
                 encoding="utf-8",
             )
             output = world / "city-world.xml"
-            composer.compose_mjcf(terrain / "terrain.xml", buildings / "buildings.xml", output)
+            counts = composer.compose_mjcf(
+                terrain / "terrain.xml", buildings / "buildings.xml", output
+            )
+            self.assertEqual(counts, {"terrain": 1, "buildings": 1, "total": 2})
             parsed = ET.parse(output).getroot()
             self.assertEqual(parsed.find("asset/hfield").get("file"), "../terrain/terrain.hf")
             self.assertIsNotNone(parsed.find("worldbody/geom[@name='terrain']"))
@@ -74,7 +77,10 @@ class CityWorldComposerTest(unittest.TestCase):
                 'face="0 1 2 5 4 3 0 3 4 0 4 1 1 4 5 1 5 2 2 5 3 2 3 0"/>'
                 '</asset><worldbody><geom name="bridge" type="mesh" mesh="bridge_mesh"/></worldbody></mujoco>'
             )
-            composer.compose_mjcf(terrain, buildings, output, [bridges])
+            counts = composer.compose_mjcf(terrain, buildings, output, [bridges])
+            self.assertEqual(
+                counts, {"terrain": 1, "buildings": 1, "bridges": 1, "total": 3}
+            )
             parsed = ET.parse(output).getroot()
             self.assertIsNotNone(parsed.find("asset/mesh[@name='bridge_mesh']"))
             self.assertIsNotNone(parsed.find("worldbody/geom[@name='bridge']"))

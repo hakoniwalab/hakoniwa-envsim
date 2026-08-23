@@ -155,6 +155,55 @@ class CityDatasetValidatorTest(unittest.TestCase):
             self.assertEqual(report["components"]["bridges"]["physics_geom_count"], 17)
             self.assertIn("visual + collision 17 geoms", module.format_report(report)[-1])
 
+    def test_reports_building_physics_classes_without_claiming_collider_change(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+
+            def receipt(name, data):
+                path = root / name
+                path.write_text(json.dumps({"schema_version": 1, **data}), encoding="utf-8")
+                return path
+
+            report = module.validate_dataset(
+                receipt("terrain.json", {"nrow": 11, "ncol": 11}),
+                receipt("buildings.json", {"buildings": {"lod2": 9, "lod1_fallback": 0}}),
+                receipt("roads.json", {"lod_polygon_counts": {"lod3": 1}}),
+                receipt("markings.json", {"status": "not_available", "polygon_count": 0}),
+                building_physics_classification_path=receipt(
+                    "classification.json",
+                    {
+                        "status": "classified",
+                        "classification_only": True,
+                        "physics_modified": False,
+                        "policy": "lod1-lod2-building-physics-classification-v1",
+                        "counts": {"P0": 4, "P1": 1, "P2": 1, "P3": 3},
+                    },
+                ),
+                building_physics_application_path=receipt(
+                    "application.json",
+                    {
+                        "status": "partial",
+                        "policy": "incremental-building-physics-v1",
+                        "physics_modified_by_classification": False,
+                        "class_status": {
+                            "P0": "applied", "P1": "pending",
+                            "P2": "pending", "P3": "pending",
+                        },
+                    },
+                ),
+            )
+            classification = report["components"]["buildings"]["physics_classification"]
+            self.assertTrue(classification["classification_only"])
+            self.assertFalse(classification["physics_modified"])
+            self.assertIn(
+                "Building physics: classified P0=4, P1=1, P2=1, P3=3",
+                module.format_report(report),
+            )
+            self.assertIn(
+                "Building collider: P0=applied, P1=pending, P2=pending, P3=pending",
+                module.format_report(report),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

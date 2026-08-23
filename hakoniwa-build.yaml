@@ -34,6 +34,7 @@ mjcf:
   model_name: plateau_city
   collision: all
   floor: false
+  building_physics_level: 3
 
 glb:
   enabled: true

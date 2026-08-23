@@ -56,7 +56,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "wall_thickness_m": 0.1,
         "roof_collision_thickness_m": 0.02,
     },
-    "mjcf": {"model_name": "plateau_city", "collision": "all", "floor": False},
+    "mjcf": {
+        "model_name": "plateau_city", "collision": "all", "floor": False,
+        "building_physics_level": 3,
+    },
     "glb": {
         "enabled": True,
         "lod_policy": "highest_available",
@@ -216,6 +219,9 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
         raise ConfigError("mjcf.collision must be all, drone, or none")
     if not isinstance(cfg["mjcf"]["floor"], bool):
         raise ConfigError("mjcf.floor must be true or false")
+    physics_level = cfg["mjcf"]["building_physics_level"]
+    if isinstance(physics_level, bool) or not isinstance(physics_level, int) or not 0 <= physics_level <= 3:
+        raise ConfigError("mjcf.building_physics_level must be an integer in [0, 3]")
     if not isinstance(cfg["glb"]["enabled"], bool):
         raise ConfigError("glb.enabled must be true or false")
     if cfg["glb"]["lod_policy"] != "highest_available":
@@ -331,7 +337,7 @@ def doctor(manifest: Path) -> int:
         scripts.extend([
             "dem2hfield.py", "road_terrain_probe.py", "city_furniture2glb.py",
             "bridge2glb.py", "bridge2mjcf.py", "city_world_composer.py", "city_dataset_validator.py",
-            "mjcf_colliders2glb.py", "world_frame.py",
+            "building_physics_classifier.py", "mjcf_colliders2glb.py", "world_frame.py",
         ])
     for script in scripts:
         if not (PIPELINE / script).is_file():
@@ -399,19 +405,6 @@ def _convert(
         world_frame = terrain_dir / "world-frame.json"
         terrain_receipt = terrain_dir / "terrain-receipt.json"
 
-        buildings_xml = buildings_dir / "buildings.xml"
-        command = [
-            sys.executable, str(PIPELINE / "obb2mjcf.py"),
-            "--inp", str(walls), "--zsrc", str(lod1), "--out", str(buildings_xml),
-            "--model-name", cfg["mjcf"]["model_name"],
-            "--collide", cfg["mjcf"]["collision"],
-            "--roof-thickness", str(geometry["roof_collision_thickness_m"]),
-            "--world-frame", str(world_frame),
-        ]
-        if cfg["mjcf"]["floor"]:
-            command.append("--floor")
-        _run(command)
-
         buildings_glb = buildings_dir / "buildings.glb"
         buildings_glb_receipt = buildings_dir / "buildings-glb-receipt.json"
         glb_command = [
@@ -426,6 +419,34 @@ def _convert(
         if not offline and cfg["glb"]["texture_mode"] != "flat":
             glb_command.append("--fetch-textures")
         _run(glb_command)
+
+        building_physics_classification = buildings_dir / "building-physics-classification.json"
+        building_physics_debug_glb = buildings_dir / "building-physics-classes.glb"
+        _run([
+            sys.executable, str(PIPELINE / "building_physics_classifier.py"),
+            "--selection", str(lod1),
+            "--world-frame", str(world_frame),
+            "--out", str(building_physics_classification),
+            "--debug-glb", str(building_physics_debug_glb),
+            "--max-level", str(cfg["mjcf"]["building_physics_level"]),
+        ])
+
+        buildings_xml = buildings_dir / "buildings.xml"
+        building_physics_application = buildings_dir / "building-physics-application.json"
+        command = [
+            sys.executable, str(PIPELINE / "obb2mjcf.py"),
+            "--inp", str(walls), "--zsrc", str(lod1), "--out", str(buildings_xml),
+            "--model-name", cfg["mjcf"]["model_name"],
+            "--collide", cfg["mjcf"]["collision"],
+            "--roof-thickness", str(geometry["roof_collision_thickness_m"]),
+            "--world-frame", str(world_frame),
+            "--classification", str(building_physics_classification),
+            "--application-receipt", str(building_physics_application),
+            "--max-physics-level", str(cfg["mjcf"]["building_physics_level"]),
+        ]
+        if cfg["mjcf"]["floor"]:
+            command.append("--floor")
+        _run(command)
 
         terrain_glb = terrain_dir / "terrain.glb"
         roads_glb = roads_dir / "roads.glb"
@@ -485,6 +506,8 @@ def _convert(
             "--markings-receipt", str(markings_dir / "road-markings-glb-receipt.json"),
             "--bridges-receipt", str(bridges_receipt),
             "--bridge-physics-receipt", str(bridge_physics_receipt),
+            "--building-physics-classification", str(building_physics_classification),
+            "--building-physics-application", str(building_physics_application),
             "--out", str(dataset_validation),
         ])
         return {
@@ -494,6 +517,9 @@ def _convert(
             "world_frame": world_frame,
             "terrain_receipt": terrain_receipt,
             "buildings_glb_receipt": buildings_glb_receipt,
+            "building_physics_classification": building_physics_classification,
+            "building_physics_debug_glb": building_physics_debug_glb,
+            "building_physics_application": building_physics_application,
             "road_markings_receipt": markings_dir / "road-markings-glb-receipt.json",
             "bridges_glb_receipt": bridges_receipt,
             "bridges_physics_receipt": bridge_physics_receipt,

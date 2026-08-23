@@ -16,6 +16,14 @@
 CityFurnitureの路面標示とLOD3橋梁を加えられます。橋梁のGLB表示と、実データの
 `OuterFloorSurface`から生成する軽量なMJCF橋面collisionは独立componentです。
 利用可能な橋面がない場合は形状を推定せず、Dataset Validatorがscoped outとして報告します。
+また、LOD1 collisionでは形状を誤る建物を段階的に改善するため、建物をP0（LOD1で十分）から
+P3（空洞・張り出し保持が必要）まで診断し、理由と色分けGLBを出力します。P0はLOD1を承認し、
+P1/P2はLOD2の壁・屋根surfaceからcollisionを生成します。P3はさらにsourceの
+OuterCeiling/OuterFloor surfaceを加え、張り出し下の空間を埋めずに保持します。
+分類条件と未対応要素は[`docs/building-physics-classification.md`](docs/building-physics-classification.md)
+に明記しています。
+City Worldの`mjcf.building_physics_level`は0〜3で建物Colliderの適用上限を制御します。
+VisualはLevelにかかわらず、最高LODと利用可能なtextureを使います。
 
 ```bash
 python -m pip install -r requirements.txt

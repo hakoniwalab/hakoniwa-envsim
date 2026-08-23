@@ -66,9 +66,10 @@ query-centered local ENU上で範囲交差を判定します。範囲外の不�
 | `geometry.roof_collision_thickness_m` | wall mode建物の屋根meshへ下向きに加える数値上のcollision厚み |
 | `mjcf.collision` | 建物と橋面collisionに共通適用するfilter。`all`=`(contype=1, conaffinity=0)`、`drone`=`(1,2)`、`none`=`(0,0)` |
 | `mjcf.floor` | MJCFに平面床を追加するか |
+| `mjcf.building_physics_level` | 0=P0、1=P1→P0、2=P2→P1→P0、3=P3→P2→P1→P0（既定） |
 | `glb.enabled` | 同じ建物選択と原点からGLBも生成するか |
-| `glb.lod_policy` | `highest_available`：LOD2を優先し、建物ごとにLOD1へフォールバック |
-| `glb.texture_mode` | `embedded-if-available`または`flat` |
+| `glb.lod_policy` | Visualは`highest_available` |
+| `glb.texture_mode` | `embedded-if-available`で利用可能なtextureを使用 |
 | `source.feature_types.brid` | LOD3橋梁を検索し、GLB表示と利用可能な橋面collisionへ変換するか（City Worldのみ、既定false） |
 
 LOD1の元の底面外周（凹形状と穴を含む）は変換中も保持されます。
@@ -79,10 +80,21 @@ wall modeでは同じ外周と中庭を三角形分割し、`zmax`を上面と�
 生成します。中庭は屋根で塞がず、OBB modeではbox自体に上面があるため屋根meshを追加しません。
 `0.0` では、OBBと完全に一致する建物を除き、最も詳細なwall表現になります。
 
+### 建物Physics分類とclass別collision
+
+City World buildは、建物をP0〜P3へ分類し、classに対応するcollisionを生成します。
+判定式、優先順位、用語、採用するsemantic surface、生成方法、既知の制限は、専用文書
+[`building-physics-classification.md`](building-physics-classification.md)を正本とします。
+本書では重複して定義しません。
+
 ## GLBのLODとテクスチャ
 
 GLBはUnityを介さず、PLATEAU CityGMLから直接生成します。同一範囲でも
 入力データの詳細度に応じて次の表現が混在します。
+
+`building_physics_level`は建物Colliderの判定上限だけを制御します。例えばLevel 2では
+P3条件を評価せず、P2、P1、P0の順に最初に一致した方式を採用します。Visualとtextureは
+全Levelで同一なので、見た目を変えずにCollider数と負荷を比較できます。
 
 ```text
 LOD2 + Appearance/UV + 参照画像あり -> 詳細形状・テクスチャ付き
@@ -198,6 +210,9 @@ python tools/hako.py build --offline
 | `components/bridges/bridges.xml` | LOD3 OuterFloorSurface由来の独立橋面collision component |
 | `components/bridges/receipt.json` | source surface、geom数、derived厚み、端部とDEMの高さ差、制限事項 |
 | `components/bridges/debug/bridge-surfaces.json` | source triangleと境界高さ検証の追跡情報 |
+| `components/buildings/building-physics-classification.json` | 建物ごとのP0〜P3分類、根拠値、選択したcollision strategy |
+| `components/buildings/building-physics-classes.glb` | 分類を色分けして判定を確認するためのLOD2モデル |
+| `components/buildings/building-physics-application.json` | class別collisionの適用状態と、建物ごとのMJCF geom対応 |
 | `world/dataset-validation.{json,txt}` | 利用可能LOD、fallback、表示/衝突capability |
 
 `source.year: latest` は将来別年度へ解決される可能性があります。再現性が必要な

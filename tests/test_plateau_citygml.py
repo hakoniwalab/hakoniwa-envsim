@@ -516,6 +516,19 @@ class PlateauCityGmlTest(unittest.TestCase):
         with self.assertRaisesRegex(hako.ConfigError, "source.cache_dir"):
             hako.resolve_config(config)
 
+    def test_building_physics_level_is_bounded(self):
+        hako = load_hako_module()
+        for level in range(4):
+            config = copy.deepcopy(hako.DEFAULT_CONFIG)
+            config["mjcf"]["building_physics_level"] = level
+            self.assertEqual(
+                hako.resolve_config(config)["mjcf"]["building_physics_level"], level
+            )
+        config = copy.deepcopy(hako.DEFAULT_CONFIG)
+        config["mjcf"]["building_physics_level"] = 4
+        with self.assertRaisesRegex(hako.ConfigError, "building_physics_level"):
+            hako.resolve_config(config)
+
     def test_direct_glb_embeds_lod2_texture_and_uses_lod1_fallback(self):
         pipeline = load_pipeline_module()
         fixture = ROOT / "tests" / "fixtures" / "tiny_mixed_lod_6697_op.gml"

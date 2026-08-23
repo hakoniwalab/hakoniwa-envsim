@@ -58,6 +58,8 @@ def validate_dataset(
     markings_receipt_path: Path,
     bridges_receipt_path: Path | None = None,
     bridge_physics_receipt_path: Path | None = None,
+    building_physics_classification_path: Path | None = None,
+    building_physics_application_path: Path | None = None,
 ) -> dict:
     terrain = _load(terrain_receipt_path, "terrain")
     buildings = _load(buildings_receipt_path, "buildings")
@@ -73,6 +75,14 @@ def validate_dataset(
     bridge_physics = (
         _load(bridge_physics_receipt_path, "bridge physics")
         if bridge_physics_receipt_path is not None else {"status": "not_generated"}
+    )
+    building_physics = (
+        _load(building_physics_classification_path, "building physics classification")
+        if building_physics_classification_path is not None else None
+    )
+    building_physics_application = (
+        _load(building_physics_application_path, "building physics application")
+        if building_physics_application_path is not None else None
     )
 
     building_lods = buildings.get("buildings") or {}
@@ -114,6 +124,33 @@ def validate_dataset(
                     (buildings.get("extraction") or {}).get("skipped_building_count", 0)
                 ),
                 "extraction_issues": (buildings.get("extraction") or {}).get("issues", []),
+                "physics_classification": (
+                    {
+                        "status": building_physics.get("status"),
+                        "classification_only": building_physics.get("classification_only", True),
+                        "physics_modified": building_physics.get("physics_modified", False),
+                        "counts": building_physics.get("counts", {}),
+                        "policy": building_physics.get("policy"),
+                    }
+                    if building_physics is not None else None
+                ),
+                "physics_application": (
+                    {
+                        "status": building_physics_application.get("status"),
+                        "max_physics_level": building_physics_application.get(
+                            "max_physics_level", 3
+                        ),
+                        "class_status": building_physics_application.get("class_status", {}),
+                        "collider_geom_counts": building_physics_application.get(
+                            "collider_geom_counts", {}
+                        ),
+                        "physics_modified_by_classification": building_physics_application.get(
+                            "physics_modified_by_classification", False
+                        ),
+                        "policy": building_physics_application.get("policy"),
+                    }
+                    if building_physics_application is not None else None
+                ),
             },
             "road_surfaces": {
                 "status": "available",
@@ -230,6 +267,20 @@ def format_report(report: dict) -> list[str]:
             ("LOD3", "lod3"), ("LOD2", "lod2_fallback"), ("LOD1", "lod1_fallback")
         ]),
     ]
+    classification = buildings.get("physics_classification")
+    if classification:
+        counts = classification.get("counts", {})
+        lines.append(
+            f"{'Building physics':<14}: classified "
+            + ", ".join(f"{key}={int(counts.get(key, 0))}" for key in ("P0", "P1", "P2", "P3"))
+        )
+    application = buildings.get("physics_application")
+    if application:
+        statuses = application.get("class_status", {})
+        lines.append(
+            f"{'Building collider':<14}: "
+            + ", ".join(f"{key}={statuses.get(key, 'unknown')}" for key in ("P0", "P1", "P2", "P3"))
+        )
     if markings["status"] == "available":
         count = sum(int(value) for value in markings["feature_counts"].values())
         lines.append(f"{'Road markings':<14}: LOD3 ({count} features)")
@@ -274,6 +325,8 @@ def main() -> int:
     parser.add_argument("--markings-receipt", type=Path)
     parser.add_argument("--bridges-receipt", type=Path)
     parser.add_argument("--bridge-physics-receipt", type=Path)
+    parser.add_argument("--building-physics-classification", type=Path)
+    parser.add_argument("--building-physics-application", type=Path)
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
     if args.input:
@@ -295,6 +348,8 @@ def main() -> int:
             args.roads_receipt, args.markings_receipt,
             args.bridges_receipt,
             args.bridge_physics_receipt,
+            args.building_physics_classification,
+            args.building_physics_application,
         )
         output_path = args.out
         text_path = write_report(report, output_path)
