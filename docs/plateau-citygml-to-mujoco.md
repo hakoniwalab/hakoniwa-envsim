@@ -73,7 +73,7 @@ query-centered local ENU上で範囲交差を判定します。範囲外の不�
 | `glb.lod_policy` | Visualは`highest_available` |
 | `glb.texture_mode` | `embedded-if-available`で利用可能なtextureを使用 |
 | `source.feature_types.brid` | LOD3橋梁を検索し、GLB表示と利用可能な橋面collisionへ変換するか（City Worldのみ、既定false） |
-| `city_world.parallel_workers` | 独立したsource取得・component生成に使う並列worker上限（1〜16、既定4） |
+| `city_world.parallel_workers` | source・LOD2 texture取得、建物GML抽出、独立component生成に使う並列worker上限（1〜16、既定4）。建物GML抽出は最大4process |
 | `city_world.dem_parallel_workers` | DEM source抽出専用のprocess上限（1〜4、既定2） |
 | `city_world.terrain_spacing_m` | DEM hfieldの目標最大格子間隔。2 mなら2 km四方で1001×1001 sample。範囲が割り切れない場合はbboxを維持して実間隔を2 m以下へ調整 |
 

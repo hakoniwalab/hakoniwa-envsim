@@ -22,9 +22,7 @@ import numpy as np
 
 from citygml2glb import GlbError, triangulate_rings
 from building_lod2_colliders import (
-    prepare_p1_geometry,
-    prepare_p2_geometry,
-    prepare_p3_geometry,
+    prepare_classes_geometry,
 )
 from mjcf_collision import collision_attributes
 from mjcf_prism import format_numbers, triangular_prism
@@ -102,20 +100,24 @@ def write_physics_application_receipt(
         str(item.get("parent_id") or item.get("id", "")).split("__part_", 1)[0]
         for item in items
     )
+    exact_geom_owners = {
+        f"geom_{item.get('id', '')}": str(
+            item.get("parent_id") or item.get("id", "")
+        ).split("__part_", 1)[0]
+        for item in items
+        if item.get("id")
+    }
     geom_counts = defaultdict(int)
     for geom in root.findall(".//geom"):
         name = geom.get("name", "")
-        for building_id in classified:
-            if (
-                name == f"geom_{building_id}"
-                or name.startswith(f"geom_{building_id}_")
-                or name.startswith(f"roof_{building_id}_piece_")
-                or name.startswith(f"p1_surface_{building_id}_piece_")
-                or name.startswith(f"p2_surface_{building_id}_piece_")
-                or name.startswith(f"p3_surface_{building_id}_piece_")
-            ):
-                geom_counts[building_id] += 1
-                break
+        building_id = exact_geom_owners.get(name)
+        if building_id is None:
+            for prefix in ("roof_", "p1_surface_", "p2_surface_", "p3_surface_"):
+                if name.startswith(prefix) and "_piece_" in name:
+                    building_id = name[len(prefix):].rsplit("_piece_", 1)[0]
+                    break
+        if building_id in classified:
+            geom_counts[building_id] += 1
     represented = set(input_counts) | {key for key, value in geom_counts.items() if value > 0}
     missing = sorted(set(classified) - represented)
     unknown = sorted(set(input_counts) - set(classified))
@@ -481,37 +483,33 @@ def main():
                 roof for roof in wall_roofs
                 if str(roof.get("id", "")).split("__part_", 1)[0] not in replaced_ids
             ]
+        requested_classes = tuple(
+            class_id for class_id in ("P1", "P2", "P3") if class_ids[class_id]
+        )
+        prepared = prepare_classes_geometry(
+            Path(args.zsrc), args.classification, args.world_frame,
+            class_ids=requested_classes,
+            roof_thickness_m=args.roof_thickness,
+        ) if requested_classes else {}
         if class_ids["P1"]:
-            p1_geometry = prepare_p1_geometry(
-                Path(args.zsrc), args.classification, args.world_frame,
-                roof_thickness_m=args.roof_thickness,
-            )
-            p1_surface_pieces = p1_geometry.pieces
-            p1_skipped_degenerate = p1_geometry.skipped_degenerate_by_surface
+            p1_surface_pieces = prepared["P1"].pieces
+            p1_skipped_degenerate = prepared["P1"].skipped_degenerate_by_surface
             print(
                 f"[INFO] P1 class collider: buildings={len(class_ids['P1'])} "
                 f"surface_pieces={len(p1_surface_pieces)} "
                 f"skipped_degenerate={sum(p1_skipped_degenerate.values())}"
             )
         if class_ids["P2"]:
-            p2_geometry = prepare_p2_geometry(
-                Path(args.zsrc), args.classification, args.world_frame,
-                roof_thickness_m=args.roof_thickness,
-            )
-            p2_surface_pieces = p2_geometry.pieces
-            p2_skipped_degenerate = p2_geometry.skipped_degenerate_by_surface
+            p2_surface_pieces = prepared["P2"].pieces
+            p2_skipped_degenerate = prepared["P2"].skipped_degenerate_by_surface
             print(
                 f"[INFO] P2 class collider: buildings={len(class_ids['P2'])} "
                 f"surface_pieces={len(p2_surface_pieces)} "
                 f"skipped_degenerate={sum(p2_skipped_degenerate.values())}"
             )
         if class_ids["P3"]:
-            p3_geometry = prepare_p3_geometry(
-                Path(args.zsrc), args.classification, args.world_frame,
-                roof_thickness_m=args.roof_thickness,
-            )
-            p3_surface_pieces = p3_geometry.pieces
-            p3_skipped_degenerate = p3_geometry.skipped_degenerate_by_surface
+            p3_surface_pieces = prepared["P3"].pieces
+            p3_skipped_degenerate = prepared["P3"].skipped_degenerate_by_surface
             print(
                 f"[INFO] P3 class collider: buildings={len(class_ids['P3'])} "
                 f"surface_pieces={len(p3_surface_pieces)} "
@@ -582,6 +580,7 @@ def main():
     pos_fn, yaw_fn, sxy_fn = coordinate_transform(coordinate_system)
     print("[INFO] Using ENU -> MJCF (X=North, Y=-East, Z=Up) transform.")
 
+    print('[HAKO_PROGRESS] {"phase":"building_physics_assemble"}', flush=True)
     root = make_mjcf(
         items=items,
         wall_roofs=wall_roofs,
@@ -607,8 +606,11 @@ def main():
         root, p3_surface_pieces, args.collide, (0.62, 0.36, 0.80, 1.0)
     )
 
-    indent(root)
-    Path(args.out).write_text(ET.tostring(root, encoding="utf-8").decode("utf-8"), encoding="utf-8")
+    # Avoid recursively indenting and materializing a second giant XML string.
+    # Large P2/P3 worlds can contain hundreds of thousands of mesh elements.
+    print('[HAKO_PROGRESS] {"phase":"building_physics_write"}', flush=True)
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    ET.ElementTree(root).write(args.out, encoding="utf-8", xml_declaration=False)
     print(f"[OK] Saved MJCF → {args.out}")
     if args.classification:
         receipt = write_physics_application_receipt(

@@ -10,7 +10,9 @@ to Hakoniwa ROS coordinates: X=East, Y=Up, Z=-North.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import hashlib
+import io
 import json
 import mimetypes
 import os
@@ -47,12 +49,49 @@ class GlbError(RuntimeError):
     pass
 
 
+class EmbeddedTexture:
+    """Pillow-compatible export object that preserves authoritative bytes."""
+
+    def __init__(self, raw: bytes, pixels: np.ndarray, image_format: str):
+        self.raw = raw
+        self.pixels = pixels
+        self.format = image_format
+        self.mode = "RGBA" if pixels.shape[-1] == 4 else "RGB"
+        self.size = (int(pixels.shape[1]), int(pixels.shape[0]))
+
+    def __array__(self, dtype=None, copy=None):
+        values = self.pixels if dtype is None else self.pixels.astype(dtype, copy=False)
+        return values.copy() if copy else values
+
+    def save(self, stream, format=None, **_kwargs):
+        requested = str(format or self.format).upper()
+        if requested == self.format:
+            stream.write(self.raw)
+            return
+        Image.fromarray(self.pixels, mode=self.mode).save(stream, format=requested)
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def load_texture_image(path: str | Path):
+    """Decode for material hashing while preserving exact JPEG/PNG bytes."""
+    raw = Path(path).read_bytes()
+    with Image.open(io.BytesIO(raw)) as source:
+        source.load()
+        image_format = source.format if source.format in {"JPEG", "PNG"} else "PNG"
+        mode = "RGBA" if image_format == "PNG" and "A" in source.getbands() else "RGB"
+        pixels = np.asarray(source.convert(mode), dtype=np.uint8).copy()
+    if image_format == "PNG" and not raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        output = io.BytesIO()
+        Image.fromarray(pixels, mode=mode).save(output, format="PNG")
+        raw = output.getvalue()
+    return EmbeddedTexture(raw, pixels, image_format)
 
 
 def _open_values(values, paired=None):
@@ -153,10 +192,23 @@ def triangulate_rings(rings: list[list[tuple[float, float, float]]]):
 
 
 class TextureResolver:
-    def __init__(self, sources: dict[Path, dict], fetch: bool, enabled: bool):
+    def __init__(
+        self,
+        sources: dict[Path, dict],
+        fetch: bool,
+        enabled: bool,
+        workers: int = 4,
+    ):
+        if (
+            isinstance(workers, bool)
+            or not isinstance(workers, int)
+            or not 1 <= workers <= 16
+        ):
+            raise ValueError("texture workers must be an integer in [1, 16]")
         self.sources = sources
         self.fetch = fetch
         self.enabled = enabled
+        self.workers = workers
         self.records = {}
         self.pending = {}
 
@@ -228,8 +280,7 @@ class TextureResolver:
             }, separators=(",", ":")),
             flush=True,
         )
-        for downloaded_count, key in enumerate(sorted(self.pending), 1):
-            current = reused_count + downloaded_count
+        def fetch_one(key: str) -> tuple[str, dict]:
             item = self.pending[key]
             destination = item["destination"]
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -245,7 +296,7 @@ class TextureResolver:
             except Exception as exc:
                 temporary.unlink(missing_ok=True)
                 raise GlbError(f"PLATEAU texture download failed: {item['url']}: {exc}") from exc
-            self.records[key] = {
+            return key, {
                 "path": key,
                 "source_gml": str(item["source_gml"]),
                 "image_uri": item["image_uri"],
@@ -255,13 +306,35 @@ class TextureResolver:
                 "mime_type": mimetypes.guess_type(destination.name)[0] or "application/octet-stream",
                 "mode": "cache-populated" if item["shared_cache"] else "downloaded",
             }
-            if downloaded_count == 1 or current == total or downloaded_count % 25 == 0:
-                print(
-                    "[HAKO_PROGRESS] " + json.dumps({
-                        "phase": "texture_download", "current": current, "total": total,
-                    }, separators=(",", ":")),
-                    flush=True,
-                )
+
+        downloaded_records = {}
+        pending_keys = sorted(self.pending)
+        if pending_keys:
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=min(self.workers, len(pending_keys)),
+                thread_name_prefix="texture-download",
+            ) as executor:
+                futures = [executor.submit(fetch_one, key) for key in pending_keys]
+                try:
+                    for downloaded_count, future in enumerate(
+                        concurrent.futures.as_completed(futures), 1,
+                    ):
+                        key, record = future.result()
+                        downloaded_records[key] = record
+                        current = reused_count + downloaded_count
+                        if downloaded_count == 1 or current == total or downloaded_count % 25 == 0:
+                            print(
+                                "[HAKO_PROGRESS] " + json.dumps({
+                                    "phase": "texture_download", "current": current, "total": total,
+                                }, separators=(",", ":")),
+                                flush=True,
+                            )
+                except Exception:
+                    for future in futures:
+                        future.cancel()
+                    raise
+        for key in pending_keys:
+            self.records[key] = downloaded_records[key]
         self.pending.clear()
 
 
@@ -341,10 +414,14 @@ def build_glb(
     fetch_textures: bool,
     texture_mode: str,
     altitude_offset_m: float | None = None,
+    texture_workers: int = 4,
 ) -> dict:
     selected, selection_z_offset, center_lat, center_lon, extraction = _selection(selection_path)
     z_offset = selection_z_offset if altitude_offset_m is None else float(altitude_offset_m)
-    resolver = TextureResolver(_source_records(download_manifest), fetch_textures, texture_mode != "flat")
+    resolver = TextureResolver(
+        _source_records(download_manifest), fetch_textures, texture_mode != "flat",
+        workers=texture_workers,
+    )
     batches = defaultdict(lambda: {"vertices": [], "faces": [], "uv": []})
     lod1_buildings = lod2_buildings = textured_surfaces = flat_surfaces = 0
 
@@ -403,16 +480,39 @@ def build_glb(
     scene = trimesh.Scene()
     total_triangles = 0
     all_vertices = []
-    for index, (texture_key, batch) in enumerate(sorted(batches.items(), key=lambda item: item[0] or "")):
+    ordered_batches = sorted(batches.items(), key=lambda item: item[0] or "")
+    texture_keys = [key for key, _ in ordered_batches if key]
+
+    loaded_textures = {}
+    if texture_keys:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(texture_workers, len(texture_keys)),
+            thread_name_prefix="texture-decode",
+        ) as executor:
+            for index, (key, decoded) in enumerate(
+                zip(texture_keys, executor.map(load_texture_image, texture_keys)), start=1,
+            ):
+                loaded_textures[key] = decoded
+                if index == 1 or index == len(texture_keys) or index % 100 == 0:
+                    print(
+                        "[HAKO_PROGRESS] " + json.dumps({
+                            "phase": "building_glb_textures",
+                            "current": index,
+                            "total": len(texture_keys),
+                        }, separators=(",", ":")),
+                        flush=True,
+                    )
+
+    total_batches = len(ordered_batches)
+    for index, (texture_key, batch) in enumerate(ordered_batches):
         vertices = np.asarray(batch["vertices"], dtype=np.float32)
         faces = np.asarray(batch["faces"], dtype=np.int64)
         if not len(vertices) or not len(faces):
             continue
         if texture_key:
-            image = Image.open(texture_key).convert("RGB")
             material = trimesh.visual.material.PBRMaterial(
                 name=Path(texture_key).stem,
-                baseColorTexture=image,
+                baseColorTexture=loaded_textures[texture_key],
                 metallicFactor=0.0,
                 roughnessFactor=1.0,
                 doubleSided=True,
@@ -433,9 +533,20 @@ def build_glb(
         scene.add_geometry(mesh, node_name=f"plateau-{index:04d}", geom_name=f"plateau-{index:04d}")
         total_triangles += len(faces)
         all_vertices.append(vertices)
+        current = index + 1
+        if current == 1 or current == total_batches or current % 100 == 0:
+            print(
+                "[HAKO_PROGRESS] " + json.dumps({
+                    "phase": "building_glb_batches",
+                    "current": current,
+                    "total": total_batches,
+                }, separators=(",", ":")),
+                flush=True,
+            )
     if not scene.geometry:
         raise GlbError("GLB conversion produced no geometry")
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    print('[HAKO_PROGRESS] {"phase":"building_glb_export"}', flush=True)
     output_path.write_bytes(scene.export(file_type="glb"))
     values = np.concatenate(all_vertices)
     receipt = {
@@ -468,6 +579,8 @@ def main() -> int:
     parser.add_argument("--download-manifest", type=Path)
     parser.add_argument("--fetch-textures", action="store_true")
     parser.add_argument("--texture-mode", choices=("embedded-if-available", "flat"), default="embedded-if-available")
+    parser.add_argument("--texture-workers", type=int, default=4,
+                        help="parallel texture download workers (1-16; default: 4)")
     parser.add_argument("--world-frame", type=Path,
                         help="Shared city world-frame.json; uses its common altitude offset")
     args = parser.parse_args()
@@ -477,7 +590,7 @@ def main() -> int:
             altitude_offset = load_world_frame(args.world_frame)["origin"]["altitude_offset_m"]
         receipt = build_glb(
             args.selection, args.out, args.receipt, args.download_manifest,
-            args.fetch_textures, args.texture_mode, altitude_offset,
+            args.fetch_textures, args.texture_mode, altitude_offset, args.texture_workers,
         )
         print(f"[OK] GLB: {args.out} ({receipt['triangles']} triangles, {len(receipt['textures'])} textures)")
         return 0

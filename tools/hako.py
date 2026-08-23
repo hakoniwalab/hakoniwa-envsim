@@ -468,6 +468,7 @@ def _convert(
         sys.executable, str(PIPELINE / "gml_lod1_extract.py"),
         "--in", str(source_root), "--out", str(lod1),
         "--base-eps", str(geometry["base_epsilon_m"]),
+        "--workers", str(min(cfg["city_world"]["parallel_workers"], 4)),
     ])
     _run([
         sys.executable, str(PIPELINE / "gml2obb.py"),
@@ -510,6 +511,7 @@ def _convert(
             "--selection", str(lod1), "--out", str(buildings_glb),
             "--receipt", str(buildings_glb_receipt),
             "--texture-mode", cfg["glb"]["texture_mode"],
+            "--texture-workers", str(city_world["parallel_workers"]),
             "--world-frame", str(world_frame),
         ]
         if download_manifest is not None:
@@ -649,6 +651,7 @@ def _convert(
             "--selection", str(lod1), "--out", str(glb),
             "--receipt", str(glb_receipt),
             "--texture-mode", cfg["glb"]["texture_mode"],
+            "--texture-workers", str(cfg["city_world"]["parallel_workers"]),
         ]
         if download_manifest is not None:
             glb_command.extend(["--download-manifest", str(download_manifest)])

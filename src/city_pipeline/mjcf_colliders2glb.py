@@ -45,19 +45,17 @@ def _element_transform(element: ET.Element) -> np.ndarray:
     return matrix
 
 
-def _inline_mesh(asset: ET.Element) -> trimesh.Trimesh:
+def _inline_mesh(asset: ET.Element) -> tuple[np.ndarray, np.ndarray]:
     if asset.get("file"):
         raise ColliderGlbError("file-backed MJCF mesh is outside the generated City World contract")
     vertices = np.asarray(_floats(asset.get("vertex"), len((asset.get("vertex") or "").split()), ()), dtype=float)
     faces = np.asarray([int(value) for value in (asset.get("face") or "").split()], dtype=int)
     if not len(vertices) or len(vertices) % 3 or not len(faces) or len(faces) % 3:
         raise ColliderGlbError(f"invalid inline mesh asset: {asset.get('name', '<unnamed>')}")
-    return trimesh.Trimesh(
-        vertices=vertices.reshape((-1, 3)), faces=faces.reshape((-1, 3)), process=False,
-    )
+    return vertices.reshape((-1, 3)), faces.reshape((-1, 3))
 
 
-def _hfield_mesh(asset: ET.Element, xml_path: Path) -> trimesh.Trimesh:
+def _hfield_mesh(asset: ET.Element, xml_path: Path) -> tuple[np.ndarray, np.ndarray]:
     source = (xml_path.parent / (asset.get("file") or "")).resolve()
     if not source.is_file():
         raise ColliderGlbError(f"hfield data was not found: {source}")
@@ -84,7 +82,7 @@ def _hfield_mesh(asset: ET.Element, xml_path: Path) -> trimesh.Trimesh:
         for col in range(ncol - 1):
             first = row * ncol + col
             faces.extend(((first, first + 1, first + ncol + 1), (first, first + ncol + 1, first + ncol)))
-    return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    return np.asarray(vertices, dtype=float), np.asarray(faces, dtype=int)
 
 
 def convert_mjcf_colliders(xml_path: Path, output: Path, receipt_path: Path) -> dict:
@@ -103,10 +101,16 @@ def convert_mjcf_colliders(xml_path: Path, output: Path, receipt_path: Path) -> 
         for element in assets.findall("hfield")
         if element.get("name")
     }
-    converted: list[trimesh.Trimesh] = []
+    converted_vertices: list[np.ndarray] = []
+    converted_faces: list[np.ndarray] = []
+    vertex_count = 0
     counts: Counter[str] = Counter()
+    unit_box = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+    unit_box_vertices = np.asarray(unit_box.vertices, dtype=float)
+    unit_box_faces = np.asarray(unit_box.faces, dtype=int)
 
     def visit(parent: ET.Element, parent_transform: np.ndarray) -> None:
+        nonlocal vertex_count
         for element in parent:
             if element.tag == "body":
                 visit(element, parent_transform @ _element_transform(element))
@@ -116,32 +120,37 @@ def convert_mjcf_colliders(xml_path: Path, output: Path, receipt_path: Path) -> 
             geom_type = element.get("type", "sphere")
             if geom_type == "box":
                 size = np.asarray(_floats(element.get("size"), 3, ()), dtype=float)
-                mesh = trimesh.creation.box(extents=size * 2.0)
+                vertices = unit_box_vertices * size
+                faces = unit_box_faces
             elif geom_type == "mesh":
                 name = element.get("mesh")
                 if name not in mesh_assets:
                     raise ColliderGlbError(f"unknown MJCF mesh asset: {name}")
-                mesh = mesh_assets[name].copy()
+                vertices, faces = mesh_assets[name]
             elif geom_type == "hfield":
                 name = element.get("hfield")
                 if name not in hfield_assets:
                     raise ColliderGlbError(f"unknown MJCF hfield asset: {name}")
-                mesh = hfield_assets[name].copy()
+                vertices, faces = hfield_assets[name]
             else:
                 raise ColliderGlbError(f"unsupported generated collider type: {geom_type}")
-            mesh.apply_transform(parent_transform @ _element_transform(element))
-            mesh.apply_transform(MJCF_TO_THREE)
-            mesh.visual.vertex_colors = np.tile(
-                np.asarray([255, 47, 146, 92], dtype=np.uint8),
-                (len(mesh.vertices), 1),
-            )
-            converted.append(mesh)
+            transform = MJCF_TO_THREE @ parent_transform @ _element_transform(element)
+            transformed = trimesh.transform_points(vertices, transform)
+            converted_vertices.append(transformed)
+            converted_faces.append(np.asarray(faces, dtype=int) + vertex_count)
+            vertex_count += len(transformed)
             counts[geom_type] += 1
 
     visit(worldbody, np.eye(4))
-    if not converted:
+    if not converted_vertices:
         raise ColliderGlbError("MJCF contains no collision geometry")
-    combined = trimesh.util.concatenate(converted)
+    vertices = np.vstack(converted_vertices)
+    faces = np.vstack(converted_faces)
+    combined = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    combined.visual.vertex_colors = np.tile(
+        np.asarray([255, 47, 146, 92], dtype=np.uint8),
+        (len(vertices), 1),
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(combined.export(file_type="glb"))
     receipt = {

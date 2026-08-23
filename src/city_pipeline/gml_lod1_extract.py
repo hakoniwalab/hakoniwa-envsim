@@ -16,6 +16,7 @@ Example::
 """
 
 import argparse
+import concurrent.futures
 import json
 import re
 from pathlib import Path
@@ -353,6 +354,20 @@ def merge_unique_footprints(target, footprints, source_gml):
     return duplicate_count
 
 
+def _extract_one_file(task):
+    """Process one mesh-sized CityGML in an isolated worker process."""
+    gml_path, base_eps, bounds, local_origin = task
+    issues = []
+    footprints = extract_buildings_lod1(
+        gml_path=Path(gml_path),
+        base_eps=base_eps,
+        bounds=bounds,
+        local_origin=local_origin,
+        issues=issues,
+    )
+    return footprints, issues
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--in",  dest="in_path",  type=str, required=True,
@@ -363,6 +378,8 @@ def main():
                     help="底面抽出のZ許容[m]")
     ap.add_argument("--pattern", type=str, default="*bldg*_op.gml",
                     help="ディレクトリ指定時に探索するGMLのglobパターン（既定=*bldg*_op.gml）")
+    ap.add_argument("--workers", type=int, choices=range(1, 5), default=1,
+                    help="GMLファイル単位のprocess並列数（1-4、既定1）")
     args = ap.parse_args()
 
     in_path  = Path(args.in_path)
@@ -406,15 +423,44 @@ def main():
     all_footprints = []
     duplicate_count = 0
     extraction_issues = []
-    for gml in gml_paths:
-        footprints = extract_buildings_lod1(
-            gml_path=gml,
-            base_eps=args.base_eps,
-            bounds=bounds,
-            local_origin=(origin_meta["center_lat"], origin_meta["center_lon"]),
-            issues=extraction_issues,
+    tasks = [
+        (
+            str(gml), args.base_eps, bounds,
+            (origin_meta["center_lat"], origin_meta["center_lon"]),
         )
-        duplicate_count += merge_unique_footprints(all_footprints, footprints, gml)
+        for gml in gml_paths
+    ]
+    worker_count = min(args.workers, len(tasks))
+    if worker_count == 1:
+        extracted = map(_extract_one_file, tasks)
+        executor = None
+    else:
+        try:
+            executor = concurrent.futures.ProcessPoolExecutor(max_workers=worker_count)
+        except OSError as exc:
+            print(
+                "[WARN] process parallelism is unavailable; "
+                f"falling back to threads: {exc}",
+                flush=True,
+            )
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=worker_count)
+        extracted = executor.map(_extract_one_file, tasks)
+    try:
+        for index, (gml, result) in enumerate(zip(gml_paths, extracted), start=1):
+            footprints, issues = result
+            extraction_issues.extend(issues)
+            duplicate_count += merge_unique_footprints(all_footprints, footprints, gml)
+            print(
+                "[HAKO_PROGRESS] " + json.dumps({
+                    "phase": "geometry_extract_files",
+                    "current": index,
+                    "total": len(gml_paths),
+                }, separators=(",", ":")),
+                flush=True,
+            )
+    finally:
+        if executor is not None:
+            executor.shutdown(cancel_futures=True)
 
     out = {
         "version": "0.2",

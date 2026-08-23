@@ -9,6 +9,8 @@ import subprocess
 import struct
 import sys
 import tempfile
+import threading
+import time
 import unittest
 import urllib.error
 import xml.etree.ElementTree as ET
@@ -82,6 +84,19 @@ def load_collider_glb_module():
 
 
 class PlateauCityGmlTest(unittest.TestCase):
+    def test_texture_decode_preserves_jpeg_export_format(self):
+        module = load_citygml2glb_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "texture.jpg"
+            from PIL import Image
+            Image.new("RGB", (2, 2), (10, 20, 30)).save(source, format="JPEG")
+            decoded = module.load_texture_image(source)
+            self.assertEqual(decoded.format, "JPEG")
+            self.assertEqual(decoded.mode, "RGB")
+            embedded = io.BytesIO()
+            decoded.save(embedded, format="JPEG")
+            self.assertEqual(embedded.getvalue(), source.read_bytes())
+
     def test_texture_resolver_populates_and_reuses_shared_source_cache(self):
         module = load_citygml2glb_module()
         with tempfile.TemporaryDirectory() as temporary:
@@ -110,6 +125,52 @@ class PlateauCityGmlTest(unittest.TestCase):
                 self.assertEqual(reused.resolve(gml, "city_appearance/wall.jpg"), texture)
             urlopen.assert_not_called()
             self.assertEqual(reused.records[str(texture)]["mode"], "cache-reused")
+
+    def test_texture_resolver_downloads_in_parallel_and_keeps_record_order(self):
+        module = load_citygml2glb_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            gml = root / "job" / "source" / "city.gml"
+            gml.parent.mkdir(parents=True)
+            gml.write_text("fixture", encoding="utf-8")
+            cached_gml = root / "cache" / "objects" / "source-key" / "city.gml"
+            cached_gml.parent.mkdir(parents=True)
+            cached_gml.write_text("fixture", encoding="utf-8")
+            resolver = module.TextureResolver({gml.resolve(): {
+                "url": "https://assets.example/dataset/udx/bldg/city.gml",
+                "cache_path": str(cached_gml),
+            }}, fetch=True, enabled=True, workers=4)
+            for index in range(8):
+                resolver.resolve(gml, f"appearance/wall-{index}.jpg")
+
+            lock = threading.Lock()
+            active = 0
+            maximum_active = 0
+
+            def urlopen(_request, timeout):
+                nonlocal active, maximum_active
+                self.assertEqual(timeout, 180)
+                with lock:
+                    active += 1
+                    maximum_active = max(maximum_active, active)
+                time.sleep(0.02)
+                with lock:
+                    active -= 1
+                return io.BytesIO(b"jpeg-fixture")
+
+            with mock.patch("urllib.request.urlopen", side_effect=urlopen):
+                resolver.fetch_pending()
+
+            self.assertGreater(maximum_active, 1)
+            self.assertEqual(list(resolver.records), sorted(resolver.records))
+            self.assertEqual(len(resolver.records), 8)
+            self.assertFalse(list(root.rglob("*.part")))
+
+    def test_texture_worker_count_is_bounded(self):
+        module = load_citygml2glb_module()
+        for invalid in (0, 17, 1.5, True):
+            with self.assertRaisesRegex(ValueError, "texture workers"):
+                module.TextureResolver({}, fetch=True, enabled=True, workers=invalid)
 
     def test_mjcf_collider_debug_glb_converts_box_mesh_and_hfield(self):
         converter = load_collider_glb_module()
@@ -617,7 +678,9 @@ class PlateauCityGmlTest(unittest.TestCase):
             document = json.loads(payload[20:20 + json_length].decode("utf-8"))
             self.assertTrue(document.get("images"))
             self.assertIn("bufferView", document["images"][0])
+            self.assertEqual(document["images"][0]["mimeType"], "image/jpeg")
             self.assertNotIn("uri", document["images"][0])
+            self.assertIn(texture.read_bytes(), payload)
             scene = __import__("trimesh").load(glb, force="scene")
             self.assertTrue(scene.geometry)
 
@@ -668,6 +731,37 @@ class PlateauCityGmlTest(unittest.TestCase):
                 )
                 self.assertNotEqual(completed.returncode, 0)
                 self.assertIn(expected_error, completed.stdout + completed.stderr)
+
+    def test_lod1_file_parallelism_preserves_deterministic_merge(self):
+        fixture = ROOT / "tests" / "fixtures" / "tiny_bldg_6697_op.gml"
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "source"
+            source.mkdir()
+            (source / "query_meta.json").write_text(json.dumps({
+                "center_lat": 35.681236,
+                "center_lon": 139.706763,
+                "ns_m": 100,
+                "ew_m": 100,
+            }), encoding="utf-8")
+            for index in range(2):
+                (source / f"mesh-{index}_bldg_6697_op.gml").write_bytes(
+                    fixture.read_bytes()
+                )
+            outputs = []
+            for workers in (1, 2):
+                output = Path(temporary) / f"lod1-{workers}.json"
+                completed = subprocess.run([
+                    sys.executable,
+                    str(ROOT / "src" / "city_pipeline" / "gml_lod1_extract.py"),
+                    "--in", str(source), "--out", str(output),
+                    "--workers", str(workers),
+                ], cwd=ROOT, capture_output=True, text=True, check=False)
+                self.assertEqual(
+                    completed.returncode, 0, completed.stdout + completed.stderr
+                )
+                outputs.append(json.loads(output.read_text(encoding="utf-8")))
+            self.assertEqual(outputs[0], outputs[1])
+            self.assertEqual(outputs[1]["deduplicated_buildings"], 1)
 
     def test_overlapping_municipality_files_deduplicate_identical_buildings(self):
         module = load_pipeline_module()
