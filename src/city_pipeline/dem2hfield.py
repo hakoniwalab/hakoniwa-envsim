@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import hashlib
 import json
 import math
+import mmap
+import os
 import struct
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -28,19 +31,82 @@ def geographic_bounds(latitude: float, longitude: float, ns_m: float, ew_m: floa
     return longitude - lon_delta, latitude - lat_delta, longitude + lon_delta, latitude + lat_delta
 
 
+def _dem_header(path: Path, west: float, south: float, east: float, north: float):
+    """Validate CRS, return the document GML prefix and bbox intersection."""
+    gml_prefix = None
+    envelope_seen = False
+    with path.open("rb") as stream:
+        parser = ET.iterparse(stream, events=("start-ns", "start", "end"))
+        for event, payload in parser:
+            if event == "start-ns":
+                prefix, uri = payload
+                if uri == GML:
+                    gml_prefix = prefix
+                continue
+            element = payload
+            if event == "start" and element.tag == f"{{{GML}}}Envelope" and not envelope_seen:
+                envelope_seen = True
+                if element.get("srsName") != EXPECTED_CRS or element.get("srsDimension") != "3":
+                    raise DemError("PLATEAU DEM must use three-dimensional EPSG:6697")
+                continue
+            if event != "end" or element.tag != f"{{{GML}}}Envelope" or not envelope_seen:
+                continue
+            lower = element.find(f"{{{GML}}}lowerCorner")
+            upper = element.find(f"{{{GML}}}upperCorner")
+            if lower is None or upper is None:
+                break
+            lower_values = [float(value) for value in (lower.text or "").split()]
+            upper_values = [float(value) for value in (upper.text or "").split()]
+            if len(lower_values) < 2 or len(upper_values) < 2:
+                break
+            file_south, file_west = lower_values[:2]
+            file_north, file_east = upper_values[:2]
+            intersects = not (
+                file_north < south or file_south > north
+                or file_east < west or file_west > east
+            )
+            return gml_prefix, intersects
+    if not envelope_seen:
+        raise DemError("PLATEAU DEM has no CRS envelope")
+    raise DemError("PLATEAU DEM has an invalid CRS envelope")
+
+
+def _iter_pos_lists(path: Path, gml_prefix: str | None):
+    """Yield numeric posList tokens without building the unrelated XML tree."""
+    qualified = f"{gml_prefix}:posList" if gml_prefix else "posList"
+    opening = f"<{qualified}".encode("ascii")
+    closing = f"</{qualified}>".encode("ascii")
+    valid_after_name = b" \t\r\n>"
+    with path.open("rb") as stream:
+        with mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as contents:
+            position = 0
+            while True:
+                start = contents.find(opening, position)
+                if start < 0:
+                    return
+                after_name = start + len(opening)
+                if after_name >= len(contents) or contents[after_name] not in valid_after_name:
+                    position = after_name
+                    continue
+                text_start = contents.find(b">", after_name)
+                if text_start < 0:
+                    raise DemError(f"unterminated {qualified} opening tag")
+                text_start += 1
+                text_end = contents.find(closing, text_start)
+                if text_end < 0:
+                    raise DemError(f"unterminated {qualified} element")
+                yield contents[text_start:text_end].split()
+                position = text_end + len(closing)
+
+
 def extract_triangles(path: Path, latitude: float, longitude: float, ns_m: float, ew_m: float):
     west, south, east, north = geographic_bounds(latitude, longitude, ns_m, ew_m)
     triangles = []
-    envelope_seen = False
-    for event, element in ET.iterparse(path, events=("start", "end")):
-        if event == "start" and element.tag == f"{{{GML}}}Envelope" and not envelope_seen:
-            envelope_seen = True
-            if element.get("srsName") != EXPECTED_CRS or element.get("srsDimension") != "3":
-                raise DemError("PLATEAU DEM must use three-dimensional EPSG:6697")
-        if event != "end" or element.tag != f"{{{GML}}}posList":
-            continue
-        values = [float(value) for value in (element.text or "").split()]
-        element.clear()
+    gml_prefix, intersects = _dem_header(path, west, south, east, north)
+    if not intersects:
+        return []
+    for tokens in _iter_pos_lists(path, gml_prefix):
+        values = [float(value) for value in tokens]
         if len(values) < 9 or len(values) % 3:
             continue
         points = [values[index:index + 3] for index in range(0, len(values), 3)]
@@ -55,9 +121,70 @@ def extract_triangles(path: Path, latitude: float, longitude: float, ns_m: float
         enu = project_epsg6697_to_local_enu(points, latitude, longitude)
         # MuJoCo hfield axes: X=North, Y=-East, Z=Up.
         triangles.append(tuple((north_m, -east_m, altitude) for east_m, north_m, altitude in enu))
-    if not envelope_seen:
-        raise DemError("PLATEAU DEM has no CRS envelope")
     return triangles
+
+
+def extract_sources_parallel(
+    sources: list[Path],
+    latitude: float,
+    longitude: float,
+    ns_m: float,
+    ew_m: float,
+    workers: int,
+):
+    """Extract independent DEM files concurrently while preserving source order."""
+    if workers <= 1 or len(sources) <= 1:
+        results = []
+        for index, source in enumerate(sources, 1):
+            print(
+                "[HAKO_PROGRESS] " + json.dumps({
+                    "phase": "terrain_extract", "current": index - 1,
+                    "total": len(sources), "source": source.name,
+                }, separators=(",", ":")),
+                flush=True,
+            )
+            results.append(extract_triangles(source, latitude, longitude, ns_m, ew_m))
+        return results
+
+    results: list[list | None] = [None] * len(sources)
+    effective_workers = min(workers, len(sources))
+    with concurrent.futures.ProcessPoolExecutor(max_workers=effective_workers) as executor:
+        futures = {
+            executor.submit(
+                extract_triangles, source, latitude, longitude, ns_m, ew_m,
+            ): (index, source)
+            for index, source in enumerate(sources)
+        }
+        pending = set(futures)
+        completed = 0
+        while pending:
+            done, pending = concurrent.futures.wait(
+                pending,
+                timeout=5.0,
+                return_when=concurrent.futures.FIRST_COMPLETED,
+            )
+            if not done:
+                print(
+                    "[HAKO_PROGRESS] " + json.dumps({
+                        "phase": "terrain_extract", "current": completed,
+                        "total": len(sources), "message": "DEM source extraction in progress",
+                    }, separators=(",", ":")),
+                    flush=True,
+                )
+                continue
+            for future in done:
+                index, source = futures[future]
+                results[index] = future.result()
+                completed += 1
+                print(
+                    "[HAKO_PROGRESS] " + json.dumps({
+                        "phase": "terrain_extract", "current": completed,
+                        "total": len(sources), "source": source.name,
+                        "triangle_count": len(results[index]),
+                    }, separators=(",", ":")),
+                    flush=True,
+                )
+    return [result if result is not None else [] for result in results]
 
 
 def source_paths(source: Path) -> list[Path]:
@@ -83,6 +210,73 @@ def _barycentric_height(x: float, y: float, triangle, epsilon: float = 1e-8):
     return a * z1 + b * z2 + c * z3
 
 
+def _neighbor_offsets(
+    max_distance_m: float,
+    row_spacing_m: float,
+    col_spacing_m: float,
+):
+    row_radius = math.floor(max_distance_m / row_spacing_m + 1e-9)
+    col_radius = math.floor(max_distance_m / col_spacing_m + 1e-9)
+    offsets = []
+    for row_delta in range(-row_radius, row_radius + 1):
+        for col_delta in range(-col_radius, col_radius + 1):
+            distance = math.hypot(
+                row_delta * row_spacing_m,
+                col_delta * col_spacing_m,
+            )
+            if distance <= max_distance_m + 1e-9:
+                offsets.append((distance, row_delta, col_delta))
+    return sorted(offsets)
+
+
+def _fill_small_gaps(
+    samples,
+    missing,
+    nrow: int,
+    ncol: int,
+    row_spacing_m: float,
+    col_spacing_m: float,
+    max_distance_m: float,
+):
+    """Fill from the four nearest original samples within a bounded grid radius."""
+    original = list(samples)
+    offsets = _neighbor_offsets(max_distance_m, row_spacing_m, col_spacing_m)
+    maximum_fill_distance = 0.0
+    for completed, index in enumerate(missing, 1):
+        row, col = divmod(index, ncol)
+        nearest = []
+        for distance, row_delta, col_delta in offsets:
+            candidate_row = row + row_delta
+            candidate_col = col + col_delta
+            if not (0 <= candidate_row < nrow and 0 <= candidate_col < ncol):
+                continue
+            candidate = candidate_row * ncol + candidate_col
+            if math.isfinite(original[candidate]):
+                nearest.append((distance, candidate))
+                if len(nearest) == 4:
+                    break
+        if not nearest:
+            continue
+        distance = nearest[0][0]
+        maximum_fill_distance = max(maximum_fill_distance, distance)
+        if distance == 0:
+            samples[index] = original[nearest[0][1]]
+        else:
+            weights = [(1.0 / item[0], original[item[1]]) for item in nearest]
+            samples[index] = sum(weight * value for weight, value in weights) / sum(
+                weight for weight, _ in weights
+            )
+        if completed % 10000 == 0:
+            print(
+                "[HAKO_PROGRESS] " + json.dumps({
+                    "phase": "terrain_gap_fill", "current": completed,
+                    "total": len(missing),
+                }, separators=(",", ":")),
+                flush=True,
+            )
+    return maximum_fill_distance
+
+
 def sample_heightfield(
     triangles,
     ns_m: float,
@@ -90,60 +284,54 @@ def sample_heightfield(
     spacing_m: float,
     max_gap_fill_distance_m: float = 0.0,
 ):
-    ncol = round((2.0 * ns_m) / spacing_m) + 1
-    nrow = round((2.0 * ew_m) / spacing_m) + 1
-    if not math.isclose((ncol - 1) * spacing_m, 2.0 * ns_m, abs_tol=1e-8):
-        raise DemError("north/south extent must be divisible by grid spacing")
-    if not math.isclose((nrow - 1) * spacing_m, 2.0 * ew_m, abs_tol=1e-8):
-        raise DemError("east/west extent must be divisible by grid spacing")
+    # A browser-drawn selection is not generally divisible by the requested
+    # spacing. Preserve the exact bbox and choose enough intervals that the
+    # effective spacing never becomes coarser than the configured maximum.
+    ncol = max(1, math.ceil((2.0 * ns_m) / spacing_m - 1e-12)) + 1
+    nrow = max(1, math.ceil((2.0 * ew_m) / spacing_m - 1e-12)) + 1
+    col_spacing_m = (2.0 * ns_m) / (ncol - 1)
+    row_spacing_m = (2.0 * ew_m) / (nrow - 1)
     samples = [math.nan] * (nrow * ncol)
     for triangle in triangles:
         xs = [point[0] for point in triangle]
         ys = [point[1] for point in triangle]
-        col_first = max(0, math.ceil((min(xs) + ns_m) / spacing_m - 1e-9))
-        col_last = min(ncol - 1, math.floor((max(xs) + ns_m) / spacing_m + 1e-9))
-        row_first = max(0, math.ceil((min(ys) + ew_m) / spacing_m - 1e-9))
-        row_last = min(nrow - 1, math.floor((max(ys) + ew_m) / spacing_m + 1e-9))
+        col_first = max(0, math.ceil((min(xs) + ns_m) / col_spacing_m - 1e-9))
+        col_last = min(ncol - 1, math.floor((max(xs) + ns_m) / col_spacing_m + 1e-9))
+        row_first = max(0, math.ceil((min(ys) + ew_m) / row_spacing_m - 1e-9))
+        row_last = min(nrow - 1, math.floor((max(ys) + ew_m) / row_spacing_m + 1e-9))
         for row in range(row_first, row_last + 1):
-            y = -ew_m + row * spacing_m
+            y = -ew_m + row * row_spacing_m
             for col in range(col_first, col_last + 1):
-                x = -ns_m + col * spacing_m
+                x = -ns_m + col * col_spacing_m
                 height = _barycentric_height(x, y, triangle)
                 if height is not None:
                     samples[row * ncol + col] = height
     missing = [index for index, value in enumerate(samples) if not math.isfinite(value)]
-    gap_report = {"source_missing_samples": len(missing), "maximum_fill_distance_m": 0.0}
+    gap_report = {
+        "source_missing_samples": len(missing),
+        "maximum_fill_distance_m": 0.0,
+        "effective_spacing_m": {
+            "north_south": col_spacing_m,
+            "east_west": row_spacing_m,
+        },
+    }
     if missing and max_gap_fill_distance_m > 0:
-        valid = [index for index, value in enumerate(samples) if math.isfinite(value)]
-        original = list(samples)
-        for index in missing:
-            row, col = divmod(index, ncol)
-            nearest = sorted(
-                (
-                    (math.hypot(row - (candidate // ncol), col - (candidate % ncol)) * spacing_m, candidate)
-                    for candidate in valid
-                ),
-                key=lambda item: item[0],
-            )[:4]
-            distance = nearest[0][0]
-            gap_report["maximum_fill_distance_m"] = max(
-                gap_report["maximum_fill_distance_m"], distance
-            )
-            if distance > max_gap_fill_distance_m:
-                continue
-            if distance == 0:
-                samples[index] = original[nearest[0][1]]
-            else:
-                weights = [(1.0 / item[0], original[item[1]]) for item in nearest]
-                samples[index] = sum(weight * value for weight, value in weights) / sum(
-                    weight for weight, _ in weights
-                )
+        print(
+            "[HAKO_PROGRESS] " + json.dumps({
+                "phase": "terrain_gap_fill", "current": 0, "total": len(missing),
+            }, separators=(",", ":")),
+            flush=True,
+        )
+        gap_report["maximum_fill_distance_m"] = _fill_small_gaps(
+            samples, missing, nrow, ncol,
+            row_spacing_m, col_spacing_m, max_gap_fill_distance_m,
+        )
         missing = [index for index, value in enumerate(samples) if not math.isfinite(value)]
     if missing:
         coordinates = [
             (
-                -ns_m + (index % ncol) * spacing_m,
-                -ew_m + (index // ncol) * spacing_m,
+                -ns_m + (index % ncol) * col_spacing_m,
+                -ew_m + (index // ncol) * row_spacing_m,
             )
             for index in missing[:12]
         ]
@@ -189,21 +377,27 @@ def main() -> int:
     parser.add_argument("--north-south", type=float, default=100.0)
     parser.add_argument("--east-west", type=float, default=100.0)
     parser.add_argument("--spacing", type=float, default=2.0)
+    parser.add_argument(
+        "--workers", type=int, default=min(2, os.cpu_count() or 1),
+        help="parallel DEM source extraction processes (default: up to 2)",
+    )
     args = parser.parse_args()
+    if args.workers < 1:
+        parser.error("--workers must be at least 1")
     # Retain neighboring TIN triangles beyond the sampled rectangle. The
     # geographic bbox is only a discovery guard; exact clipping happens in
     # local MuJoCo coordinates during grid sampling.
     extraction_margin = 2.0 * args.spacing
     sources = source_paths(args.source)
-    triangles = []
-    for source in sources:
-        triangles.extend(extract_triangles(
-            source,
-            args.latitude,
-            args.longitude,
-            args.north_south + extraction_margin,
-            args.east_west + extraction_margin,
-        ))
+    extracted = extract_sources_parallel(
+        sources,
+        args.latitude,
+        args.longitude,
+        args.north_south + extraction_margin,
+        args.east_west + extraction_margin,
+        args.workers,
+    )
+    triangles = [triangle for result in extracted for triangle in result]
     if not triangles:
         raise DemError("PLATEAU DEM contains no triangle intersecting the requested range")
     nrow, ncol, samples, gap_report = sample_heightfield(
@@ -225,7 +419,9 @@ def main() -> int:
         "half_extent_m": {"north_south": args.north_south, "east_west": args.east_west},
         "coordinate_system": "X=North,Y=-East,Z=Up",
         "spacing_m": args.spacing,
+        "effective_spacing_m": gap_report["effective_spacing_m"],
         "triangle_extraction_margin_m": extraction_margin,
+        "parallel_workers": min(args.workers, len(sources)),
         "nrow": nrow,
         "ncol": ncol,
         "triangle_count": len(triangles),

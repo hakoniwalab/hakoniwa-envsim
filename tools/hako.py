@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import importlib.util
 import json
 import re
@@ -67,6 +68,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "city_world": {
         "enabled": False,
+        "parallel_workers": 4,
         "terrain_spacing_m": 2.0,
         "marking_vertical_offset_m": 0.055,
         "bridge_collision_thickness_m": 0.02,
@@ -230,6 +232,13 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
         raise ConfigError("glb.texture_mode must be embedded-if-available or flat")
     if not isinstance(cfg["city_world"]["enabled"], bool):
         raise ConfigError("city_world.enabled must be true or false")
+    parallel_workers = cfg["city_world"]["parallel_workers"]
+    if (
+        isinstance(parallel_workers, bool)
+        or not isinstance(parallel_workers, int)
+        or not 1 <= parallel_workers <= 16
+    ):
+        raise ConfigError("city_world.parallel_workers must be an integer in [1, 16]")
     for key in ("terrain_spacing_m", "marking_vertical_offset_m", "bridge_collision_thickness_m"):
         value = cfg["city_world"][key]
         if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
@@ -293,6 +302,25 @@ def _run(command: list[str]) -> None:
     subprocess.run(command, cwd=ROOT, check=True)
 
 
+def _run_groups(groups: list[list[list[str]]], max_workers: int) -> None:
+    """Run independent command groups concurrently; commands in a group stay ordered."""
+    def run_group(commands: list[list[str]]) -> None:
+        for command in commands:
+            _run(command)
+
+    if max_workers <= 1 or len(groups) <= 1:
+        for group in groups:
+            run_group(group)
+        return
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=min(max_workers, len(groups)),
+        thread_name_prefix="city-world",
+    ) as executor:
+        futures = [executor.submit(run_group, group) for group in groups]
+        for future in concurrent.futures.as_completed(futures):
+            future.result()
+
+
 def _query_meta(cfg: dict[str, Any]) -> dict[str, Any]:
     center = cfg["selection"]["center"]
     extent = cfg["selection"]["half_extent_m"]
@@ -303,6 +331,67 @@ def _query_meta(cfg: dict[str, Any]) -> dict[str, Any]:
         "bbox": {"west": bbox[0], "south": bbox[1], "east": bbox[2], "north": bbox[3]},
         "third_mesh_codes": third_mesh_codes(bbox),
     }
+
+
+def _materialize_feature_sources(
+    selected: list[dict[str, Any]],
+    feature_type: str,
+    source_root: Path,
+    cache_root: Path | None,
+    offline: bool,
+    max_workers: int,
+) -> list[dict[str, Any]]:
+    items = [{**item, "feature_type": feature_type} for item in selected]
+
+    def materialize(index: int, item: dict[str, Any]) -> dict[str, Any]:
+        print(
+            f"INFO: {feature_type} CityGML {index + 1}/{len(items)} "
+            f"city={item['city_code']} year={item['year']} "
+            f"mesh={item['code']} size={item['file_size']}"
+        )
+        if offline:
+            expected = source_root / f"{item['city_code']}-{item['year']}" / Path(
+                urllib.parse.urlparse(item["url"]).path
+            ).name
+            if not expected.is_file():
+                raise ConfigError(f"offline build requires downloaded CityGML: {expected}")
+            return {
+                **item, "path": str(expected), "bytes": expected.stat().st_size,
+                "sha256": sha256_file(expected), "mode": "offline-reused",
+            }
+        return download_file(item, source_root, cache_root=cache_root)
+
+    if not items:
+        return []
+    _emit_progress(
+        "source_download", feature=feature_type, current=0, total=len(items),
+        parallel_workers=min(max_workers, len(items)),
+    )
+    records: list[dict[str, Any] | None] = [None] * len(items)
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=min(max_workers, len(items)),
+        thread_name_prefix=f"download-{feature_type}",
+    ) as executor:
+        futures = {
+            executor.submit(materialize, index, item): index
+            for index, item in enumerate(items)
+        }
+        completed = 0
+        for future in concurrent.futures.as_completed(futures):
+            index = futures[future]
+            record = future.result()
+            records[index] = record
+            completed += 1
+            _emit_progress(
+                "source_download", feature=feature_type,
+                current=completed, total=len(items), mode=record["mode"],
+                source_index=index + 1,
+            )
+            print(
+                f"INFO: PLATEAU source mode={record['mode']} "
+                f"bytes={record['bytes']} sha256={record['sha256']}"
+            )
+    return [record for record in records if record is not None]
 
 
 def configure(manifest: Path) -> int:
@@ -401,6 +490,7 @@ def _convert(
             "--north-south", str(cfg["selection"]["half_extent_m"]["north_south"]),
             "--east-west", str(cfg["selection"]["half_extent_m"]["east_west"]),
             "--spacing", str(city_world["terrain_spacing_m"]),
+            "--workers", str(min(2, city_world["parallel_workers"])),
         ])
         world_frame = terrain_dir / "world-frame.json"
         terrain_receipt = terrain_dir / "terrain-receipt.json"
@@ -418,22 +508,20 @@ def _convert(
             glb_command.extend(["--download-manifest", str(download_manifest)])
         if not offline and cfg["glb"]["texture_mode"] != "flat":
             glb_command.append("--fetch-textures")
-        _run(glb_command)
-
         building_physics_classification = buildings_dir / "building-physics-classification.json"
         building_physics_debug_glb = buildings_dir / "building-physics-classes.glb"
-        _run([
+        classifier_command = [
             sys.executable, str(PIPELINE / "building_physics_classifier.py"),
             "--selection", str(lod1),
             "--world-frame", str(world_frame),
             "--out", str(building_physics_classification),
             "--debug-glb", str(building_physics_debug_glb),
             "--max-level", str(cfg["mjcf"]["building_physics_level"]),
-        ])
+        ]
 
         buildings_xml = buildings_dir / "buildings.xml"
         building_physics_application = buildings_dir / "building-physics-application.json"
-        command = [
+        buildings_mjcf_command = [
             sys.executable, str(PIPELINE / "obb2mjcf.py"),
             "--inp", str(walls), "--zsrc", str(lod1), "--out", str(buildings_xml),
             "--model-name", cfg["mjcf"]["model_name"],
@@ -445,35 +533,34 @@ def _convert(
             "--max-physics-level", str(cfg["mjcf"]["building_physics_level"]),
         ]
         if cfg["mjcf"]["floor"]:
-            command.append("--floor")
-        _run(command)
+            buildings_mjcf_command.append("--floor")
 
         terrain_glb = terrain_dir / "terrain.glb"
         roads_glb = roads_dir / "roads.glb"
-        _run([
+        roads_command = [
             sys.executable, str(PIPELINE / "road_terrain_probe.py"),
             "--roads", str(source_root), "--terrain-receipt", str(terrain_receipt),
             "--terrain-out", str(terrain_glb), "--roads-out", str(roads_glb),
-        ])
+        ]
         markings_glb = markings_dir / "road-markings.glb"
-        _run([
+        markings_command = [
             sys.executable, str(PIPELINE / "city_furniture2glb.py"),
             "--source", str(source_root), "--world-frame", str(world_frame),
             "--terrain-receipt", str(terrain_receipt), "--out", str(markings_glb),
             "--marking-vertical-offset", str(city_world["marking_vertical_offset_m"]),
             "--allow-empty",
-        ])
+        ]
         bridges_glb = bridges_dir / "bridges.glb"
         bridges_receipt = bridges_dir / "bridges-glb-receipt.json"
-        _run([
+        bridges_glb_command = [
             sys.executable, str(PIPELINE / "bridge2glb.py"),
             "--source", str(source_root), "--world-frame", str(world_frame),
             "--out", str(bridges_glb), "--receipt", str(bridges_receipt),
             "--allow-empty",
-        ])
+        ]
         bridges_xml = bridges_dir / "bridges.xml"
         bridge_physics_receipt = bridges_dir / "receipt.json"
-        _run([
+        bridges_mjcf_command = [
             sys.executable, str(PIPELINE / "bridge2mjcf.py"),
             "--source", str(source_root), "--world-frame", str(world_frame),
             "--terrain-receipt", str(terrain_receipt),
@@ -481,7 +568,15 @@ def _convert(
             "--collision-thickness", str(city_world["bridge_collision_thickness_m"]),
             "--max-slope-deg", str(city_world["bridge_max_surface_slope_deg"]),
             "--collide", cfg["mjcf"]["collision"],
-        ])
+        ]
+        _run_groups([
+            [glb_command],
+            [classifier_command, buildings_mjcf_command],
+            [roads_command],
+            [markings_command],
+            [bridges_glb_command],
+            [bridges_mjcf_command],
+        ], city_world["parallel_workers"])
         compose_command = [
             sys.executable, str(PIPELINE / "city_world_composer.py"),
             "--world-frame", str(world_frame),
@@ -651,38 +746,14 @@ def build(manifest: Path, offline: bool = False) -> int:
             "_catalog_status",
             {"status": "available" if selected else "not_available"},
         )
-        for index, item in enumerate(selected, 1):
-            item = {**item, "feature_type": feature_type}
-            _emit_progress(
-                "source_download", feature=feature_type,
-                current=index, total=len(selected),
-            )
-            print(
-                f"INFO: {feature_type} CityGML {index}/{len(selected)} "
-                f"city={item['city_code']} year={item['year']} "
-                f"mesh={item['code']} size={item['file_size']}"
-            )
-            if offline:
-                expected = source_root / f"{item['city_code']}-{item['year']}" / Path(
-                    urllib.parse.urlparse(item["url"]).path
-                ).name
-                if not expected.is_file():
-                    raise ConfigError(f"offline build requires downloaded CityGML: {expected}")
-            record = download_file(
-                item, source_root, cache_root=cache_root,
-            ) if not offline else {
-                **item, "path": str(expected), "bytes": expected.stat().st_size,
-                "sha256": sha256_file(expected), "mode": "offline-reused"
-            }
-            downloaded.append(record)
-            _emit_progress(
-                "source_download", feature=feature_type,
-                current=index, total=len(selected), mode=record["mode"],
-            )
-            print(
-                f"INFO: PLATEAU source mode={record['mode']} "
-                f"bytes={record['bytes']} sha256={record['sha256']}"
-            )
+        downloaded.extend(_materialize_feature_sources(
+            selected,
+            feature_type,
+            source_root,
+            cache_root,
+            offline,
+            cfg["city_world"]["parallel_workers"],
+        ))
     download_manifest = {
         "schema_version": 1,
         "query": meta,

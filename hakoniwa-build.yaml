@@ -43,6 +43,7 @@ glb:
 
 city_world:
   enabled: false
+  parallel_workers: 4
   terrain_spacing_m: 2
   marking_vertical_offset_m: 0.055
   bridge_collision_thickness_m: 0.02

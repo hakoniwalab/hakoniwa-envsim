@@ -99,6 +99,7 @@
       "required": ["enabled", "terrain_spacing_m", "marking_vertical_offset_m"],
       "properties": {
         "enabled": {"type": "boolean"},
+        "parallel_workers": {"type": "integer", "minimum": 1, "maximum": 16},
         "terrain_spacing_m": {"type": "number", "exclusiveMinimum": 0},
         "marking_vertical_offset_m": {"type": "number", "exclusiveMinimum": 0},
         "bridge_collision_thickness_m": {"type": "number", "exclusiveMinimum": 0},

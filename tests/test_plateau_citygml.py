@@ -529,6 +529,28 @@ class PlateauCityGmlTest(unittest.TestCase):
         with self.assertRaisesRegex(hako.ConfigError, "building_physics_level"):
             hako.resolve_config(config)
 
+    def test_city_world_parallel_workers_are_bounded(self):
+        hako = load_hako_module()
+        for workers in (1, 4, 16):
+            config = copy.deepcopy(hako.DEFAULT_CONFIG)
+            config["city_world"]["parallel_workers"] = workers
+            self.assertEqual(
+                hako.resolve_config(config)["city_world"]["parallel_workers"], workers
+            )
+        for invalid in (0, 17, 1.5, True):
+            config = copy.deepcopy(hako.DEFAULT_CONFIG)
+            config["city_world"]["parallel_workers"] = invalid
+            with self.assertRaisesRegex(hako.ConfigError, "parallel_workers"):
+                hako.resolve_config(config)
+
+    def test_parallel_command_groups_preserve_dependencies_inside_each_group(self):
+        hako = load_hako_module()
+        observed = []
+        with mock.patch.object(hako, "_run", side_effect=lambda command: observed.append(command[0])):
+            hako._run_groups([[['a'], ['b']], [['c']], [['d']]], max_workers=3)
+        self.assertEqual(sorted(observed), ['a', 'b', 'c', 'd'])
+        self.assertLess(observed.index('a'), observed.index('b'))
+
     def test_direct_glb_embeds_lod2_texture_and_uses_lod1_fallback(self):
         pipeline = load_pipeline_module()
         fixture = ROOT / "tests" / "fixtures" / "tiny_mixed_lod_6697_op.gml"

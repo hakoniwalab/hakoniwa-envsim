@@ -37,7 +37,8 @@ python tools/hako.py install
 原点とする局所ENUメートル座標へ変換してから、MuJoCoの
 `X=North, Y=-East, Z=Up` へ写像します。
 
-設定、取得データのprovenance、オフライン再変換、範囲の意味については
+全設定項目は[`hakoniwa-build.yaml`設定リファレンス](docs/hakoniwa-build-reference.md)、
+取得データのprovenance、オフライン再変換、変換仕様については
 [PLATEAU CityGML → MuJoCo変換](docs/plateau-citygml-to-mujoco.md)を参照してください。
 
 # プレゼンテーション
