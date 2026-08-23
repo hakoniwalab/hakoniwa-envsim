@@ -69,6 +69,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "city_world": {
         "enabled": False,
         "parallel_workers": 4,
+        "dem_parallel_workers": 2,
         "terrain_spacing_m": 2.0,
         "marking_vertical_offset_m": 0.055,
         "bridge_collision_thickness_m": 0.02,
@@ -239,6 +240,13 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
         or not 1 <= parallel_workers <= 16
     ):
         raise ConfigError("city_world.parallel_workers must be an integer in [1, 16]")
+    dem_parallel_workers = cfg["city_world"]["dem_parallel_workers"]
+    if (
+        isinstance(dem_parallel_workers, bool)
+        or not isinstance(dem_parallel_workers, int)
+        or not 1 <= dem_parallel_workers <= 4
+    ):
+        raise ConfigError("city_world.dem_parallel_workers must be an integer in [1, 4]")
     for key in ("terrain_spacing_m", "marking_vertical_offset_m", "bridge_collision_thickness_m"):
         value = cfg["city_world"][key]
         if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
@@ -490,7 +498,7 @@ def _convert(
             "--north-south", str(cfg["selection"]["half_extent_m"]["north_south"]),
             "--east-west", str(cfg["selection"]["half_extent_m"]["east_west"]),
             "--spacing", str(city_world["terrain_spacing_m"]),
-            "--workers", str(min(2, city_world["parallel_workers"])),
+            "--workers", str(city_world["dem_parallel_workers"]),
         ])
         world_frame = terrain_dir / "world-frame.json"
         terrain_receipt = terrain_dir / "terrain-receipt.json"

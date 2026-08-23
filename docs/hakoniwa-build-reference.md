@@ -84,7 +84,8 @@ Dataset Validatorで`scoped_out`として明示されます。
 | 設定 | 型・範囲 | 既定値 | 意味 |
 |---|---|---|---|
 | `city_world.enabled` | boolean | `false` | 建物単体ではなく、地形・道路等を含むCity Worldを生成する |
-| `city_world.parallel_workers` | 整数1〜16 | `4` | source取得と独立component生成に使うworker上限。DEM抽出はメモリ保護のため最大2 process |
+| `city_world.parallel_workers` | 整数1〜16 | `4` | source取得と独立component生成に使うworker上限 |
+| `city_world.dem_parallel_workers` | 整数1〜4 | `2` | DEM source抽出専用のprocess上限。メモリ保護のため最大4 |
 | `city_world.terrain_spacing_m` | 0より大きいm | `2` | DEM hfieldの目標最大格子間隔。小さいほど詳細だが、sample数とメモリが増える |
 | `city_world.marking_vertical_offset_m` | 0より大きいm | `0.055` | 路面標示Visualを道路面から浮かせる描画用offset |
 | `city_world.bridge_collision_thickness_m` | 0より大きいm | `0.02` | 橋面collision meshへ与える数値上の厚み |
@@ -98,6 +99,31 @@ Dataset Validatorで`scoped_out`として明示されます。
 DEMの未収録領域をこの設定で補うことはありません。
 DEM CityGMLはCRSとEnvelopeをXMLとして検証した後、巨大ファイル全体のXML treeを
 構築せず、TINの`gml:posList`だけをstream走査します。複数sourceは並列処理されます。
+
+### `parallel_workers`の選び方
+
+`parallel_workers`は、PLATEAU source取得と、出力先が独立した建物Visual、建物Physics、
+道路、路面標示、橋梁component生成のworker上限です。ComposerとDataset Validatorは
+依存componentの完了後に直列実行します。`dem_parallel_workers`はDEM source抽出だけに使い、
+実際のprocess数は設定値と対象DEM source数の小さい方です。DEM CityGMLと抽出結果をprocessごとに
+保持するため、メモリ保護の観点から設定上限を4にしています。
+
+まず既定値`4`を使い、CPUとメモリに余裕があり、source取得または独立component生成が
+律速している場合に`6`、次に`8`を試します。CPU飽和、swap、ディスクI/O待ちが増える場合は
+一段階戻します。`8`を超える値は、同じ入力範囲とcache状態で処理時間の短縮を実測できた場合だけ
+使用してください。並列可能なsource数・component数以上のworkerは待機するため、値を増やせば
+必ず高速化するわけではありません。
+
+DEM source抽出が律速し、CPUとメモリに余裕がある場合だけ、既定値`2`から`4`へ増やします。
+この値は、その後の格子ラスタライズや小欠損補間には影響しません。
+
+直接実行では、`tools/hako.py build --config`へ渡すYAMLの次の箇所を編集します。
+
+```yaml
+city_world:
+  parallel_workers: 6
+  dem_parallel_workers: 4
+```
 
 ## 出力 (`output`)
 

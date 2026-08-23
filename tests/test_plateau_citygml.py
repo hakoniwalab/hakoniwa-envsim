@@ -543,6 +543,21 @@ class PlateauCityGmlTest(unittest.TestCase):
             with self.assertRaisesRegex(hako.ConfigError, "parallel_workers"):
                 hako.resolve_config(config)
 
+    def test_city_world_dem_parallel_workers_are_bounded(self):
+        hako = load_hako_module()
+        for workers in (1, 2, 4):
+            config = copy.deepcopy(hako.DEFAULT_CONFIG)
+            config["city_world"]["dem_parallel_workers"] = workers
+            self.assertEqual(
+                hako.resolve_config(config)["city_world"]["dem_parallel_workers"],
+                workers,
+            )
+        for invalid in (0, 5, 1.5, True):
+            config = copy.deepcopy(hako.DEFAULT_CONFIG)
+            config["city_world"]["dem_parallel_workers"] = invalid
+            with self.assertRaisesRegex(hako.ConfigError, "dem_parallel_workers"):
+                hako.resolve_config(config)
+
     def test_parallel_command_groups_preserve_dependencies_inside_each_group(self):
         hako = load_hako_module()
         observed = []
