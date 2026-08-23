@@ -38,6 +38,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "pipeline": {"type": "plateau-citygml-to-assets"},
     "source": {
         "api_base_url": "https://api.plateauview.mlit.go.jp",
+        "cache_dir": None,
         "feature_type": "bldg",
         "feature_types": {
             "bldg": True, "tran": False, "dem": False, "frn": False,
@@ -184,6 +185,9 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
         raise ConfigError("source.feature_types.bldg must be true")
     if not isinstance(cfg["source"]["api_base_url"], str) or not cfg["source"]["api_base_url"].startswith("https://"):
         raise ConfigError("source.api_base_url must be an HTTPS URL")
+    cache_dir = cfg["source"]["cache_dir"]
+    if cache_dir is not None and (not isinstance(cache_dir, str) or not cache_dir.strip()):
+        raise ConfigError("source.cache_dir must be null or a non-empty path")
     year = cfg["source"]["year"]
     if year != "latest" and (not isinstance(year, int) or isinstance(year, bool) or year < 2000):
         raise ConfigError("source.year must be latest or a four-digit year")
@@ -300,7 +304,7 @@ def doctor(manifest: Path) -> int:
         scripts.extend([
             "dem2hfield.py", "road_terrain_probe.py", "city_furniture2glb.py",
             "bridge2glb.py", "bridge2mjcf.py", "city_world_composer.py", "city_dataset_validator.py",
-            "world_frame.py",
+            "mjcf_colliders2glb.py", "world_frame.py",
         ])
     for script in scripts:
         if not (PIPELINE / script).is_file():
@@ -507,6 +511,11 @@ def build(manifest: Path, offline: bool = False) -> int:
     build_dir = _path(cfg["output"]["build_dir"])
     source_root = build_dir / "source"
     source_root.mkdir(parents=True, exist_ok=True)
+    cache_root = (
+        _path(cfg["source"]["cache_dir"])
+        if cfg["source"]["cache_dir"] is not None
+        else None
+    )
     meta = _query_meta(cfg)
     (source_root / "query_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     downloaded = []
@@ -602,10 +611,17 @@ def build(manifest: Path, offline: bool = False) -> int:
                 ).name
                 if not expected.is_file():
                     raise ConfigError(f"offline build requires downloaded CityGML: {expected}")
-            downloaded.append(download_file(item, source_root) if not offline else {
+            record = download_file(
+                item, source_root, cache_root=cache_root,
+            ) if not offline else {
                 **item, "path": str(expected), "bytes": expected.stat().st_size,
                 "sha256": sha256_file(expected), "mode": "offline-reused"
-            })
+            }
+            downloaded.append(record)
+            print(
+                f"INFO: PLATEAU source mode={record['mode']} "
+                f"bytes={record['bytes']} sha256={record['sha256']}"
+            )
     download_manifest = {
         "schema_version": 1,
         "query": meta,

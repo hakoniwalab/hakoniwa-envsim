@@ -49,11 +49,16 @@ PLATEAU APIへ明示し、LOD1抽出時に建物フットプリントの重心�
 メッシュを`m:`条件で問い合わせ、メッシュコード一覧をquery契約として記録します。
 隣接自治体から同一メッシュ・同一建物が返る場合はCityGML建物IDで一つにまとめます。
 同じIDで形状が異なる場合は、任意の一方を選ばず入力矛盾として停止します。
+メッシュ単位のCityGMLはユーザー選択範囲より広いため、建物LOD1の厳密な底面検証より先に
+query-centered local ENU上で範囲交差を判定します。範囲外の不正形状は生成を妨げません。
+範囲内に不正なLOD1底面がある場合は、その1棟だけをスキップし、建物ID、source GML、
+理由コードを抽出JSON、建物Receipt、Dataset Validatorへ伝搬します。
 
 主な設定値は次のとおりです。
 
 | 設定 | 意味 |
 |---|---|
+| `source.cache_dir` | 任意の共有CityGML cache。source URL単位で保存し、サイズとSHA-256検証後に再利用。同一filesystemではhard link、利用できない場合はcopyでbuildへ配置。`null`ではbuild単位 |
 | `source.year` | `latest`または西暦。`latest`は市区町村ごとの最新データを選択 |
 | `geometry.base_epsilon_m` | 建物底面点を抽出する高さ許容差 |
 | `geometry.waste_threshold` | OBB内の空白面積率 `(OBB面積-建物面積)/OBB面積` がこの値を超えたら外周壁boxへ切替（0〜1） |
@@ -136,6 +141,11 @@ MuJoCoのデフォルト値へ暗黙にフォールバックしません。
 することはなく、境界頂点とDEM高さの差だけを計測します。
 橋面全体についてもsource頂点と同一XYのDEM高さを比較し、DEMより低いsample数を
 Receiptへ記録します。負の差があっても橋面を黙って移動せず、元データ間の不一致として残します。
+
+生成済みCity World MJCFは`mjcf_colliders2glb.py`でデバッグ表示用GLBへ変換できます。
+box、inline mesh、terrain hfieldを対象とし、MJCFの
+`X=North, Y=-East, Z=Up`からThree.jsの`X=East, Y=Up, Z=-North`へ変換します。
+このGLBはVisual Worldとの位置合わせを確認するための表示物であり、collision判定の正本ではありません。
 
 関連設定は次のとおりです。
 

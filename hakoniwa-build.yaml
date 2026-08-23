@@ -6,6 +6,7 @@ pipeline:
 
 source:
   api_base_url: https://api.plateauview.mlit.go.jp
+  cache_dir: null
   feature_type: bldg
   feature_types:
     bldg: true

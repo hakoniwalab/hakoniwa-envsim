@@ -258,7 +258,11 @@ def _selection(selection_path: Path):
     if not zmins:
         raise GlbError("selection contains no buildings")
     origin = data.get("origin") or {}
-    return by_source, float(min(zmins)), float(origin["lat"]), float(origin["lon"])
+    extraction = {
+        "skipped_building_count": int(data.get("skipped_buildings", 0)),
+        "issues": data.get("building_extraction_issues", []),
+    }
+    return by_source, float(min(zmins)), float(origin["lat"]), float(origin["lon"]), extraction
 
 
 def build_glb(
@@ -270,7 +274,7 @@ def build_glb(
     texture_mode: str,
     altitude_offset_m: float | None = None,
 ) -> dict:
-    selected, selection_z_offset, center_lat, center_lon = _selection(selection_path)
+    selected, selection_z_offset, center_lat, center_lon, extraction = _selection(selection_path)
     z_offset = selection_z_offset if altitude_offset_m is None else float(altitude_offset_m)
     resolver = TextureResolver(_source_urls(download_manifest), fetch_textures, texture_mode != "flat")
     batches = defaultdict(lambda: {"vertices": [], "faces": [], "uv": []})
@@ -375,6 +379,7 @@ def build_glb(
             "origin": {"latitude": center_lat, "longitude": center_lon, "altitude_offset_m": z_offset},
         },
         "buildings": {"lod2": lod2_buildings, "lod1_fallback": lod1_buildings},
+        "extraction": extraction,
         "surfaces": {"textured": int(textured_surfaces), "flat": int(flat_surfaces)},
         "triangles": total_triangles,
         "meshes": len(scene.geometry),

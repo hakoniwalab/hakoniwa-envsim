@@ -7,6 +7,8 @@ import json
 import math
 import os
 import re
+import shutil
+import tempfile
 import urllib.parse
 import urllib.request
 import urllib.error
@@ -88,6 +90,21 @@ def second_mesh_codes(bbox: tuple[float, float, float, float]) -> list[str]:
     return sorted({code[:6] for code in third_mesh_codes(bbox)})
 
 
+def third_mesh_bounds(code: str) -> tuple[float, float, float, float]:
+    """Return west, south, east, north for one 8-digit Japanese mesh code."""
+    if re.fullmatch(r"\d{8}", code) is None:
+        raise PlateauError(f"third-level mesh code must contain 8 digits: {code!r}")
+    first_lat = int(code[0:2])
+    first_lon = int(code[2:4])
+    second_lat = int(code[4])
+    second_lon = int(code[5])
+    third_lat = int(code[6])
+    third_lon = int(code[7])
+    south = first_lat * (2.0 / 3.0) + second_lat / 12.0 + third_lat / 120.0
+    west = 100.0 + first_lon + second_lon / 8.0 + third_lon / 80.0
+    return west, south, west + 1.0 / 80.0, south + 1.0 / 120.0
+
+
 def request_catalog(
     url: str, timeout_sec: int = 60, *, allow_not_found: bool = False
 ) -> dict[str, Any]:
@@ -112,6 +129,30 @@ def request_catalog(
         raise PlateauError(f"PLATEAU catalog request failed: {url}: {exc}") from exc
     if not isinstance(payload, dict) or not isinstance(payload.get("cities"), list):
         raise PlateauError("PLATEAU catalog response does not contain a cities array")
+    return payload
+
+
+def request_dataset_catalog(
+    api_base_url: str = "https://api.plateauview.mlit.go.jp",
+    timeout_sec: int = 60,
+) -> dict[str, Any]:
+    """Return the official PLATEAU municipality/dataset catalog.
+
+    This is the coarse, nationwide availability layer.  Callers must still
+    use ``request_catalog`` for the selected bbox before claiming that source
+    files are available for generation.
+    """
+    url = f"{api_base_url.rstrip('/')}/datacatalog/plateau-datasets"
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "hakoniwa-envsim/plateau-citygml"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout_sec) as response:
+            payload = json.load(response)
+    except Exception as exc:
+        raise PlateauError(f"PLATEAU dataset catalog request failed: {url}: {exc}") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("citygml"), list):
+        raise PlateauError("PLATEAU dataset catalog response does not contain a citygml array")
     return payload
 
 
@@ -182,9 +223,127 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def download_file(item: dict[str, Any], source_root: Path, timeout_sec: int = 180) -> dict[str, Any]:
+def _cache_object_path(item: dict[str, Any], cache_root: Path) -> Path:
+    identity = f"{item['url']}\n{int(item.get('file_size', 0))}"
+    url_key = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:20]
+    return cache_root / "objects" / url_key / _safe_filename(item["url"])
+
+
+def _read_valid_cache(
+    item: dict[str, Any], cache_path: Path,
+) -> tuple[int, str] | None:
+    receipt_path = cache_path.with_suffix(cache_path.suffix + ".cache.json")
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        actual_size = cache_path.stat().st_size
+        if (
+            actual_size <= 0
+            or receipt.get("url") != item["url"]
+            or receipt.get("catalog_file_size") != int(item.get("file_size", 0))
+            or receipt.get("bytes") != actual_size
+        ):
+            return None
+        actual_sha256 = sha256_file(cache_path)
+        if receipt.get("sha256") != actual_sha256:
+            return None
+        return actual_size, actual_sha256
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def _download_cache_object(
+    item: dict[str, Any], cache_path: Path, timeout_sec: int,
+) -> tuple[int, str]:
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    request = urllib.request.Request(
+        item["url"], headers={"User-Agent": "hakoniwa-envsim/plateau-citygml"},
+    )
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=cache_path.parent,
+            prefix=f".{cache_path.name}.",
+            suffix=".part",
+            delete=False,
+        ) as output:
+            temporary = Path(output.name)
+            with urllib.request.urlopen(request, timeout=timeout_sec) as response:
+                while chunk := response.read(1024 * 1024):
+                    output.write(chunk)
+        if temporary.stat().st_size <= 0:
+            raise PlateauError(f"downloaded an empty PLATEAU asset: {item['url']}")
+        actual_size = temporary.stat().st_size
+        declared_size = int(item.get("file_size", 0))
+        if declared_size > 0 and actual_size != declared_size:
+            print(
+                "WARN: PLATEAU catalog fileSize differs from the downloaded object; "
+                f"declared={declared_size}, actual={actual_size}, url={item['url']}"
+            )
+        actual_sha256 = sha256_file(temporary)
+        os.replace(temporary, cache_path)
+        temporary = None
+        cache_path.with_suffix(cache_path.suffix + ".cache.json").write_text(
+            json.dumps({
+                "schema_version": 1,
+                "url": item["url"],
+                "catalog_file_size": int(item.get("file_size", 0)),
+                "bytes": actual_size,
+                "sha256": actual_sha256,
+            }, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return actual_size, actual_sha256
+    except Exception as exc:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        if isinstance(exc, PlateauError):
+            raise
+        raise PlateauError(f"PLATEAU asset download failed: {item['url']}: {exc}") from exc
+
+
+def download_file(
+    item: dict[str, Any], source_root: Path, timeout_sec: int = 180,
+    *, cache_root: Path | None = None,
+) -> dict[str, Any]:
     destination = source_root / f"{item['city_code']}-{item['year']}" / _safe_filename(item["url"])
     destination.parent.mkdir(parents=True, exist_ok=True)
+    if cache_root is not None:
+        cache_path = _cache_object_path(item, cache_root)
+        cached = _read_valid_cache(item, cache_path)
+        cache_hit = cached is not None
+        actual_size, actual_sha256 = cached or _download_cache_object(
+            item, cache_path, timeout_sec,
+        )
+        destination_valid = (
+            destination.is_file()
+            and destination.stat().st_size == actual_size
+            and sha256_file(destination) == actual_sha256
+        )
+        if not destination_valid:
+            temporary = destination.with_suffix(destination.suffix + ".part")
+            temporary.unlink(missing_ok=True)
+            try:
+                os.link(cache_path, temporary)
+                materialization = "hardlink"
+            except OSError:
+                shutil.copy2(cache_path, temporary)
+                materialization = "copy"
+            os.replace(temporary, destination)
+        else:
+            materialization = "existing"
+        return {
+            **item,
+            "path": str(destination),
+            "bytes": actual_size,
+            "sha256": actual_sha256,
+            "mode": "cache-reused" if cache_hit else "downloaded",
+            "cache": {
+                "path": str(cache_path),
+                "hit": cache_hit,
+                "materialization": materialization,
+            },
+        }
+
     declared_size = int(item.get("file_size", 0))
     reused = destination.is_file() and destination.stat().st_size > 0
     if not reused:

@@ -110,6 +110,10 @@ def validate_dataset(
                 "lod2": int(building_lods.get("lod2", 0)),
                 "lod1_fallback": int(building_lods.get("lod1_fallback", 0)),
                 "lod_resolution": building_resolution,
+                "skipped_building_count": int(
+                    (buildings.get("extraction") or {}).get("skipped_building_count", 0)
+                ),
+                "extraction_issues": (buildings.get("extraction") or {}).get("issues", []),
             },
             "road_surfaces": {
                 "status": "available",
@@ -161,6 +165,11 @@ def validate_dataset(
             "unavailable_components": (
                 ([] if marking_available else ["road_markings"])
                 + ([] if bridge_available else ["bridges"])
+            ),
+            "warnings": (
+                ["invalid LOD1 buildings were skipped with provenance"]
+                if int((buildings.get("extraction") or {}).get("skipped_building_count", 0))
+                else []
             ),
         },
     }

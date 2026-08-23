@@ -190,7 +190,39 @@ def is_within_bounds(footprint, bounds):
     return abs(cy) <= ns_m and abs(cx) <= ew_m
 
 
-def extract_buildings_lod1(gml_path, base_eps=0.2, bounds=None, local_origin=None):
+def _xyz_intersects_bounds(xyz, bounds):
+    """Cheaply reject buildings wholly outside the requested rectangle."""
+    if bounds is None or not xyz:
+        return True
+    east = [point[0] for point in xyz]
+    north = [point[1] for point in xyz]
+    return not (
+        max(east) < -bounds["ew_m"] or min(east) > bounds["ew_m"]
+        or max(north) < -bounds["ns_m"] or min(north) > bounds["ns_m"]
+    )
+
+
+def _geometry_issue(building_id, gml_path, error):
+    message = str(error)
+    if "invalid and cannot be preserved" in message:
+        code = "invalid_lod1_bottom_polygon"
+    elif "horizontal bottom surface was not found" in message:
+        code = "lod1_bottom_surface_not_found"
+    elif "non-horizontal interior ring" in message:
+        code = "non_horizontal_lod1_interior_ring"
+    else:
+        code = "invalid_lod1_geometry"
+    return {
+        "building_id": building_id,
+        "source_gml": str(gml_path),
+        "reason_code": code,
+        "message": message,
+    }
+
+
+def extract_buildings_lod1(
+    gml_path, base_eps=0.2, bounds=None, local_origin=None, issues=None,
+):
     """
     1つの GML ファイルから bldg:lod1Solid の元の底面外周と穴を抽出する。
     - base_eps: zmin からの許容差（m）。水平底面の判定に使用。
@@ -231,20 +263,36 @@ def extract_buildings_lod1(gml_path, base_eps=0.2, bounds=None, local_origin=Non
             center_lon=local_origin[1],
         )
 
+        # PLATEAU files are mesh-sized. Do not let malformed geometry outside
+        # the user's requested rectangle prevent an otherwise valid build.
+        if not _xyz_intersects_bounds(xyz, bounds):
+            continue
+
         zmin = float(min(p[2] for p in xyz))
         zmax = float(max(p[2] for p in xyz))
 
-        base_polygons = _base_polygons(bldg, zmin, base_eps, local_origin)
-        if not base_polygons:
-            raise ValueError(f"LOD1 horizontal bottom surface was not found: building={bid}")
+        try:
+            base_polygons = _base_polygons(bldg, zmin, base_eps, local_origin)
+            if not base_polygons:
+                raise ValueError(f"LOD1 horizontal bottom surface was not found: building={bid}")
 
-        merged = unary_union(base_polygons)
-        if merged.geom_type == "Polygon":
-            parts = [merged]
-        elif merged.geom_type == "MultiPolygon":
-            parts = sorted(merged.geoms, key=lambda item: tuple(item.bounds))
-        else:
-            raise ValueError(f"LOD1 bottom surfaces did not form polygons: building={bid}")
+            merged = unary_union(base_polygons)
+            if merged.geom_type == "Polygon":
+                parts = [merged]
+            elif merged.geom_type == "MultiPolygon":
+                parts = sorted(merged.geoms, key=lambda item: tuple(item.bounds))
+            else:
+                raise ValueError(f"LOD1 bottom surfaces did not form polygons: building={bid}")
+        except ValueError as exc:
+            if issues is None:
+                raise ValueError(f"{exc}: building={bid}") from exc
+            issue = _geometry_issue(bid, gml_path, exc)
+            issues.append(issue)
+            print(
+                f"[WARN] skipped building={bid} reason={issue['reason_code']} "
+                f"source={gml_path}"
+            )
+            continue
 
         for index, part in enumerate(parts, start=1):
             serialized = _canonical_polygon(part)
@@ -357,12 +405,14 @@ def main():
 
     all_footprints = []
     duplicate_count = 0
+    extraction_issues = []
     for gml in gml_paths:
         footprints = extract_buildings_lod1(
             gml_path=gml,
             base_eps=args.base_eps,
             bounds=bounds,
             local_origin=(origin_meta["center_lat"], origin_meta["center_lon"]),
+            issues=extraction_issues,
         )
         duplicate_count += merge_unique_footprints(all_footprints, footprints, gml)
 
@@ -372,6 +422,8 @@ def main():
         "crs": "LOCAL_ENU_GRS80",
         "coordinate_system": "local-enu",
         "deduplicated_buildings": duplicate_count,
+        "skipped_buildings": len(extraction_issues),
+        "building_extraction_issues": extraction_issues,
         "polygons": all_footprints
     }
     
@@ -390,6 +442,8 @@ def main():
     print(f"[OK] buildings: {len(all_footprints)}  → {out_path}")
     if duplicate_count:
         print(f"[INFO] deduplicated identical buildings by CityGML ID: {duplicate_count}")
+    if extraction_issues:
+        print(f"[WARN] skipped invalid LOD1 buildings: {len(extraction_issues)}")
     print(f"[OK] 局所ENU座標系で出力しました（原点: lat={origin_meta['center_lat']}, lon={origin_meta['center_lon']}）")
     if bounds:
         print(f"[OK] 範囲フィルタ適用: ±{bounds['ns_m']}m (NS), ±{bounds['ew_m']}m (EW)")
