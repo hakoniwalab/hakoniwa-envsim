@@ -255,7 +255,8 @@ P1〜P3では次の規則を共有します。
 
 - CRSはEPSG:6697を必須とし、query中心のlocal ENUからMJCF
   `X=North, Y=-East, Z=Up`へ変換する
-- RoofSurfaceはworld Zの負方向へ厚みを付ける
+- RoofSurfaceは原則としてworld Zの負方向へ厚みを付ける。ただし実データ上ほぼ垂直な
+  RoofSurfaceでは-Z押し出しが退化するため、面法線方向へフォールバックする
 - Wall/OuterCeiling/OuterFloorはsource polygonまたはfallback三角形の法線方向へ厚みを付ける
 - 現在の厚みは0.02m。歴史的なCLI名`--roof-thickness`が全semantic surfaceの厚みを兼ねる
 - 面積が`1e-6 m²`未満、または`2*area/max_edge² < 1e-6`の三角形は数値的退化として除外する
@@ -268,23 +269,47 @@ P1〜P3では次の規則を共有します。
 - P3も各source polygon内だけで統合するため、OuterCeiling/OuterFloorが表す
   空洞・張り出しをsurface間の統合で塞がない
 
-`mjcf.building_collider_reduction`は次の3モードです。
+`mjcf.building_collider_reduction`は次の4モードです。
 
 | mode | 統合範囲 |
 |---|---|
 | `safe` | 上記のとおり、同一source polygon内だけ |
 | `coplanar-union` | すでに凸なsource polygon Colliderについて、同一建物・surface種別・向き・平面の隣接面も統合 |
 | `convex-decompose` | `coplanar-union`に加え、凹・穴ありsource polygonの三角Colliderを同一source polygon内で少数の凸領域へ再構成 |
+| `tolerant-planar` | `convex-decompose`後、同一建物のWallSurfaceだけを対象に、法線差2度以内・派生平面まで最大5cm以内の隣接凸面を統合 |
 
-後二者も、隣接する2形状の幾何学的和集合が単一の穴なし凸polygonになる組だけを段階的に
+後三者も、隣接する2形状の幾何学的和集合が単一の穴なし凸polygonになる組だけを段階的に
 置換します。凸包、頂点snap、隙間補間は使いません。したがって空白領域を新たなcollisionで
-埋めません。`convex-decompose`は決定的なgreedy統合であり、数学的な最小分割は保証しません。
+埋めません。`tolerant-planar`もXY方向の隙間を補間せず、既存boxがmeshへ変わる統合を拒否します。
+5cmは元頂点から派生平面までの最大変位です。各モードは決定的なgreedy統合であり、数学的な
+最小分割は保証しません。
 
 生成した凸prismのうち、元面が厳密な長方形で、全頂点の厚み方向が一致し、厚みが面へ直交する
 ものはMuJoCo `geom type="box"`として書き出します。傾斜面をworld-Z方向へ厚くしたsheared prism、
 長方形でない凸polygon、数値条件を満たさないものはmeshを維持します。これにより形状を変えず、
 MuJoCoのprimitive collisionを利用します。クラス別box/mesh数は
 `building-physics-application.json`の`collider_geom_types.by_class`へ記録します。
+
+### 許容誤差付き平面化の評価
+
+`building_collider_tolerance_profiler.py`は、現在のPhysics形状を変更せず、
+`convex-decompose`後のColliderに許容誤差付き平面化を仮適用した場合の削減候補を
+JSONへ記録する解析専用ツールです。MJCF/GLBは生成・変更しません。
+
+```bash
+python src/city_pipeline/building_collider_tolerance_profiler.py \
+  --selection BUILD_DIR/city-world-lod1.json \
+  --classification BUILD_DIR/components/buildings/building-physics-classification.json \
+  --world-frame BUILD_DIR/components/terrain/world-frame.json \
+  --out tolerance-profile.json
+```
+
+既定では`0 / 5 / 10 / 20 / 50 cm`を評価します。`0 cm`との差分が、数値誤差ではなく
+近似平面化によって得られる効果です。結果にはCollider削減数、Surface種別ごとの削減数、
+box/mesh推定数、元頂点から派生平面までの最大変位を記録します。これはruntime高速化を
+保証する値ではなく、`tolerant-planar`の適用可否や閾値を判断するための資料です。
+`--surface-kinds WallSurface`で壁だけを評価でき、`--preserve-box-primitives`を指定すると
+既存boxをmeshへ変える統合候補を除外できます。
 
 `building-physics-application.json`の`collider_optimization`には、クラスごとに
 `triangles_before`、`colliders_after`、`merged_group_count`、
@@ -306,7 +331,7 @@ MuJoCoのprimitive collisionを利用します。クラス別box/mesh数は
 - polygonの自己交差、surface間の隙間、watertight性の包括検証
 - sourceの法線向きが全surfaceで統一されていることの検証
 - 実際の経路探索による通行可能性の証明
-- 凹形状を複数の凸形状へ再分割するconvex decomposition
+- 数学的な最小個数を保証する大域的convex decomposition
 - P1の「複数だが実質同一平面の屋根」をP0へ戻す判定
 - P2の高さ別cross-sectionを直接比較する判定
 

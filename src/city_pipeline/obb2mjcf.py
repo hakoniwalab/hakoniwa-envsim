@@ -477,7 +477,7 @@ def main():
                     help="Maximum applied building Physics class (P0..P3)")
     ap.add_argument(
         "--building-collider-reduction",
-        choices=("safe", "coplanar-union", "convex-decompose"),
+        choices=("safe", "coplanar-union", "convex-decompose", "tolerant-planar"),
         default="safe",
         help="Optional exact union across adjacent coplanar source polygons",
     )

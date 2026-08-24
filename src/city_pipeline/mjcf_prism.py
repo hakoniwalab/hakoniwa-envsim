@@ -5,6 +5,11 @@ from __future__ import annotations
 import numpy as np
 
 
+# A -Z extrusion has only ``thickness * abs(normal.z)`` effective thickness.
+# Below 5% it is a numerically narrow 3-D hull despite having non-zero rank.
+MIN_WORLD_Z_EXTRUSION_NORMAL_COMPONENT = 0.05
+
+
 PRISM_FACES = np.asarray([
     [0, 1, 2], [5, 4, 3],
     [0, 3, 4], [0, 4, 1],
@@ -62,6 +67,40 @@ def polygon_prism_along_normal(vertices: np.ndarray, thickness_m: float):
     return np.vstack((surface, surface - offset)), _polygon_prism_faces(len(surface))
 
 
+def polygon_prism_for_surface(
+    vertices: np.ndarray,
+    thickness_m: float,
+    *,
+    prefer_world_z: bool,
+):
+    """Build a non-degenerate prism and report the extrusion direction used.
+
+    Roof surfaces normally use world -Z so their collision top stays exactly at
+    the source height.  Some real PLATEAU datasets nevertheless label nearly
+    vertical polygons as RoofSurface.  Moving such a polygon along -Z leaves
+    all vertices effectively coplanar and MuJoCo/QHull cannot compile it.  In
+    that case we use the source normal, which guarantees the requested physical
+    thickness without changing the source face.
+    """
+    surface = np.asarray(vertices, dtype=float)
+    if not prefer_world_z:
+        prism, faces = polygon_prism_along_normal(surface, thickness_m)
+        return prism, faces, "surface-normal"
+
+    normal = np.zeros(3, dtype=float)
+    for index, current in enumerate(surface):
+        normal += np.cross(current, surface[(index + 1) % len(surface)])
+    length = float(np.linalg.norm(normal))
+    if length <= 1e-12:
+        raise ValueError("polygon prism source polygon is degenerate")
+    world_z_normal_component = abs(float(normal[2] / length))
+    if world_z_normal_component >= MIN_WORLD_Z_EXTRUSION_NORMAL_COMPONENT:
+        prism, faces = polygon_prism(surface, thickness_m)
+        return prism, faces, "world-z"
+    prism, faces = polygon_prism_along_normal(surface, thickness_m)
+    return prism, faces, "surface-normal-fallback"
+
+
 def triangular_prism(vertices: np.ndarray, thickness_m: float):
     """Return a watertight prism with an exact top triangle and downward thickness."""
     top = np.asarray(vertices, dtype=float)
@@ -98,20 +137,37 @@ def prism_as_box(surface_vertices, prism_vertices):
     """
     surface = np.asarray(surface_vertices, dtype=float)
     prism = np.asarray(prism_vertices, dtype=float)
-    if surface.shape != (4, 3) or prism.shape != (8, 3):
+    if surface.ndim != 2 or surface.shape[1:] != (3,) or len(surface) < 4:
+        return None
+    if prism.shape != (2 * len(surface), 3):
         return None
     scale = max(float(np.ptp(prism, axis=0).max()), 1.0)
     tolerance = max(1e-6, scale * 1e-8)
-    bottom = prism[4:]
-    if not np.allclose(prism[:4], surface, atol=tolerance, rtol=0):
+    bottom = prism[len(surface):]
+    if not np.allclose(prism[:len(surface)], surface, atol=tolerance, rtol=0):
         return None
     extrusion = bottom - surface
     if not np.allclose(extrusion, extrusion[0], atol=tolerance, rtol=0):
         return None
-    edge_x = surface[1] - surface[0]
-    edge_y = surface[2] - surface[1]
-    opposite_x = surface[3] - surface[2]
-    opposite_y = surface[0] - surface[3]
+    corners = []
+    for index, point in enumerate(surface):
+        previous = surface[index - 1]
+        following = surface[(index + 1) % len(surface)]
+        incoming = point - previous
+        outgoing = following - point
+        denominator = float(np.linalg.norm(incoming) * np.linalg.norm(outgoing))
+        if denominator <= tolerance * tolerance:
+            return None
+        if float(np.linalg.norm(np.cross(incoming, outgoing))) <= 1e-8 * denominator:
+            continue
+        corners.append(point)
+    if len(corners) != 4:
+        return None
+    corners = np.asarray(corners, dtype=float)
+    edge_x = corners[1] - corners[0]
+    edge_y = corners[2] - corners[1]
+    opposite_x = corners[3] - corners[2]
+    opposite_y = corners[0] - corners[3]
     length_x = float(np.linalg.norm(edge_x))
     length_y = float(np.linalg.norm(edge_y))
     thickness = float(np.linalg.norm(extrusion[0]))
@@ -129,7 +185,7 @@ def prism_as_box(surface_vertices, prism_vertices):
     if abs(float(edge_y @ extrusion[0])) > orthogonal_tolerance * length_y * thickness:
         return None
     return {
-        "pos": prism.mean(axis=0),
+        "pos": corners.mean(axis=0) + extrusion[0] / 2,
         "size": np.asarray((length_x / 2, length_y / 2, thickness / 2)),
         "xyaxes": np.concatenate((edge_x / length_x, edge_y / length_y)),
     }

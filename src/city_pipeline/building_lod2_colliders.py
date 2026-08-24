@@ -10,6 +10,7 @@ GroundSurface is omitted because the city terrain owns the floor.
 from __future__ import annotations
 
 import json
+import heapq
 from collections import defaultdict
 from pathlib import Path
 from typing import NamedTuple
@@ -18,17 +19,20 @@ from xml.etree import ElementTree as ET
 import numpy as np
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
+from shapely.strtree import STRtree
 
 from citygml2glb import GML_ID, NS, _polygon_rings, triangulate_rings
 from geodesy import project_epsg6697_to_local_enu
 from mjcf_prism import (
     polygon_prism,
     polygon_prism_along_normal,
+    polygon_prism_for_surface,
     triangular_prism,
     triangular_prism_along_normal,
 )
 from gml_lod1_extract import validate_epsg6697_contract
 from world_frame import load_world_frame
+from building_tolerant_planar import reduce_tolerant_planar
 
 B = "{http://www.opengis.net/citygml/building/2.0}"
 GML_POLYGON = "{http://www.opengis.net/gml}Polygon"
@@ -39,7 +43,9 @@ PLANAR_RELATIVE_TOLERANCE = 1e-8
 COPLANAR_NORMAL_DECIMALS = 6
 COPLANAR_OFFSET_DECIMALS = 4
 UNION_AREA_TOLERANCE_M2 = 1e-6
-COLLIDER_REDUCTION_MODES = {"safe", "coplanar-union", "convex-decompose"}
+COLLIDER_REDUCTION_MODES = {
+    "safe", "coplanar-union", "convex-decompose", "tolerant-planar"
+}
 CLASS_SURFACE_KINDS = {
     "P1": ("WallSurface", "RoofSurface"),
     "P2": ("WallSurface", "RoofSurface"),
@@ -158,7 +164,8 @@ def _is_convex_polygon(polygon):
 
 
 def _apply_coplanar_union(
-    pieces, thickness_m, stats, *, include_triangulated_fallback: bool = False
+    pieces, thickness_m, stats, *, include_triangulated_fallback: bool = False,
+    progress_callback=None,
 ):
     """Exactly merge adjacent source polygons when their union is one convex face.
 
@@ -193,9 +200,17 @@ def _apply_coplanar_union(
     merged = []
     rejected_non_convex = 0
     rejected_holes = 0
-    for group in groups.values():
+    group_values = list(groups.values())
+    progress_interval = max(1000, len(group_values) // 100)
+    for group_index, group in enumerate(group_values, start=1):
         if len(group) < 2:
             merged.extend(item[0] for item in group)
+            if progress_callback is not None and (
+                group_index == 1
+                or group_index == len(group_values)
+                or group_index % progress_interval == 0
+            ):
+                progress_callback(group_index, len(group_values))
             continue
         normal = group[0][2]
         offset = group[0][3]
@@ -208,39 +223,87 @@ def _apply_coplanar_union(
             {"polygon": polygon, "pieces": [item[0]]}
             for item, polygon in zip(group, projected)
         ]
-        changed = True
-        while changed:
-            changed = False
-            for left in range(len(candidates)):
-                for right in range(left + 1, len(candidates)):
-                    first_polygon = candidates[left]["polygon"]
-                    second_polygon = candidates[right]["polygon"]
-                    if first_polygon.boundary.intersection(
-                        second_polygon.boundary
-                    ).length <= UNION_AREA_TOLERANCE_M2:
-                        continue
-                    component = unary_union([first_polygon, second_polygon])
-                    if component.geom_type != "Polygon":
-                        continue
-                    if component.interiors:
-                        rejected_holes += 1
-                        continue
-                    if not _is_convex_polygon(component):
-                        rejected_non_convex += 1
-                        continue
-                    candidates[left] = {
-                        "polygon": component,
-                        "pieces": (
-                            candidates[left]["pieces"] + candidates[right]["pieces"]
-                        ),
-                    }
-                    del candidates[right]
-                    stats["convex_merge_count"] += 1
-                    stats["convex_merge_colliders_eliminated"] += 1
-                    changed = True
-                    break
-                if changed:
-                    break
+        if len(projected) <= 8:
+            # Most source polygons contain only a few triangles. A spatial
+            # index costs more than direct comparison at this size.
+            edges = [
+                (left, right)
+                for left in range(len(projected))
+                for right in range(left + 1, len(projected))
+            ]
+        else:
+            spatial_index = STRtree(projected)
+            edges = sorted({
+                (left, int(right))
+                for left, polygon in enumerate(projected)
+                for right in spatial_index.query(polygon)
+                if int(right) > left
+            })
+        parent = list(range(len(candidates)))
+        neighbors = [set() for _ in candidates]
+        for left, right in edges:
+            neighbors[left].add(right)
+            neighbors[right].add(left)
+
+        def find(index):
+            while parent[index] != index:
+                parent[index] = parent[parent[index]]
+                index = parent[index]
+            return index
+
+        pending = list(edges)
+        heapq.heapify(pending)
+        queued = set(edges)
+        while pending:
+            original_left, original_right = heapq.heappop(pending)
+            queued.discard((original_left, original_right))
+            left, right = find(original_left), find(original_right)
+            if left == right:
+                continue
+            first_polygon = candidates[left]["polygon"]
+            second_polygon = candidates[right]["polygon"]
+            if first_polygon.boundary.intersection(
+                second_polygon.boundary
+            ).length <= UNION_AREA_TOLERANCE_M2:
+                continue
+            component = unary_union([first_polygon, second_polygon])
+            if component.geom_type != "Polygon":
+                continue
+            if component.interiors:
+                rejected_holes += 1
+                continue
+            if not _is_convex_polygon(component):
+                rejected_non_convex += 1
+                continue
+            keep, discard = min(left, right), max(left, right)
+            candidates[keep] = {
+                "polygon": component,
+                "pieces": candidates[left]["pieces"] + candidates[right]["pieces"],
+            }
+            parent[discard] = keep
+            stats["convex_merge_count"] += 1
+            stats["convex_merge_colliders_eliminated"] += 1
+
+            affected = neighbors[keep] | neighbors[discard]
+            neighbors[keep] = set()
+            neighbors[discard].clear()
+            for candidate_index in affected:
+                root = find(candidate_index)
+                if root == keep:
+                    continue
+                neighbors[keep].add(root)
+                neighbors[root].discard(discard)
+                neighbors[root].add(keep)
+                pair = (min(keep, root), max(keep, root))
+                if pair not in queued:
+                    heapq.heappush(pending, pair)
+                    queued.add(pair)
+
+        candidates = [
+            candidates[index]
+            for index in range(len(candidates))
+            if find(index) == index
+        ]
 
         for candidate in candidates:
             component = candidate["polygon"]
@@ -268,10 +331,10 @@ def _apply_coplanar_union(
                 continue
             if float(oriented[0] @ normal) < 0:
                 ring = ring[::-1]
-            prism, prism_faces = (
-                polygon_prism(ring, thickness_m)
-                if first["surface_kind"] == "RoofSurface"
-                else polygon_prism_along_normal(ring, thickness_m)
+            prism, prism_faces, _ = polygon_prism_for_surface(
+                ring,
+                thickness_m,
+                prefer_world_z=(first["surface_kind"] == "RoofSurface"),
             )
             merged.append({
                 **first,
@@ -280,6 +343,12 @@ def _apply_coplanar_union(
                 "faces": prism_faces,
                 "_collider_origin": "coplanar-union",
             })
+        if progress_callback is not None and (
+            group_index == 1
+            or group_index == len(group_values)
+            or group_index % progress_interval == 0
+        ):
+            progress_callback(group_index, len(group_values))
 
     stats["convex_merge_rejected_non_convex_count"] = rejected_non_convex
     stats["convex_merge_rejected_hole_count"] = rejected_holes
@@ -364,6 +433,7 @@ def _surface_pieces_for_classes(
             "colliders_before_reduction": 0,
             "convex_merge_count": 0,
             "convex_merge_colliders_eliminated": 0,
+            "roof_normal_extrusion_fallback_count": 0,
         }
         for class_id in class_ids
     }
@@ -439,13 +509,17 @@ def _surface_pieces_for_classes(
                                 fallback_reason = "interior_ring"
 
                             if merged_ring is not None and valid_triangles:
-                                prism, prism_faces = (
-                                    polygon_prism(merged_ring, thickness_m)
-                                    if surface_kind == "RoofSurface"
-                                    else polygon_prism_along_normal(
-                                        merged_ring, thickness_m
+                                prism, prism_faces, extrusion_mode = (
+                                    polygon_prism_for_surface(
+                                        merged_ring,
+                                        thickness_m,
+                                        prefer_world_z=(
+                                            surface_kind == "RoofSurface"
+                                        ),
                                     )
                                 )
+                                if extrusion_mode == "surface-normal-fallback":
+                                    stats["roof_normal_extrusion_fallback_count"] += 1
                                 piece_index = counters[class_id].next(building_id)
                                 pieces[class_id].append({
                                     "id": (
@@ -474,13 +548,17 @@ def _surface_pieces_for_classes(
                             if fallback_reason:
                                 stats["fallback_polygon_counts"][fallback_reason] += 1
                             for triangle in valid_triangles:
-                                prism, prism_faces = (
-                                    triangular_prism(triangle, thickness_m)
-                                    if surface_kind == "RoofSurface"
-                                    else triangular_prism_along_normal(
-                                        triangle, thickness_m
+                                prism, prism_faces, extrusion_mode = (
+                                    polygon_prism_for_surface(
+                                        triangle,
+                                        thickness_m,
+                                        prefer_world_z=(
+                                            surface_kind == "RoofSurface"
+                                        ),
                                     )
                                 )
+                                if extrusion_mode == "surface-normal-fallback":
+                                    stats["roof_normal_extrusion_fallback_count"] += 1
                                 piece_index = counters[class_id].next(building_id)
                                 pieces[class_id].append({
                                     "id": (
@@ -512,16 +590,66 @@ def _surface_pieces_for_classes(
             }, separators=(",", ":")),
             flush=True,
         )
-    if collider_reduction in {"coplanar-union", "convex-decompose"}:
-        for class_id in class_ids:
+    if collider_reduction in {
+        "coplanar-union", "convex-decompose", "tolerant-planar"
+    }:
+        for class_index, class_id in enumerate(class_ids, start=1):
             stats = optimization[class_id]
             stats["colliders_before_reduction"] = len(pieces[class_id])
+            print(
+                "[HAKO_PROGRESS] " + json.dumps({
+                    "phase": "building_physics_exact_reduction",
+                    "current": class_index,
+                    "total": len(class_ids),
+                    "class_id": class_id,
+                    "colliders": len(pieces[class_id]),
+                }, separators=(",", ":")),
+                flush=True,
+            )
             pieces[class_id] = _apply_coplanar_union(
                 pieces[class_id], thickness_m, stats,
                 include_triangulated_fallback=(
-                    collider_reduction == "convex-decompose"
+                    collider_reduction in {"convex-decompose", "tolerant-planar"}
+                ),
+                progress_callback=lambda current, total, class_id=class_id: print(
+                    "[HAKO_PROGRESS] " + json.dumps({
+                        "phase": "building_physics_exact_groups",
+                        "current": current,
+                        "total": total,
+                        "class_id": class_id,
+                    }, separators=(",", ":")),
+                    flush=True,
                 ),
             )
+            if collider_reduction == "tolerant-planar":
+                print(
+                    "[HAKO_PROGRESS] " + json.dumps({
+                        "phase": "building_physics_tolerant_reduction",
+                        "current": class_index,
+                        "total": len(class_ids),
+                        "class_id": class_id,
+                        "colliders": len(pieces[class_id]),
+                    }, separators=(",", ":")),
+                    flush=True,
+                )
+                pieces[class_id], tolerant_stats = reduce_tolerant_planar(
+                    pieces[class_id],
+                    thickness_m=thickness_m,
+                    tolerance_m=0.05,
+                    normal_tolerance_deg=2.0,
+                    surface_kinds=("WallSurface",),
+                    preserve_box_primitives=True,
+                    progress_callback=lambda current, total, class_id=class_id: print(
+                        "[HAKO_PROGRESS] " + json.dumps({
+                            "phase": "building_physics_tolerant_groups",
+                            "current": current,
+                            "total": total,
+                            "class_id": class_id,
+                        }, separators=(",", ":")),
+                        flush=True,
+                    ),
+                )
+                stats["tolerant_planar"] = tolerant_stats
             stats["colliders_after"] = len(pieces[class_id])
             stats["convex_polygon_collider_count"] = sum(
                 piece.get("_collider_origin") != "triangular-fallback"
@@ -533,6 +661,9 @@ def _surface_pieces_for_classes(
             )
             for piece in pieces[class_id]:
                 piece.pop("_collider_origin", None)
+                piece.pop("_tolerant_source_count", None)
+                piece.pop("_tolerant_maximum_displacement_m", None)
+                piece.pop("_extrusion_mode", None)
     else:
         for class_id in class_ids:
             optimization[class_id]["colliders_before_reduction"] = len(

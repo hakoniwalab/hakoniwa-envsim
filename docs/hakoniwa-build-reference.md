@@ -68,7 +68,7 @@ Dataset Validatorで`scoped_out`として明示されます。
 | `mjcf.collision` | `all` / `drone` / `none` | `all` | 建物と橋面のcollision filter。順に`(contype, conaffinity)=(1,0) / (1,2) / (0,0)` |
 | `mjcf.floor` | boolean | `false` | z=0の無限平面を建物MJCFへ追加する |
 | `mjcf.building_physics_level` | 整数0〜3 | `3` | 建物Colliderの適用上限。0=P0のみ、1=P1→P0、2=P2→P1→P0、3=P3→P2→P1→P0 |
-| `mjcf.building_collider_reduction` | `safe` / `coplanar-union` / `convex-decompose` | `safe` | P1〜P3のCollider統合範囲。後者ほど広い範囲を厳密な凸形状へ再構成する |
+| `mjcf.building_collider_reduction` | `safe` / `coplanar-union` / `convex-decompose` / `tolerant-planar` | `safe` | P1〜P3のCollider統合範囲。`tolerant-planar`だけはWallSurfaceへ最大5cmの近似を許容する |
 
 `building_physics_level`はPhysicsだけを変えます。VisualのLODやtextureは変えません。
 `coplanar-union`もVisualを変更しません。同一建物・同一semantic surface種別・同一向きの

@@ -26,6 +26,13 @@ LOD2_SPEC = importlib.util.spec_from_file_location("building_lod2_colliders_test
 LOD2_MODULE = importlib.util.module_from_spec(LOD2_SPEC)
 LOD2_SPEC.loader.exec_module(LOD2_MODULE)
 
+PROFILER_SCRIPT = SCRIPT.parent / "building_collider_tolerance_profiler.py"
+PROFILER_SPEC = importlib.util.spec_from_file_location(
+    "building_collider_tolerance_profiler_test", PROFILER_SCRIPT
+)
+PROFILER_MODULE = importlib.util.module_from_spec(PROFILER_SPEC)
+PROFILER_SPEC.loader.exec_module(PROFILER_MODULE)
+
 
 def metrics(**overrides):
     values = {
@@ -52,6 +59,41 @@ class BuildingPhysicsClassifierTest(unittest.TestCase):
         return MODULE.classify_metrics(
             metrics(**overrides), roof_relief_m=0.5, profile_ratio=1.5
         )
+
+    def test_roof_prism_falls_back_to_normal_for_vertical_surface(self):
+        vertical_roof = np.asarray([
+            [-41.7297393, 22.3065285, 25.7431918],
+            [-41.7297394, 22.3065285, 24.6432067],
+            [-40.5056186, 22.0999629, 25.3677918],
+            [-40.5056189, 22.0999630, 25.7431916],
+        ])
+        prism, _, mode = LOD2_MODULE.polygon_prism_for_surface(
+            vertical_roof, 0.02, prefer_world_z=True
+        )
+        self.assertEqual(mode, "surface-normal-fallback")
+        singular_values = np.linalg.svd(
+            prism - prism.mean(axis=0), compute_uv=False
+        )
+        self.assertGreater(singular_values[-1], 1e-4)
+
+        nearly_vertical_roof = np.asarray([
+            [0, 0, 0], [0.02, 0, 2], [0.02, 1, 2], [0, 1, 0],
+        ])
+        _, _, near_mode = LOD2_MODULE.polygon_prism_for_surface(
+            nearly_vertical_roof, 0.02, prefer_world_z=True
+        )
+        self.assertEqual(near_mode, "surface-normal-fallback")
+
+    def test_roof_prism_keeps_world_z_for_horizontal_and_sloped_surfaces(self):
+        for roof in (
+            np.asarray([[0, 0, 5], [2, 0, 5], [2, 2, 5], [0, 2, 5.0]]),
+            np.asarray([[0, 0, 5], [2, 0, 5.5], [2, 2, 5.5], [0, 2, 5.0]]),
+        ):
+            prism, _, mode = LOD2_MODULE.polygon_prism_for_surface(
+                roof, 0.02, prefer_world_z=True
+            )
+            self.assertEqual(mode, "world-z")
+            np.testing.assert_allclose(prism[len(roof):, 2], roof[:, 2] - 0.02)
 
     def test_simple_prism_is_p0(self):
         class_id, reasons = self.classify()
@@ -382,6 +424,118 @@ class BuildingPhysicsClassifierTest(unittest.TestCase):
         geom = root.find("./worldbody/geom")
         self.assertEqual(geom.get("type"), "box")
         self.assertIsNone(root.find("asset"))
+
+        rectangle_with_midpoints = np.asarray([
+            [0, 0, 2], [1, 0, 2], [2, 0, 2],
+            [2, 1, 2], [1, 1, 2], [0, 1, 2],
+        ], dtype=float)
+        midpoint_prism, _ = LOD2_MODULE.polygon_prism(
+            rectangle_with_midpoints, 0.02
+        )
+        midpoint_box = OBB_MODULE.prism_as_box(
+            rectangle_with_midpoints, midpoint_prism
+        )
+        self.assertIsNotNone(midpoint_box)
+        self.assertTrue(np.allclose(midpoint_box["pos"], [1, 0.5, 1.99]))
+
+    def test_tolerance_profiler_estimates_only_merges_within_displacement(self):
+        def roof(identifier, x0, x1, z):
+            ring = np.asarray([
+                [x0, 0, z], [x1, 0, z], [x1, 1, z], [x0, 1, z],
+            ], dtype=float)
+            prism, faces = LOD2_MODULE.polygon_prism(ring, 0.02)
+            return {
+                "id": identifier,
+                "building_id": "building",
+                "surface_kind": "RoofSurface",
+                "source_vertices": ring,
+                "vertices": prism,
+                "faces": faces,
+            }
+
+        pieces = [roof("left", 0, 1, 0.0), roof("right", 1, 2, 0.08)]
+        rejected = PROFILER_MODULE.profile_pieces(
+            pieces, tolerance_m=0.03, normal_tolerance_deg=2.0,
+            thickness_m=0.02,
+        )
+        self.assertEqual(rejected["colliders_after"], 2)
+        self.assertEqual(rejected["box_after"], 2)
+
+        accepted = PROFILER_MODULE.profile_pieces(
+            pieces, tolerance_m=0.05, normal_tolerance_deg=2.0,
+            thickness_m=0.02,
+        )
+        self.assertEqual(accepted["colliders_after"], 1)
+        self.assertEqual(accepted["colliders_eliminated"], 1)
+        self.assertEqual(
+            accepted["colliders_eliminated_by_surface"], {"RoofSurface": 1}
+        )
+        self.assertEqual(accepted["box_after"], 1)
+        self.assertAlmostEqual(accepted["maximum_displacement_m"], 0.04)
+
+        separated = [roof("left", 0, 1, 0.0), roof("right", 1.01, 2.01, 0.0)]
+        no_gap_fill = PROFILER_MODULE.profile_pieces(
+            separated, tolerance_m=0.05, normal_tolerance_deg=2.0,
+            thickness_m=0.02,
+        )
+        self.assertEqual(no_gap_fill["colliders_after"], 2)
+
+        triangle_ring = np.asarray([
+            [1, 0, 0], [2, 0.5, 0], [1, 1, 0],
+        ], dtype=float)
+        triangle_prism, triangle_faces = LOD2_MODULE.polygon_prism(
+            triangle_ring, 0.02
+        )
+        arrow = [pieces[0], {
+            "id": "tip",
+            "building_id": "building",
+            "surface_kind": "RoofSurface",
+            "source_vertices": triangle_ring,
+            "vertices": triangle_prism,
+            "faces": triangle_faces,
+        }]
+        mesh_merge = PROFILER_MODULE.profile_pieces(
+            arrow, tolerance_m=0.0, normal_tolerance_deg=2.0,
+            thickness_m=0.02,
+        )
+        self.assertEqual(mesh_merge["colliders_after"], 1)
+        preserved = PROFILER_MODULE.profile_pieces(
+            arrow, tolerance_m=0.0, normal_tolerance_deg=2.0,
+            thickness_m=0.02, preserve_box_primitives=True,
+        )
+        self.assertEqual(preserved["colliders_after"], 2)
+        self.assertEqual(preserved["box_after"], 1)
+
+    def test_tolerant_planar_production_merges_only_wall_faces(self):
+        def piece(identifier, x, y0, y1):
+            ring = np.asarray([
+                [x, y0, 0], [x, y1, 0], [x, y1, 2], [x, y0, 2],
+            ], dtype=float)
+            prism, faces, _ = LOD2_MODULE.polygon_prism_for_surface(
+                ring, 0.02, prefer_world_z=False
+            )
+            return {
+                "id": identifier,
+                "building_id": "building",
+                "surface_kind": "WallSurface",
+                "source_vertices": ring,
+                "vertices": prism,
+                "faces": faces,
+            }
+
+        walls = [piece("wall-a", 0.00, 0, 1), piece("wall-b", 0.08, 1, 2)]
+        reduced, stats = LOD2_MODULE.reduce_tolerant_planar(
+            walls,
+            thickness_m=0.02,
+            tolerance_m=0.05,
+            surface_kinds=("WallSurface",),
+            preserve_box_primitives=True,
+        )
+        self.assertEqual(len(reduced), 1)
+        self.assertEqual(stats["colliders_eliminated"], 1)
+        self.assertAlmostEqual(stats["maximum_displacement_m"], 0.04)
+        self.assertEqual(stats["box_before"], 2)
+        self.assertEqual(stats["box_after"], 1)
 
     def test_p2_application_receipt_records_source_replacement(self):
         with tempfile.TemporaryDirectory() as temporary:

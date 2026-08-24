@@ -227,11 +227,11 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
     if isinstance(physics_level, bool) or not isinstance(physics_level, int) or not 0 <= physics_level <= 3:
         raise ConfigError("mjcf.building_physics_level must be an integer in [0, 3]")
     if cfg["mjcf"]["building_collider_reduction"] not in {
-        "safe", "coplanar-union", "convex-decompose"
+        "safe", "coplanar-union", "convex-decompose", "tolerant-planar"
     }:
         raise ConfigError(
             "mjcf.building_collider_reduction must be safe, coplanar-union, "
-            "or convex-decompose"
+            "convex-decompose, or tolerant-planar"
         )
     if not isinstance(cfg["glb"]["enabled"], bool):
         raise ConfigError("glb.enabled must be true or false")
