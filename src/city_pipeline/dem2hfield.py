@@ -283,7 +283,13 @@ def sample_heightfield(
     ew_m: float,
     spacing_m: float,
     max_gap_fill_distance_m: float = 0.0,
+    uncovered_policy: str = "error",
+    uncovered_elevation_m: float = 0.0,
 ):
+    if uncovered_policy not in {"error", "constant"}:
+        raise ValueError("uncovered_policy must be error or constant")
+    if not math.isfinite(uncovered_elevation_m):
+        raise ValueError("uncovered_elevation_m must be finite")
     # A browser-drawn selection is not generally divisible by the requested
     # spacing. Preserve the exact bbox and choose enough intervals that the
     # effective spacing never becomes coarser than the configured maximum.
@@ -310,6 +316,11 @@ def sample_heightfield(
     gap_report = {
         "source_missing_samples": len(missing),
         "maximum_fill_distance_m": 0.0,
+        "uncovered_policy": uncovered_policy,
+        "constant_filled_samples": 0,
+        "constant_fill_elevation_m": (
+            uncovered_elevation_m if uncovered_policy == "constant" else None
+        ),
         "effective_spacing_m": {
             "north_south": col_spacing_m,
             "east_west": row_spacing_m,
@@ -327,6 +338,12 @@ def sample_heightfield(
             row_spacing_m, col_spacing_m, max_gap_fill_distance_m,
         )
         missing = [index for index, value in enumerate(samples) if not math.isfinite(value)]
+    gap_report["remaining_after_nearby_fill_samples"] = len(missing)
+    if missing and uncovered_policy == "constant":
+        for index in missing:
+            samples[index] = uncovered_elevation_m
+        gap_report["constant_filled_samples"] = len(missing)
+        missing = []
     if missing:
         coordinates = [
             (
@@ -378,6 +395,14 @@ def main() -> int:
     parser.add_argument("--east-west", type=float, default=100.0)
     parser.add_argument("--spacing", type=float, default=2.0)
     parser.add_argument(
+        "--uncovered-policy", choices=("error", "constant"), default="error",
+        help="handling for samples still uncovered after nearby gap fill (default: error)",
+    )
+    parser.add_argument(
+        "--uncovered-elevation", type=float, default=0.0,
+        help="elevation in metres used by --uncovered-policy constant (default: 0)",
+    )
+    parser.add_argument(
         "--workers", type=int, default=min(2, os.cpu_count() or 1),
         help="parallel DEM source extraction processes (default: up to 2)",
     )
@@ -406,6 +431,8 @@ def main() -> int:
         args.east_west,
         args.spacing,
         max_gap_fill_distance_m=20.0,
+        uncovered_policy=args.uncovered_policy,
+        uncovered_elevation_m=args.uncovered_elevation,
     )
     hfield = args.out.with_suffix(".hf")
     digest = write_hfield(hfield, nrow, ncol, samples)

@@ -7,6 +7,7 @@ import argparse
 import concurrent.futures
 import importlib.util
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -72,6 +73,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "parallel_workers": 4,
         "dem_parallel_workers": 2,
         "terrain_spacing_m": 2.0,
+        "terrain_uncovered_policy": "error",
+        "terrain_uncovered_elevation_m": 0.0,
         "marking_vertical_offset_m": 0.055,
         "bridge_collision_thickness_m": 0.02,
         "bridge_max_surface_slope_deg": 60.0,
@@ -259,6 +262,15 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
         value = cfg["city_world"][key]
         if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
             raise ConfigError(f"city_world.{key} must be positive")
+    if cfg["city_world"]["terrain_uncovered_policy"] not in {"error", "constant"}:
+        raise ConfigError("city_world.terrain_uncovered_policy must be error or constant")
+    uncovered_elevation = cfg["city_world"]["terrain_uncovered_elevation_m"]
+    if (
+        not isinstance(uncovered_elevation, (int, float))
+        or isinstance(uncovered_elevation, bool)
+        or not math.isfinite(uncovered_elevation)
+    ):
+        raise ConfigError("city_world.terrain_uncovered_elevation_m must be numeric")
     slope = cfg["city_world"]["bridge_max_surface_slope_deg"]
     if not isinstance(slope, (int, float)) or isinstance(slope, bool) or not 0 < slope < 90:
         raise ConfigError("city_world.bridge_max_surface_slope_deg must be in (0, 90)")
@@ -508,6 +520,8 @@ def _convert(
             "--east-west", str(cfg["selection"]["half_extent_m"]["east_west"]),
             "--spacing", str(city_world["terrain_spacing_m"]),
             "--workers", str(city_world["dem_parallel_workers"]),
+            "--uncovered-policy", str(city_world["terrain_uncovered_policy"]),
+            "--uncovered-elevation", str(city_world["terrain_uncovered_elevation_m"]),
         ])
         world_frame = terrain_dir / "world-frame.json"
         terrain_receipt = terrain_dir / "terrain-receipt.json"

@@ -83,6 +83,10 @@ Dataset Validatorは全component完了後に直列実行します。
 
 DEMの小欠損は20 m以内にある元sample最大4点から補間します。20 mを超える未収録領域を
 平面等で暗黙生成することはありません。その場合は`uncovered samples`として生成を停止します。
+`city_world.terrain_uncovered_policy: constant`を明示した場合に限り、小欠損補間後も残る
+未被覆sampleを`city_world.terrain_uncovered_elevation_m`の一定標高で補完できます。海・河川を
+含む選択範囲では標高`0.0`が候補ですが、内陸のデータ欠損も同じ標高になるため、既定値は
+`error`です。補完点数と標高はterrain receiptの`gap_fill`へ記録されます。
 広域生成では処理量が面積と格子密度に応じて増えるため、用途上許容できる場合は
 `terrain_spacing_m`を5 mまたは10 mへ広げます。
 

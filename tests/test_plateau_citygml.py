@@ -629,6 +629,20 @@ class PlateauCityGmlTest(unittest.TestCase):
             with self.assertRaisesRegex(hako.ConfigError, "dem_parallel_workers"):
                 hako.resolve_config(config)
 
+    def test_city_world_terrain_uncovered_policy_is_guarded(self):
+        hako = load_hako_module()
+        for policy in ("error", "constant"):
+            config = copy.deepcopy(hako.DEFAULT_CONFIG)
+            config["city_world"]["terrain_uncovered_policy"] = policy
+            self.assertEqual(
+                hako.resolve_config(config)["city_world"]["terrain_uncovered_policy"],
+                policy,
+            )
+        config = copy.deepcopy(hako.DEFAULT_CONFIG)
+        config["city_world"]["terrain_uncovered_policy"] = "nearest"
+        with self.assertRaisesRegex(hako.ConfigError, "terrain_uncovered_policy"):
+            hako.resolve_config(config)
+
     def test_parallel_command_groups_preserve_dependencies_inside_each_group(self):
         hako = load_hako_module()
         observed = []

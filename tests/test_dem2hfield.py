@@ -45,6 +45,20 @@ class DemToHeightfieldTest(unittest.TestCase):
         self.assertGreater(gaps["source_missing_samples"], 0)
         self.assertLessEqual(gaps["maximum_fill_distance_m"], 2.0)
 
+    def test_optionally_fills_remaining_uncovered_samples_at_constant_elevation(self):
+        triangles = [
+            ((-1.0, -1.0, 5.0), (0.0, -1.0, 5.0), (-1.0, 0.0, 5.0)),
+        ]
+        nrow, ncol, samples, gaps = dem.sample_heightfield(
+            triangles, 1.0, 1.0, 1.0,
+            uncovered_policy="constant", uncovered_elevation_m=0.0,
+        )
+        self.assertEqual((nrow, ncol, len(samples)), (3, 3, 9))
+        self.assertEqual(gaps["remaining_after_nearby_fill_samples"], 6)
+        self.assertEqual(gaps["constant_filled_samples"], 6)
+        self.assertEqual(gaps["constant_fill_elevation_m"], 0.0)
+        self.assertEqual(samples.count(0.0), 6)
+
     def test_preserves_arbitrary_bbox_with_spacing_as_maximum(self):
         # Browser selections can have decimal extents that are not divisible
         # by the configured target spacing.
