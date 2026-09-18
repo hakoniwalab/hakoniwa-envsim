@@ -16,11 +16,13 @@ from pathlib import Path
 
 import numpy as np
 import trimesh
+from shapely.geometry import Polygon
 from trimesh.visual.material import PBRMaterial
 
-from citygml2glb import _polygon_rings, triangulate_rings
+from citygml2glb import _polygon_rings
 from geodesy import project_epsg6697_to_local_enu
-from road_terrain_probe import read_hfield, terrain_height
+from road_terrain_probe import read_hfield
+from terrain_surface import SURFACE_POLICY, TerrainSurface, drape_polygons
 from world_frame import load_world_frame
 
 GML = "http://www.opengis.net/gml"
@@ -85,37 +87,13 @@ def furniture_source_paths(source: Path) -> list[Path]:
     raise CityFurnitureError(f"no PLATEAU CityFurniture CityGML source found: {source}")
 
 
-def _in_range(points, latitude, longitude, ns_m, ew_m) -> bool:
-    enu = project_epsg6697_to_local_enu(points, latitude, longitude)
-    east = [point[0] for point in enu]
-    north = [point[1] for point in enu]
-    return (
-        min(east) <= ew_m and max(east) >= -ew_m
-        and min(north) <= ns_m and max(north) >= -ns_m
-    )
-
-
-def _glb_points(
-    points,
-    latitude,
-    longitude,
-    altitude_offset_m,
-    terrain_samples,
-    nrow,
-    ncol,
-    ns_m,
-    ew_m,
-    marking_vertical_offset_m,
-):
-    enu = project_epsg6697_to_local_enu(points, latitude, longitude)
-    # Hakoniwa X=North,Y=-East,Z=Up -> GLB X=East,Y=Up,Z=-North.
-    output = []
-    for east, north, _ in enu:
-        altitude = terrain_height(
-            north, -east, terrain_samples, nrow, ncol, ns_m, ew_m
-        ) + marking_vertical_offset_m
-        output.append((east, altitude - altitude_offset_m, -north))
-    return output
+def _horizontal_polygon(rings, latitude, longitude):
+    projected = []
+    for points in rings:
+        enu = project_epsg6697_to_local_enu(points, latitude, longitude)
+        projected.append([(north, -east) for east, north, _ in enu])
+    polygon = Polygon(projected[0], projected[1:])
+    return polygon if polygon.is_valid else polygon.buffer(0)
 
 
 def convert(
@@ -126,6 +104,7 @@ def convert(
     receipt_path: Path | None = None,
     marking_vertical_offset_m: float = 0.055,
     allow_empty: bool = False,
+    workers: int = 1,
 ) -> dict:
     frame = load_world_frame(world_frame_path)
     origin = frame["origin"]
@@ -137,6 +116,9 @@ def convert(
     ew_m = float(extent["east_west"])
     terrain_receipt = json.loads(terrain_receipt_path.read_text(encoding="utf-8"))
     nrow, ncol, terrain_samples = read_hfield(Path(terrain_receipt["hfield"]["path"]))
+    terrain_surface = TerrainSurface.from_samples(
+        terrain_samples, nrow, ncol, ns_m, ew_m
+    )
 
     try:
         sources = furniture_source_paths(source)
@@ -147,9 +129,9 @@ def convert(
     colors = {}
     for path in sources:
         colors.update(extract_material_colors(path))
-    batches = defaultdict(lambda: {"vertices": [], "faces": []})
+    records = []
     feature_counts = Counter()
-    polygon_count = triangle_count = material_polygon_count = fallback_polygon_count = 0
+    polygon_count = material_polygon_count = fallback_polygon_count = 0
 
     furniture_tag = f"{{{FRN}}}CityFurniture"
     for source_path in sources:
@@ -169,7 +151,11 @@ def convert(
                 if not rings_with_ids:
                     continue
                 source_rings = [points for _, points in rings_with_ids]
-                if not _in_range(source_rings[0], latitude, longitude, ns_m, ew_m):
+                horizontal = _horizontal_polygon(source_rings, latitude, longitude)
+                if (
+                    horizontal.is_empty
+                    or horizontal.intersection(terrain_surface.bounds).area <= 1e-10
+                ):
                     continue
                 polygon_id = polygon.get(GML_ID, "")
                 rgba = colors.get(polygon_id, DEFAULT_RGBA)
@@ -177,32 +163,36 @@ def convert(
                     material_polygon_count += 1
                 else:
                     fallback_polygon_count += 1
-                rings = [
-                    _glb_points(
-                        points,
-                        latitude,
-                        longitude,
-                        altitude_offset,
-                        terrain_samples,
-                        nrow,
-                        ncol,
-                        ns_m,
-                        ew_m,
-                        marking_vertical_offset_m,
-                    )
-                    for points in source_rings
-                ]
-                vertices, faces = triangulate_rings(rings)
-                batch = batches[(category, rgba)]
-                base = len(batch["vertices"])
-                batch["vertices"].extend(vertices.tolist())
-                batch["faces"].extend((face + base).tolist() for face in faces)
+                records.append((category, rgba, horizontal))
                 polygon_count += 1
-                triangle_count += len(faces)
                 selected_feature = True
             if selected_feature:
                 feature_counts[function] += 1
             furniture.clear()
+
+    draped, drape_stats = drape_polygons(
+        terrain_surface,
+        [polygon for _, _, polygon in records],
+        vertical_offset_m=marking_vertical_offset_m,
+        workers=workers,
+    )
+    batches = defaultdict(lambda: {"vertices": [], "faces": []})
+    triangle_count = 0
+    for (category, rgba, _), draped_mesh in zip(records, draped):
+        if not draped_mesh.faces:
+            continue
+        batch = batches[(category, rgba)]
+        base = len(batch["vertices"])
+        # Hakoniwa X=North,Y=-East,Z=Up -> GLB X=East,Y=Up,Z=-North.
+        batch["vertices"].extend(
+            (-y, altitude - altitude_offset, -x)
+            for x, y, altitude in draped_mesh.vertices
+        )
+        batch["faces"].extend(
+            (base + first, base + second, base + third)
+            for first, second, third in draped_mesh.faces
+        )
+        triangle_count += len(draped_mesh.faces)
 
     receipt_path = receipt_path or output.with_name(output.stem + "-glb-receipt.json")
     receipt = {
@@ -215,7 +205,9 @@ def convert(
         "world_frame": str(world_frame_path.resolve()),
         "terrain_receipt": str(terrain_receipt_path.resolve()),
         "selection_policy": "LOD3 polygon intersects configured horizontal range",
-        "geometry_policy": "source CityFurniture horizontal geometry draped on the shared DEM; no inferred markings",
+        "geometry_policy": "source CityFurniture horizontal geometry clipped and draped on MuJoCo hfield triangles; no inferred markings",
+        "terrain_surface_policy": SURFACE_POLICY,
+        "drape": drape_stats,
         "marking_vertical_offset_m": marking_vertical_offset_m,
         "material_policy": "PLATEAU X3DMaterial diffuseColor with documented fallback",
         "rendering_policy": "double-sided road-marking material; source winding preserved",
@@ -280,10 +272,13 @@ def main() -> int:
     parser.add_argument("--receipt", type=Path)
     parser.add_argument("--marking-vertical-offset", type=float, default=0.055)
     parser.add_argument("--allow-empty", action="store_true")
+    parser.add_argument("--workers", type=int, default=1)
     args = parser.parse_args()
+    if not 1 <= args.workers <= 16:
+        parser.error("--workers must be in [1, 16]")
     receipt = convert(
         args.source, args.world_frame, args.terrain_receipt, args.out, args.receipt,
-        args.marking_vertical_offset, args.allow_empty,
+        args.marking_vertical_offset, args.allow_empty, args.workers,
     )
     if receipt["status"] == "not_available":
         print("INFO: no LOD3 road-marking data; road-marking GLB was omitted")

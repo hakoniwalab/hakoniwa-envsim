@@ -455,6 +455,7 @@ def doctor(manifest: Path) -> int:
             "dem2hfield.py", "road_terrain_probe.py", "city_furniture2glb.py",
             "bridge2glb.py", "bridge2mjcf.py", "city_world_composer.py", "city_dataset_validator.py",
             "building_physics_classifier.py", "mjcf_colliders2glb.py", "world_frame.py",
+            "terrain_surface.py",
         ])
     for script in scripts:
         if not (PIPELINE / script).is_file():
@@ -575,6 +576,7 @@ def _convert(
             sys.executable, str(PIPELINE / "road_terrain_probe.py"),
             "--roads", str(source_root), "--terrain-receipt", str(terrain_receipt),
             "--terrain-out", str(terrain_glb), "--roads-out", str(roads_glb),
+            "--workers", str(min(city_world["parallel_workers"], 4)),
         ]
         markings_glb = markings_dir / "road-markings.glb"
         markings_command = [
@@ -582,6 +584,7 @@ def _convert(
             "--source", str(source_root), "--world-frame", str(world_frame),
             "--terrain-receipt", str(terrain_receipt), "--out", str(markings_glb),
             "--marking-vertical-offset", str(city_world["marking_vertical_offset_m"]),
+            "--workers", str(min(city_world["parallel_workers"], 4)),
             "--allow-empty",
         ]
         bridges_glb = bridges_dir / "bridges.glb"

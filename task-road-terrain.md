@@ -9,7 +9,8 @@ aligned MuJoCo scene:
 - `tran` LOD1 polygons define the horizontal road footprint.
 - `dem` LOD1 TIN triangles define ground elevation.
 - the DEM is sampled into a MuJoCo `hfield`.
-- road polygons are draped onto the sampled terrain.
+- terrain GLB, road polygons, and road markings use the exact MuJoCo hfield
+  triangle topology.
 - terrain, roads, and buildings share one horizontal origin and one altitude
   offset.
 
@@ -123,9 +124,15 @@ Road-marking materials are rendered double-sided because PLATEAU polygon
 winding does not guarantee an upward-facing normal; this changes visibility,
 not the source geometry.
 The horizontal marking outlines remain the source CityFurniture geometry, but
-their display altitude is draped onto the shared DEM. This avoids inter-layer
+their display altitude is draped onto the MuJoCo-compatible piecewise-planar
+DEM surface. This avoids inter-layer
 altitude discrepancies hiding the markings below the road surface. A small,
 recorded vertical display offset places road paint above the visual road mesh.
+
+The hfield cell diagonal is `BL--TR`, matching MuJoCo's `TL, BL, TR, BR`
+triangle-strip order. `terrain_surface.py` owns this topology for terrain GLB,
+roads, and road markings. The older bilinear `terrain_height()` query remains
+separate for bridge endpoint diagnostics until that behavior is assessed.
 
 No synthetic sidewalk height is added. The DEM remains the common geometric
 height source for both the GLB and MJCF. Procedural curb collision geometry is
@@ -140,7 +147,12 @@ height-field sampling do not preserve.
 - MuJoCo loads the generated XML without an hfield schema or size error.
 - The center, north, east, south, and west height samples map to the expected
   MuJoCo directions.
-- Every selected LOD1 road vertex receives an interpolated DEM height.
+- Every generated road face is contained in one MuJoCo hfield triangle and
+  differs from that triangle plane only by the recorded visual offset.
+- A road polygon spanning multiple cells is split at cell and triangle
+  boundaries; holes and the selection clip do not expand.
+- Road markings use the same terrain surface contract with their own recorded
+  visual offset.
 - Duplicated municipality or mesh coverage does not produce duplicated road
   surfaces.
 - Source URLs, byte sizes, and SHA-256 values are recorded before promoting

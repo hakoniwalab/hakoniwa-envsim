@@ -22,6 +22,8 @@ P1/P2はLOD2の壁・屋根surfaceからcollisionを生成します。P3はさ�
 OuterCeiling/OuterFloor surfaceを加え、張り出し下の空間を埋めずに保持します。
 分類条件と未対応要素は[`docs/building-physics-classification.md`](docs/building-physics-classification.md)
 に明記しています。
+DEM hfieldを正本としてterrain、道路、路面標示の表示面を一致させる規則は
+[`docs/terrain-surface-contract.md`](docs/terrain-surface-contract.md)に明記しています。
 City Worldの`mjcf.building_physics_level`は0〜3で建物Colliderの適用上限を制御します。
 VisualはLevelにかかわらず、最高LODと利用可能なtextureを使います。
 

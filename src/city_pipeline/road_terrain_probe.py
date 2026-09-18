@@ -13,9 +13,9 @@ from pathlib import Path
 import numpy as np
 import trimesh
 from shapely.geometry import Polygon, box
-from shapely.ops import triangulate
 
 from geodesy import project_epsg6697_to_local_enu
+from terrain_surface import SURFACE_POLICY, TerrainSurface, drape_polygons
 from world_frame import load_world_frame
 
 GML = "http://www.opengis.net/gml"
@@ -224,18 +224,18 @@ def _display_vertex(x, y, altitude, offset):
     return (-y, altitude - offset, -x)
 
 
-def build_component_scenes(surfaces, samples, nrow, ncol, ns_m, ew_m, altitude_offset):
-    terrain_vertices = []
-    for row in range(nrow):
-        y = -ew_m + 2.0 * ew_m * row / (nrow - 1)
-        for col in range(ncol):
-            x = -ns_m + 2.0 * ns_m * col / (ncol - 1)
-            terrain_vertices.append(_display_vertex(x, y, samples[row*ncol + col], altitude_offset))
-    terrain_faces = []
-    for row in range(nrow - 1):
-        for col in range(ncol - 1):
-            a = row * ncol + col
-            terrain_faces.extend(((a, a + ncol, a + 1), (a + 1, a + ncol, a + ncol + 1)))
+def build_component_scenes(
+    surfaces, samples, nrow, ncol, ns_m, ew_m, altitude_offset,
+    workers=1, include_drape_stats=False,
+):
+    terrain_surface = TerrainSurface.from_samples(
+        samples, nrow, ncol, ns_m, ew_m
+    )
+    grid_vertices, terrain_faces = terrain_surface.grid_mesh()
+    terrain_vertices = [
+        _display_vertex(x, y, altitude, altitude_offset)
+        for x, y, altitude in grid_vertices
+    ]
     terrain = trimesh.Trimesh(
         vertices=np.asarray(terrain_vertices), faces=np.asarray(terrain_faces), process=False
     )
@@ -247,19 +247,33 @@ def build_component_scenes(surfaces, samples, nrow, ncol, ns_m, ew_m, altitude_o
     terrain_scene = trimesh.Scene()
     terrain_scene.add_geometry(terrain, node_name="terrain")
     road_scene = trimesh.Scene()
+    records = [
+        (category, polygon)
+        for category, polygons in surfaces.items()
+        for _, polygon in polygons
+    ]
+    draped, drape_stats = drape_polygons(
+        terrain_surface,
+        [polygon for _, polygon in records],
+        vertical_offset_m=0.03,
+        workers=workers,
+    )
     triangle_counts = {}
+    record_index = 0
     for category, polygons in surfaces.items():
         vertices, faces = [], []
         for _, polygon in polygons:
-            for triangle in triangulate(polygon):
-                if not polygon.covers(triangle.representative_point()):
-                    continue
-                coordinates = list(triangle.exterior.coords)[:3]
-                base = len(vertices)
-                for x, y in coordinates:
-                    altitude = terrain_height(x, y, samples, nrow, ncol, ns_m, ew_m) + 0.03
-                    vertices.append(_display_vertex(x, y, altitude, altitude_offset))
-                faces.append((base, base + 1, base + 2))
+            draped_mesh = draped[record_index]
+            record_index += 1
+            base = len(vertices)
+            vertices.extend(
+                _display_vertex(x, y, altitude, altitude_offset)
+                for x, y, altitude in draped_mesh.vertices
+            )
+            faces.extend(
+                (base + first, base + second, base + third)
+                for first, second, third in draped_mesh.faces
+            )
         triangle_counts[category] = len(faces)
         if not faces:
             continue
@@ -271,7 +285,8 @@ def build_component_scenes(surfaces, samples, nrow, ncol, ns_m, ew_m, altitude_o
             (len(mesh.vertices), 1),
         )
         road_scene.add_geometry(mesh, node_name=category, geom_name=category)
-    return terrain_scene, road_scene, triangle_counts
+    result = (terrain_scene, road_scene, triangle_counts)
+    return (*result, drape_stats) if include_drape_stats else result
 
 
 def build_scene(surfaces, samples, nrow, ncol, ns_m, ew_m, altitude_offset):
@@ -310,9 +325,12 @@ def main() -> int:
     parser.add_argument("--terrain-out", type=Path)
     parser.add_argument("--roads-out", type=Path)
     parser.add_argument("--out", type=Path, help="legacy combined terrain and roads GLB")
+    parser.add_argument("--workers", type=int, default=1)
     args = parser.parse_args()
     if not args.out and not (args.terrain_out and args.roads_out):
         parser.error("specify both --terrain-out and --roads-out, or legacy --out")
+    if not 1 <= args.workers <= 16:
+        parser.error("--workers must be in [1, 16]")
     receipt = json.loads(args.terrain_receipt.read_text(encoding="utf-8"))
     world_frame_path = args.world_frame or Path(receipt["world_frame"])
     world_frame = load_world_frame(world_frame_path)
@@ -326,7 +344,7 @@ def main() -> int:
         extent["north_south"],
         extent["east_west"],
     )
-    terrain_scene, road_scene, triangle_counts = build_component_scenes(
+    terrain_scene, road_scene, triangle_counts, drape_stats = build_component_scenes(
         surfaces,
         samples,
         nrow,
@@ -334,6 +352,8 @@ def main() -> int:
         extent["north_south"],
         extent["east_west"],
         center["altitude_offset_m"],
+        workers=args.workers,
+        include_drape_stats=True,
     )
     common_receipt = {
         "schema_version": 1,
@@ -345,6 +365,7 @@ def main() -> int:
             **common_receipt,
             "component": "terrain",
             "terrain_triangles": 2 * (nrow - 1) * (ncol - 1),
+            "terrain_surface_policy": SURFACE_POLICY,
         })
         _write_component(road_scene, args.roads_out, {
             **common_receipt,
@@ -355,6 +376,8 @@ def main() -> int:
             "lod_polygon_counts": lod_evidence,
             "surface_colors_rgba": SURFACE_STYLE,
             "road_vertical_offset_m": 0.03,
+            "terrain_surface_policy": SURFACE_POLICY,
+            "drape": drape_stats,
         })
         print(f"OK: terrain GLB: {args.terrain_out}")
         print(f"OK: roads GLB: {args.roads_out}")
@@ -372,6 +395,8 @@ def main() -> int:
             "lod_polygon_counts": lod_evidence,
             "surface_colors_rgba": SURFACE_STYLE,
             "road_vertical_offset_m": 0.03,
+            "terrain_surface_policy": SURFACE_POLICY,
+            "drape": drape_stats,
         })
         print(f"OK: terrain and road GLB: {args.out}")
     print("OK: transport surfaces: " + ", ".join(

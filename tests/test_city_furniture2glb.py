@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import trimesh
 
@@ -58,6 +59,9 @@ class CityFurnitureGlbTest(unittest.TestCase):
             self.assertEqual(receipt["material_polygon_count"], 1)
             self.assertEqual(receipt["fallback_polygon_count"], 0)
             self.assertEqual(receipt["marking_vertical_offset_m"], 0.055)
+            self.assertEqual(
+                receipt["terrain_surface_policy"], "mujoco-hfield-triangles-v1"
+            )
             scene = trimesh.load(output, force="scene")
             self.assertEqual(len(scene.geometry), 1)
             material = next(iter(scene.geometry.values())).visual.material
@@ -93,6 +97,66 @@ class CityFurnitureGlbTest(unittest.TestCase):
             self.assertEqual(receipt["status"], "not_available")
             self.assertFalse(output.exists())
             self.assertTrue((root / "markings-glb-receipt.json").is_file())
+
+    def test_marking_faces_follow_mujoco_surface_instead_of_bilinear_height(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "frn.gml"
+            source.write_text("""<?xml version="1.0"?>
+<core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0"
+ xmlns:gml="http://www.opengis.net/gml"
+ xmlns:frn="http://www.opengis.net/citygml/cityfurniture/2.0">
+ <core:cityObjectMember><frn:CityFurniture gml:id="marking">
+  <frn:class>1000</frn:class><frn:function>1110</frn:function>
+  <frn:lod3Geometry><gml:MultiSurface><gml:surfaceMember>
+   <gml:Polygon gml:id="paint"><gml:exterior><gml:LinearRing>
+    <gml:posList>0 0 0 0 1 0 1 1 0 1 0 0 0 0 0</gml:posList>
+   </gml:LinearRing></gml:exterior></gml:Polygon>
+  </gml:surfaceMember></gml:MultiSurface></frn:lod3Geometry>
+ </frn:CityFurniture></core:cityObjectMember>
+</core:CityModel>""", encoding="utf-8")
+            frame = root / "world-frame.json"
+            frame.write_text(json.dumps({
+                "schema_version": 1,
+                "origin": {"latitude": 35.0, "longitude": 139.0, "altitude_offset_m": 0.0},
+                "half_extent_m": {"north_south": 1.0, "east_west": 1.0},
+                "coordinate_systems": {
+                    "mjcf": "X=North,Y=-East,Z=Up",
+                    "glb": "X=East,Y=Up,Z=-North"
+                },
+            }), encoding="utf-8")
+            samples = [0.0, 0.0, 0.0, 1.0]
+            hfield = root / "terrain.hf"
+            hfield.write_bytes(struct.pack("<ii4f", 2, 2, *samples))
+            terrain_receipt = root / "terrain-receipt.json"
+            terrain_receipt.write_text(json.dumps({
+                "hfield": {"path": str(hfield)}
+            }), encoding="utf-8")
+            output = root / "markings.glb"
+            # Return one local polygon in ENU.  Converted Hakoniwa XY covers
+            # the center and therefore exercises MuJoCo's BL--TR diagonal.
+            local_enu = [
+                (0.75, -0.75, 0), (0.75, 0.75, 0),
+                (-0.75, 0.75, 0), (-0.75, -0.75, 0), (0.75, -0.75, 0),
+            ]
+            with mock.patch.object(
+                module, "project_epsg6697_to_local_enu", return_value=local_enu
+            ):
+                receipt = module.convert(source, frame, terrain_receipt, output)
+
+            self.assertEqual(receipt["triangle_count"], 2)
+            surface = module.TerrainSurface.from_samples(samples, 2, 2, 1, 1)
+            scene = trimesh.load(output, force="scene")
+            for geometry in scene.geometry.values():
+                for face in geometry.faces:
+                    triangle = geometry.vertices[face]
+                    # GLB=(East, Up, -North), Hakoniwa=(North, -East, Up).
+                    x = -float(triangle[:, 2].mean())
+                    y = -float(triangle[:, 0].mean())
+                    z = float(triangle[:, 1].mean())
+                    self.assertAlmostEqual(
+                        z, surface.height_at(x, y) + 0.055, places=6
+                    )
 
 
 if __name__ == "__main__":

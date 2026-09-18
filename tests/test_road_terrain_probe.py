@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from shapely.geometry import Polygon, box
+
 SCRIPT = Path(__file__).parents[1] / "src" / "city_pipeline" / "road_terrain_probe.py"
 sys.path.insert(0, str(SCRIPT.parent))
 SPEC = importlib.util.spec_from_file_location("road_terrain_probe", SCRIPT)
@@ -21,6 +23,62 @@ class RoadTerrainProbeTest(unittest.TestCase):
         samples = [-3.0, -2.0, -1.0, -1.0, 0.0, 1.0, 1.0, 2.0, 3.0]
         self.assertAlmostEqual(road.terrain_height(0.5, -0.5, samples, 3, 3, 1, 1), -0.5)
         self.assertAlmostEqual(road.terrain_height(-0.5, 0.5, samples, 3, 3, 1, 1), 0.5)
+
+    def test_mujoco_surface_uses_bottom_left_to_top_right_diagonal(self):
+        # Row-major corners: BL=0, BR=0, TL=0, TR=1.  At the center,
+        # bilinear interpolation is 0.25 and the old opposite diagonal is 0;
+        # MuJoCo's BL--TR triangle-strip diagonal is 0.5.
+        surface = road.TerrainSurface.from_samples([0, 0, 0, 1], 2, 2, 1, 1)
+        _vertices, faces = surface.grid_mesh()
+        self.assertEqual(faces.tolist(), [[2, 0, 3], [0, 1, 3]])
+        self.assertAlmostEqual(surface.height_at(0, 0), 0.5)
+        self.assertAlmostEqual(
+            road.terrain_height(0, 0, [0, 0, 0, 1], 2, 2, 1, 1),
+            0.25,
+        )
+
+    def test_road_is_split_at_each_mujoco_terrain_triangle(self):
+        surface = road.TerrainSurface.from_samples(
+            [0, 0, 0, 0, 1, 0, 0, 0, 2], 3, 3, 1, 1
+        )
+        polygon = box(-0.9, -0.9, 0.9, 0.9)
+        mesh = surface.drape_polygon(polygon, vertical_offset_m=0.03)
+
+        self.assertEqual(mesh.candidate_cell_count, 4)
+        self.assertGreater(len(mesh.faces), 2)
+        for first, second, third in mesh.faces:
+            triangle = [mesh.vertices[index] for index in (first, second, third)]
+            x = sum(vertex[0] for vertex in triangle) / 3.0
+            y = sum(vertex[1] for vertex in triangle) / 3.0
+            z = sum(vertex[2] for vertex in triangle) / 3.0
+            self.assertAlmostEqual(z, surface.height_at(x, y) + 0.03, places=9)
+
+    def test_drape_preserves_hole_and_clips_to_terrain_bounds(self):
+        surface = road.TerrainSurface.from_samples([0] * 9, 3, 3, 1, 1)
+        polygon = Polygon(
+            [(-2, -2), (2, -2), (2, 2), (-2, 2)],
+            [[(-0.4, -0.4), (0.4, -0.4), (0.4, 0.4), (-0.4, 0.4)]],
+        )
+        mesh = surface.drape_polygon(polygon)
+        triangle_area = 0.0
+        for face in mesh.faces:
+            points = [(mesh.vertices[index][0], mesh.vertices[index][1]) for index in face]
+            triangle_area += Polygon(points).area
+        expected = polygon.intersection(surface.bounds).area
+        self.assertAlmostEqual(triangle_area, expected, places=9)
+
+    def test_parallel_drape_preserves_source_order_and_geometry(self):
+        surface = road.TerrainSurface.from_samples(
+            [0, 0, 0, 0, 1, 0, 0, 0, 2], 3, 3, 1, 1
+        )
+        polygons = [box(-0.9, -0.9, 0.2, 0.2), box(-0.2, -0.2, 0.9, 0.9)]
+        serial, serial_stats = road.drape_polygons(surface, polygons, 0.03, workers=1)
+        parallel, parallel_stats = road.drape_polygons(surface, polygons, 0.03, workers=2)
+
+        self.assertEqual(serial, parallel)
+        self.assertEqual(serial_stats["candidate_cell_count"], parallel_stats["candidate_cell_count"])
+        self.assertEqual(parallel_stats["requested_workers"], 2)
+        self.assertEqual(parallel_stats["effective_workers"], 2)
 
     def test_extracts_lod2_vehicle_sidewalk_and_island_classes(self):
         feature = '''
