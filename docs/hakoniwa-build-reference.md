@@ -110,14 +110,15 @@ DEM CityGMLはCRSとEnvelopeをXMLとして検証した後、巨大ファイル�
 
 ### `parallel_workers`の選び方
 
-`parallel_workers`は、PLATEAU source・LOD2 texture取得、建物GML抽出と、出力先が独立した建物Visual、建物Physics、
-道路、路面標示、橋梁component生成のworker上限です。ComposerとDataset Validatorは
+`parallel_workers`は、PLATEAU source・LOD2 texture取得、建物GML抽出と、出力先が独立した建物Visual、
+道路、路面標示、橋梁component生成のworker上限です。Building Physicsのsource GML解析・三角形化は
+`building_physics_workers`で制御します。ComposerとDataset Validatorは
 依存componentの完了後に直列実行します。建物GML抽出は100MB級XMLをprocessごとに保持するため、
 設定値が5以上でも4 processへ自動制限します。`dem_parallel_workers`はDEM source抽出だけに使い、
 実際のprocess数は設定値と対象DEM source数の小さい方です。DEM CityGMLと抽出結果をprocessごとに
 保持するため、メモリ保護の観点から設定上限を4にしています。
 道路・路面標示はpolygonのbboxに重なるhfield cellだけを処理し、内部の面分割も
-`building_physics_workers`から最大8 processを使用します。process完了順ではなくsource順に戻してから
+`parallel_workers`から最大4 processを使用します。process完了順ではなくsource順に戻してから
 meshを構成するため、並列数によってGLBの内容やSHA-256は変化しません。候補cell数、triangle判定数、
 実効process数は各Receiptの`drape`へ記録します。
 process semaphoreを利用できない制限環境では、建物GML抽出だけ同数のthreadへ自動fallbackします。
