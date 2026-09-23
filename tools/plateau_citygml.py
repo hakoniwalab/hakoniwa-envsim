@@ -268,8 +268,10 @@ def _download_cache_object(
         ) as output:
             temporary = Path(output.name)
             with urllib.request.urlopen(request, timeout=timeout_sec) as response:
+                digest = hashlib.sha256()
                 while chunk := response.read(1024 * 1024):
                     output.write(chunk)
+                    digest.update(chunk)
         if temporary.stat().st_size <= 0:
             raise PlateauError(f"downloaded an empty PLATEAU asset: {item['url']}")
         actual_size = temporary.stat().st_size
@@ -279,7 +281,7 @@ def _download_cache_object(
                 "WARN: PLATEAU catalog fileSize differs from the downloaded object; "
                 f"declared={declared_size}, actual={actual_size}, url={item['url']}"
             )
-        actual_sha256 = sha256_file(temporary)
+        actual_sha256 = digest.hexdigest()
         os.replace(temporary, cache_path)
         temporary = None
         cache_path.with_suffix(cache_path.suffix + ".cache.json").write_text(
@@ -314,11 +316,12 @@ def download_file(
         actual_size, actual_sha256 = cached or _download_cache_object(
             item, cache_path, timeout_sec,
         )
-        destination_valid = (
-            destination.is_file()
-            and destination.stat().st_size == actual_size
-            and sha256_file(destination) == actual_sha256
-        )
+        destination_valid = False
+        if destination.is_file() and destination.stat().st_size == actual_size:
+            try:
+                destination_valid = os.path.samefile(cache_path, destination)
+            except OSError:
+                destination_valid = sha256_file(destination) == actual_sha256
         if not destination_valid:
             temporary = destination.with_suffix(destination.suffix + ".part")
             temporary.unlink(missing_ok=True)
