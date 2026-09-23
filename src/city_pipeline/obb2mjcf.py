@@ -481,6 +481,10 @@ def main():
         default="safe",
         help="Optional exact union across adjacent coplanar source polygons",
     )
+    ap.add_argument(
+        "--building-physics-workers", type=int, default=4,
+        help="Worker processes for source-GML building Physics preparation (1..8)",
+    )
 
     args = ap.parse_args()
 
@@ -495,6 +499,8 @@ def main():
     receipt_items = list(items)
     if args.roof_thickness <= 0:
         raise SystemExit("[ERR] --roof-thickness must be positive")
+    if not 1 <= args.building_physics_workers <= 8:
+        raise SystemExit("[ERR] --building-physics-workers must be in [1, 8]")
     if bool(args.classification) != bool(args.application_receipt):
         raise SystemExit("[ERR] --classification and --application-receipt must be used together")
     if args.classification and (not args.zsrc or not args.world_frame):
@@ -540,6 +546,7 @@ def main():
             class_ids=requested_classes,
             roof_thickness_m=args.roof_thickness,
             collider_reduction=args.building_collider_reduction,
+            workers=args.building_physics_workers,
         ) if requested_classes else {}
         if class_ids["P1"]:
             p1_surface_pieces = prepared["P1"].pieces

@@ -9,6 +9,7 @@ GroundSurface is omitted because the city terrain owns the floor.
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import heapq
 from collections import defaultdict
@@ -413,9 +414,47 @@ def _surface_pieces(
 
 def _surface_pieces_for_classes(
     by_source, center_lat, center_lon, frame, thickness_m: float, class_ids,
-    collider_reduction: str = "safe",
+    collider_reduction: str = "safe", *, workers: int = 1,
 ):
     """Prepare all requested classes while parsing each source GML only once."""
+    ordered_sources = sorted(by_source.items(), key=lambda item: str(item[0]))
+    effective_workers = min(workers, len(ordered_sources)) if ordered_sources else 1
+    if effective_workers > 1 and collider_reduction == "safe":
+        tasks = [
+            (
+                source,
+                {
+                    class_id: {building_id: None for building_id in buildings}
+                    for class_id, buildings in classes.items()
+                },
+                center_lat, center_lon, frame, thickness_m,
+                tuple(class_ids),
+            )
+            for source, classes in ordered_sources
+        ]
+        source_results = [None] * len(tasks)
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=effective_workers
+        ) as executor:
+            futures = {
+                executor.submit(_surface_pieces_source_task, task): index
+                for index, task in enumerate(tasks)
+            }
+            completed = 0
+            for future in concurrent.futures.as_completed(futures):
+                source_results[futures[future]] = future.result()
+                completed += 1
+                print(
+                    "[HAKO_PROGRESS] " + json.dumps({
+                        "phase": "building_physics_surfaces",
+                        "current": completed,
+                        "total": len(tasks),
+                        "parallel_workers": effective_workers,
+                    }, separators=(",", ":")),
+                    flush=True,
+                )
+        return _merge_safe_source_results(source_results, class_ids)
+
     offset = float(frame["origin"]["altitude_offset_m"])
     pieces = {class_id: [] for class_id in class_ids}
     counters = {class_id: CounterLike() for class_id in class_ids}
@@ -437,7 +476,6 @@ def _surface_pieces_for_classes(
         }
         for class_id in class_ids
     }
-    ordered_sources = sorted(by_source.items(), key=lambda item: str(item[0]))
     for source_index, (source, classes) in enumerate(ordered_sources, start=1):
         root = ET.parse(source).getroot()
         validate_epsg6697_contract(root, source)
@@ -703,6 +741,70 @@ def _surface_pieces_for_classes(
     }
 
 
+def _surface_pieces_source_task(task):
+    """Spawn-safe entry point for one source GML."""
+    source, classes, center_lat, center_lon, frame, thickness_m, class_ids = task
+    return _surface_pieces_for_classes(
+        {source: classes}, center_lat, center_lon, frame, thickness_m, class_ids,
+        "safe", workers=1,
+    )
+
+
+def _merge_safe_source_results(source_results, class_ids):
+    """Merge in source order so parallel completion cannot change the MJCF."""
+    merged = {}
+    for class_id in class_ids:
+        pieces = []
+        skipped = defaultdict(int)
+        stats = None
+        counters = CounterLike()
+        for source_result in source_results:
+            prepared = source_result[class_id]
+            for piece in prepared.pieces:
+                piece_index = counters.next(piece["building_id"])
+                piece["id"] = (
+                    f"{class_id.lower()}_surface_{piece['building_id']}_"
+                    f"piece_{piece_index:04d}"
+                )
+                pieces.append(piece)
+            for key, value in prepared.skipped_degenerate_by_surface.items():
+                skipped[key] += value
+            current = prepared.collider_optimization
+            if stats is None:
+                stats = {
+                    **current,
+                    "fallback_polygon_counts": dict(
+                        current["fallback_polygon_counts"]
+                    ),
+                }
+                continue
+            for key in (
+                "triangles_before", "colliders_after",
+                "convex_polygon_collider_count",
+                "triangular_fallback_collider_count", "merged_group_count",
+                "triangles_eliminated", "colliders_before_reduction",
+                "convex_merge_count", "convex_merge_colliders_eliminated",
+                "roof_normal_extrusion_fallback_count", "rejected_concave_count",
+            ):
+                stats[key] = stats.get(key, 0) + current.get(key, 0)
+            for key, value in current["fallback_polygon_counts"].items():
+                stats["fallback_polygon_counts"][key] = (
+                    stats["fallback_polygon_counts"].get(key, 0) + value
+                )
+        if stats is None:
+            stats = {}
+        stats["reduction_ratio"] = (
+            1.0 - stats.get("colliders_after", 0) / stats["triangles_before"]
+            if stats.get("triangles_before") else 0.0
+        )
+        merged[class_id] = PreparedSurfaceGeometry(
+            pieces=pieces,
+            skipped_degenerate_by_surface=dict(sorted(skipped.items())),
+            collider_optimization=stats,
+        )
+    return merged
+
+
 class CounterLike:
     def __init__(self):
         self.values = defaultdict(int)
@@ -754,6 +856,7 @@ def prepare_classes_geometry(
     class_ids,
     roof_thickness_m: float,
     collider_reduction: str = "safe",
+    workers: int = 1,
 ):
     class_ids = tuple(class_ids)
     if any(class_id not in CLASS_SURFACE_KINDS for class_id in class_ids):
@@ -766,13 +869,17 @@ def prepare_classes_geometry(
         raise BuildingLod2ColliderError(
             f"unsupported building collider reduction: {collider_reduction}"
         )
+    if isinstance(workers, bool) or not isinstance(workers, int) or not 1 <= workers <= 8:
+        raise BuildingLod2ColliderError(
+            "building Physics workers must be an integer in [1, 8]"
+        )
     by_source, center_lat, center_lon = _selected_classes(
         selection_path, classification_path, class_ids
     )
     frame = load_world_frame(world_frame_path)
     return _surface_pieces_for_classes(
         by_source, center_lat, center_lon, frame, roof_thickness_m, class_ids,
-        collider_reduction,
+        collider_reduction, workers=workers,
     )
 
 

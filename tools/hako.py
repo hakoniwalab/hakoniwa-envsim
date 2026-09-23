@@ -70,8 +70,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "city_world": {
         "enabled": False,
-        "parallel_workers": 4,
-        "dem_parallel_workers": 2,
+        "parallel_workers": 8,
+        "dem_parallel_workers": 4,
+        "building_physics_workers": 4,
         "terrain_spacing_m": 2.0,
         "terrain_uncovered_policy": "error",
         "terrain_uncovered_elevation_m": 0.0,
@@ -258,6 +259,15 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
         or not 1 <= dem_parallel_workers <= 4
     ):
         raise ConfigError("city_world.dem_parallel_workers must be an integer in [1, 4]")
+    building_physics_workers = cfg["city_world"]["building_physics_workers"]
+    if (
+        isinstance(building_physics_workers, bool)
+        or not isinstance(building_physics_workers, int)
+        or not 1 <= building_physics_workers <= 8
+    ):
+        raise ConfigError(
+            "city_world.building_physics_workers must be an integer in [1, 8]"
+        )
     for key in ("terrain_spacing_m", "marking_vertical_offset_m", "bridge_collision_thickness_m"):
         value = cfg["city_world"][key]
         if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
@@ -566,6 +576,8 @@ def _convert(
             "--max-physics-level", str(cfg["mjcf"]["building_physics_level"]),
             "--building-collider-reduction",
             cfg["mjcf"]["building_collider_reduction"],
+            "--building-physics-workers",
+            str(city_world["building_physics_workers"]),
         ]
         if cfg["mjcf"]["floor"]:
             buildings_mjcf_command.append("--floor")

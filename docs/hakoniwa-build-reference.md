@@ -91,8 +91,9 @@ Dataset Validatorで`scoped_out`として明示されます。
 | 設定 | 型・範囲 | 既定値 | 意味 |
 |---|---|---|---|
 | `city_world.enabled` | boolean | `false` | 建物単体ではなく、地形・道路等を含むCity Worldを生成する |
-| `city_world.parallel_workers` | 整数1〜16 | `4` | source・LOD2 texture取得、建物GML抽出、独立component生成、道路・路面標示の面分割に使うworker上限。建物GML抽出と面分割は最大4process |
-| `city_world.dem_parallel_workers` | 整数1〜4 | `2` | DEM source抽出専用のprocess上限。メモリ保護のため最大4 |
+| `city_world.parallel_workers` | 整数1〜16 | `8` | source・LOD2 texture取得、建物GML抽出、独立component生成、道路・路面標示の面分割に使うworker上限。建物GML抽出と面分割は最大4process |
+| `city_world.dem_parallel_workers` | 整数1〜4 | `4` | DEM source抽出専用のprocess上限。メモリ保護のため最大4 |
+| `city_world.building_physics_workers` | 整数1〜8 | `4` | 建物Physicsのsource GML解析・三角形化に使うprocess上限。`safe` reductionでsourceが複数ある場合に有効 |
 | `city_world.terrain_spacing_m` | 0より大きいm | `2` | DEM hfieldの目標最大格子間隔。小さいほど詳細だが、sample数とメモリが増える |
 | `city_world.marking_vertical_offset_m` | 0より大きいm | `0.055` | 路面標示Visualを道路面から浮かせる描画用offset |
 | `city_world.bridge_collision_thickness_m` | 0より大きいm | `0.02` | 橋面collision meshへ与える数値上の厚み |
@@ -116,7 +117,7 @@ DEM CityGMLはCRSとEnvelopeをXMLとして検証した後、巨大ファイル�
 実際のprocess数は設定値と対象DEM source数の小さい方です。DEM CityGMLと抽出結果をprocessごとに
 保持するため、メモリ保護の観点から設定上限を4にしています。
 道路・路面標示はpolygonのbboxに重なるhfield cellだけを処理し、内部の面分割も
-`parallel_workers`から最大4 processを使用します。process完了順ではなくsource順に戻してから
+`building_physics_workers`から最大8 processを使用します。process完了順ではなくsource順に戻してから
 meshを構成するため、並列数によってGLBの内容やSHA-256は変化しません。候補cell数、triangle判定数、
 実効process数は各Receiptの`drape`へ記録します。
 process semaphoreを利用できない制限環境では、建物GML抽出だけ同数のthreadへ自動fallbackします。
@@ -141,6 +142,7 @@ DEM source抽出が律速し、CPUとメモリに余裕がある場合だけ、�
 city_world:
   parallel_workers: 6
   dem_parallel_workers: 4
+  building_physics_workers: 4
 ```
 
 ## 出力 (`output`)
