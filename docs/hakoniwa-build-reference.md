@@ -37,7 +37,7 @@
 Dataset Validatorで`scoped_out`として明示されます。
 
 `source.kind: files`では`bldg`と`tran`が必須で、`dem`・`frn`・`brid`は任意です。
-手元のファイルは`build_dir/source/local/`へSHA-256付きでコピーされ、`download-manifest.json`に
+手元のファイルは、ビルドのたびに作り直す`build_dir/source/local/`へ（`source.path`からの相対パスのまま）SHA-256付きでコピーされ、変換はそこだけを読みます（以前のPLATEAUのダウンロードや古いコピーは混ざりません。`build_dir`・`install_dir`の中のファイルは入力にしません）。`download-manifest.json`に
 `mode: local`として記録されます（ネットワークは使いません）。DEMが無い場合は
 `city_world.terrain_uncovered_policy: constant`が必要で、地形は
 `terrain_uncovered_elevation_m`の高さの平らなhfieldになります。
@@ -51,7 +51,7 @@ CityGMLの座標参照系は、三次元の緯度・経度・高さで次のい�
 | 4326 | 世界の地図データを変換したもの（WGS 84） | WGS 84 |
 
 どちらも選択範囲の中心で接する同じ局所ENU平面へ変換します。JGD2011とWGS 84の測地系の差
-（日本では地殻変動により最大でdm程度）は無視します。OpenStreetMapからのCityGMLは
+（JGD2011は2011年の元期に固定、WGS 84はプレートに追従するため、地殻変動の分だけずれます。日本の多くの地域でdm程度、大地震で地面が動いた地域ではm規模）は無視します。地図データの位置精度の範囲内ですが、測量精度の位置合わせには両者を混ぜないでください。1つのビルドに座標系の違うCityGMLが混ざるとエラーになります（`gml_lod1_extract.py --allow-mixed-crs`で明示的に許可）。OpenStreetMapからのCityGMLは
 `src/city_pipeline/osm2citygml.py`で作ります（[osm-to-citygml.md](osm-to-citygml.md)）。
 
 ## 対象範囲 (`selection`)

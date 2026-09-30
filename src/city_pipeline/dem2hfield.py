@@ -69,8 +69,8 @@ def _dem_header(path: Path, west: float, south: float, east: float, north: float
             )
             return gml_prefix, intersects, epsg
     if not envelope_seen:
-        raise DemError("PLATEAU DEM has no CRS envelope")
-    raise DemError("PLATEAU DEM has an invalid CRS envelope")
+        raise DemError("DEM CityGML has no CRS envelope")
+    raise DemError("DEM CityGML has an invalid CRS envelope")
 
 
 def _iter_pos_lists(path: Path, gml_prefix: str | None):
@@ -196,7 +196,7 @@ def source_paths(source: Path) -> list[Path]:
         paths = sorted(source.rglob("*dem*_op.gml"))
         if paths:
             return paths
-    raise DemError(f"no PLATEAU DEM CityGML source found: {source}")
+    raise DemError(f"no DEM CityGML source (*dem*_op.gml) found: {source}")
 
 
 def _barycentric_height(x: float, y: float, triangle, epsilon: float = 1e-8):
@@ -407,6 +407,11 @@ def main() -> int:
         help="elevation in metres used by --uncovered-policy constant (default: 0)",
     )
     parser.add_argument(
+        "--allow-missing-dem", action="store_true",
+        help="with --uncovered-policy constant, build flat ground when there is no DEM at all "
+             "(hako.py passes it only for local CityGML without a DEM)",
+    )
+    parser.add_argument(
         "--workers", type=int, default=min(2, os.cpu_count() or 1),
         help="parallel DEM source extraction processes (default: up to 2)",
     )
@@ -420,9 +425,9 @@ def main() -> int:
     try:
         sources = source_paths(args.source)
     except DemError:
-        # Data without a DEM (e.g. CityGML converted from OpenStreetMap):
-        # with the constant policy the whole range is flat ground.
-        if args.uncovered_policy != "constant":
+        # Data without a DEM (e.g. CityGML converted from OpenStreetMap): flat
+        # ground, only when asked for; a PLATEAU build missing its DEM fails.
+        if not (args.allow_missing_dem and args.uncovered_policy == "constant"):
             raise
         sources = []
         print("INFO: no DEM source; the terrain is flat at the uncovered elevation")

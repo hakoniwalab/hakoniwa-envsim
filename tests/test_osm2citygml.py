@@ -192,6 +192,84 @@ class SharedWallTest(unittest.TestCase):
         self.assertLess(first.intersection(second).area, 1e-6)
 
 
+class SourceHygieneTest(unittest.TestCase):
+    """A build reads only its own inputs, of one CRS, and flat ground only when asked."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.out = Path(directory.name)
+        osm2citygml.run(BOX, self.out, "sample", osm_json=sample(), manifest=self.out / "hakoniwa-build.yaml")
+
+    def build(self):
+        completed = subprocess.run([sys.executable, str(ROOT / "tools" / "hako.py"), "build", "--config",
+                                    str(self.out / "hakoniwa-build.yaml")],
+                                   capture_output=True, text=True, check=False, timeout=600)
+        return completed
+
+    def test_a_rebuild_and_old_downloads_add_no_inputs(self):
+        self.assertEqual(self.build().returncode, 0)
+        # An old PLATEAU download left in the build's source tree (EPSG:6697).
+        old = self.out / "build/source/99999-2020"
+        old.mkdir(parents=True)
+        (old / "fixture_bldg_6697_op.gml").write_bytes((ROOT / "tests/fixtures/tiny_bldg_6697_op.gml").read_bytes())
+        completed = self.build()
+        self.assertEqual(completed.returncode, 0, completed.stdout[-2000:] + completed.stderr[-2000:])
+        manifest = json.loads((self.out / "build/download-manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(sorted(Path(item["path"]).name for item in manifest["files"]),
+                         ["sample_bldg_op.gml", "sample_tran_op.gml"])
+        lod1 = json.loads(next((self.out / "build").glob("*-lod1.json")).read_text(encoding="utf-8"))
+        self.assertEqual(lod1["source_crs"], "EPSG:4326")
+
+    def test_buildings_of_two_crss_are_refused(self):
+        mixed = self.out / "mixed"
+        mixed.mkdir()
+        (mixed / "sample_bldg_op.gml").write_bytes((self.out / "sample_bldg_op.gml").read_bytes())
+        fixture = (ROOT / "tests/fixtures/tiny_bldg_6697_op.gml").read_text(encoding="utf-8")
+        (mixed / "plateau_bldg_op.gml").write_text(fixture, encoding="utf-8")
+        (mixed / "query_meta.json").write_text(json.dumps({"center_lat": CENTER[0], "center_lon": CENTER[1]}),
+                                               encoding="utf-8")
+        command = [sys.executable, str(ROOT / "src/city_pipeline/gml_lod1_extract.py"), "--in", str(mixed),
+                   "--out", str(self.out / "mixed.json")]
+        completed = subprocess.run(command, capture_output=True, text=True, check=False, timeout=120)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("one CRS", completed.stderr)
+        allowed = subprocess.run(command + ["--allow-mixed-crs"], capture_output=True, text=True, check=False, timeout=120)
+        self.assertEqual(allowed.returncode, 0, allowed.stderr)
+
+    def test_a_missing_dem_is_flat_only_when_asked(self):
+        command = [sys.executable, str(ROOT / "src/city_pipeline/dem2hfield.py"), "--in", str(self.out / "nothing"),
+                   "--out", str(self.out / "terrain/terrain.xml"), "--latitude", str(CENTER[0]),
+                   "--longitude", str(CENTER[1]), "--uncovered-policy", "constant"]
+        (self.out / "nothing").mkdir()
+        refused = subprocess.run(command, capture_output=True, text=True, check=False, timeout=120)
+        self.assertNotEqual(refused.returncode, 0)  # a PLATEAU build missing its DEM fails
+        flat = subprocess.run(command + ["--allow-missing-dem"], capture_output=True, text=True, check=False, timeout=120)
+        self.assertEqual(flat.returncode, 0, flat.stderr)
+
+
+class RobustnessTest(unittest.TestCase):
+    def test_control_characters_dropped_rings_and_the_envelope(self):
+        osm = Overpass()
+        osm.way(1, [(0, 0), (10, 0), (10, 10), (0, 10)], {"building": "yes", "name": "bad\x01name\x0b"}, closed=True)
+        osm.way(2, [(-5, -5), (-1, -5), (-1, -1)], {})  # an open outer piece
+        osm.way(3, [(80, 80), (82, 80), (82, 82), (80, 82)], {}, closed=True)  # an inner ring far outside
+        osm.way(4, [(20, 0), (30, 0), (30, 10), (20, 10)], {}, closed=True)
+        osm.elements.append({"type": "relation", "id": 9, "tags": {"type": "multipolygon", "building": "yes"},
+                             "members": [{"type": "way", "ref": 4, "role": "outer"}, {"type": "way", "ref": 2, "role": "outer"},
+                                         {"type": "way", "ref": 3, "role": "inner"}]})
+        osm.way(5, [(60, 0), (75, 0), (75, 10), (60, 10)], {"building": "yes"}, closed=True)  # reaches past the bbox
+        with tempfile.TemporaryDirectory() as directory:
+            receipt = osm2citygml.run(BOX, Path(directory), "robust", osm_json=osm.data())
+            text = (Path(directory) / "robust_bldg_op.gml").read_text(encoding="utf-8")
+            root = ET.fromstring(text.encode("utf-8"))  # well-formed XML 1.0
+        self.assertIn("<gml:name>badname</gml:name>", text)
+        self.assertTrue(any("relation/9" in note and "does not close" in note for note in receipt["notes"]))
+        self.assertTrue(any("relation/9" in note and "inner ring" in note for note in receipt["notes"]))
+        upper = root.find(".//{http://www.opengis.net/gml}upperCorner").text.split()
+        self.assertGreaterEqual(float(upper[1]), latlon(75, 0)[1] - 1e-9)  # the envelope holds the whole building
+
+
 class GeoJsonTest(unittest.TestCase):
     def test_buildings_with_holes_and_roads_from_a_feature_collection(self):
         outer = [list(reversed(latlon(x, y))) for x, y in [(0, 0), (20, 0), (20, 20), (0, 20), (0, 0)]]

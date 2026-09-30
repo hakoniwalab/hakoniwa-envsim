@@ -377,6 +377,8 @@ def main():
                     help="底面抽出のZ許容[m]")
     ap.add_argument("--pattern", type=str, default="*bldg*_op.gml",
                     help="ディレクトリ指定時に探索するGMLのglobパターン（既定=*bldg*_op.gml）")
+    ap.add_argument("--allow-mixed-crs", action="store_true",
+                    help="accept CityGML of different CRSs in one build (their heights may mean different things)")
     ap.add_argument("--workers", type=int, choices=range(1, 5), default=1,
                     help="GMLファイル単位のprocess並列数（1-4、既定1）")
     args = ap.parse_args()
@@ -460,6 +462,15 @@ def main():
     finally:
         if executor is not None:
             executor.shutdown(cancel_futures=True)
+
+    # Heights mean different things by source (PLATEAU: above sea level;
+    # CityGML from OpenStreetMap: above the ground): one build, one CRS.
+    crs_labels = sorted({record.get("source_crs", "EPSG:6697") for record in all_footprints})
+    if len(crs_labels) > 1 and not args.allow_mixed_crs:
+        raise SystemExit(
+            f"CityGML in one build must share one CRS; found {', '.join(crs_labels)} "
+            "(an old download or another source in the same input tree?)"
+        )
 
     out = {
         "version": "0.2",
