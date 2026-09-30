@@ -59,7 +59,12 @@ LICENSE = "ODbL-1.0"
 # A sanity bound on the area converted at once, metres per side.
 MAX_SIDE_M = 2000.0
 # Points closer than this are merged; smaller buildings and shorter roads are dropped.
-MIN_STEP_M = 0.05
+# Footprints are otherwise kept as drawn: simplifying each one on its own would
+# move the walls neighbours share (OSM draws them with the same nodes) and
+# make them overlap.
+MIN_STEP_M = 0.001
+# Road centre lines (the surface layer, where overlaps do not matter) are simplified to this.
+ROAD_SIMPLIFY_M = 0.025
 MIN_BUILDING_AREA_M2 = 4.0
 MIN_ROAD_LENGTH_M = 1.0
 
@@ -462,6 +467,31 @@ def _feature_id(feature: Feature) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]", "_", f"{prefix}_{kind}{feature.source_id}")
 
 
+def _cross(o, a, b) -> float:
+    return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+
+def _ring(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """A ring without repeated points (closer than MIN_STEP_M) or corners on a
+    straight line; no other point moves, so shared walls stay shared."""
+    ring = []
+    for point in points:
+        if not ring or math.dist(ring[-1], point) > MIN_STEP_M:
+            ring.append(point)
+    while len(ring) > 1 and math.dist(ring[0], ring[-1]) <= MIN_STEP_M:
+        ring.pop()
+    changed = True
+    while changed and len(ring) > 3:
+        changed = False
+        for index in range(len(ring)):
+            a, b, c = ring[index - 1], ring[index], ring[(index + 1) % len(ring)]
+            if abs(_cross(a, b, c)) <= 1e-9 * max(1.0, math.dist(a, c) ** 2):
+                del ring[index]
+                changed = True
+                break
+    return ring if len(ring) >= 3 else points
+
+
 def convert(features: list[Feature], box: Box) -> tuple[str, str, Report, float]:
     """(buildings CityGML, roads CityGML, report, highest top) of map features."""
     north_south, east_west = box.half_extent_m()
@@ -503,7 +533,7 @@ def convert(features: list[Feature], box: Box) -> tuple[str, str, Report, float]
             base = round(building_base(feature.tags, height), 3)
             kept = 0
             for number, (outer, inners) in enumerate(feature.polygons, 1):
-                shape = Polygon(to_local(outer), [to_local(ring) for ring in inners]).simplify(MIN_STEP_M / 2)
+                shape = Polygon(_ring(to_local(outer)), [_ring(to_local(ring)) for ring in inners])
                 if not shape.is_valid:
                     shape = shape.buffer(0)
                 if shape.geom_type != "Polygon" or shape.is_empty:
@@ -531,7 +561,7 @@ def convert(features: list[Feature], box: Box) -> tuple[str, str, Report, float]
             width, lanes, width_source, lanes_source = road_size(feature.tags)
             kept = 0
             for number, line in enumerate(feature.lines, 1):
-                path = LineString(to_local(line)).simplify(MIN_STEP_M / 2)
+                path = LineString(to_local(line)).simplify(ROAD_SIMPLIFY_M)
                 if path.length < MIN_ROAD_LENGTH_M:
                     continue
                 area = path.buffer(width / 2, cap_style="flat", join_style="round")
