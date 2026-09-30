@@ -7,7 +7,13 @@ turns coarser worldwide map data into the same form, so one pipeline builds
 the City World from either. The conversion rules (what is read, how missing
 heights and widths are filled, ids and provenance) are specified in
 docs/osm-to-citygml.md; tests/test_osm2citygml.py checks that document's
-tables against the constants here.
+tables against the constants.
+
+The work is split in three modules: osm_source.py reads the map data (the
+area, Overpass, GeoJSON), osm_rules.py holds the conversion rules (what is a
+building or a road, the heights and widths filled in), and this module writes
+the CityGML, the receipt and the build manifest (and keeps the other two
+modules' names, for existing callers).
 
 Output (CityGML 2.0, ``latitude longitude height`` in EPSG:4326):
 
@@ -34,12 +40,9 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 import math
-import os
 from pathlib import Path
 import re
 import sys
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
 from xml.sax.saxutils import escape, quoteattr
 
 from shapely.geometry import LineString, Polygon
@@ -47,12 +50,19 @@ from shapely.geometry.polygon import orient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from geodesy import local_enu_to_geodetic, project_to_local_enu  # noqa: E402
+# Reading the map data and the conversion rules live in their own modules;
+# their names are kept here too (osm2citygml.Box, osm2citygml.HEIGHTS_BY_KIND, ...).
+from osm_rules import (  # noqa: E402,F401
+    DEFAULT_HEIGHT_M, DEFAULT_LANES, EXCLUDED_HIGHWAYS, HEIGHTS_BY_KIND, LANE_WIDTH_M, LANES_BY_CLASS,
+    LEVEL_HEIGHT_M, MAX_HEIGHT_M, MAX_ROAD_WIDTH_M, MIN_HEIGHT_M, MIN_ROAD_WIDTH_M, ROOF_SLAB_M,
+    building_base, building_height, is_building, is_road, parse_length, road_size,
+)
+from osm_source import (  # noqa: E402,F401
+    DEFAULT_OVERPASS, EPSG, OVERPASS_TIMEOUT_S, TOOL_VERSION, Box, Feature, OsmConversionError,
+    features_from_geojson, features_from_overpass, fetch_overpass, geojson_box, overpass_query,
+)
 
-TOOL_VERSION = "1"
-EPSG = 4326
 SRS_NAME = "http://www.opengis.net/def/crs/EPSG/0/4326"
-DEFAULT_OVERPASS = "https://overpass-api.de/api/interpreter"
-OVERPASS_TIMEOUT_S = 90
 ATTRIBUTION = "© OpenStreetMap contributors"
 LICENSE = "ODbL-1.0"
 
@@ -68,35 +78,6 @@ ROAD_SIMPLIFY_M = 0.025
 MIN_BUILDING_AREA_M2 = 4.0
 MIN_ROAD_LENGTH_M = 1.0
 
-# Heights: a building's height tag, else levels x this, else by its kind.
-LEVEL_HEIGHT_M = 3.0
-# A roof without walls (building=roof: a canopy) becomes a slab this thick under its height.
-ROOF_SLAB_M = 0.5
-DEFAULT_HEIGHT_M = 9.0
-MIN_HEIGHT_M, MAX_HEIGHT_M = 1.0, 500.0
-HEIGHTS_BY_KIND = {
-    "house": 6.0, "detached": 6.0, "semidetached_house": 6.0, "terrace": 6.0, "bungalow": 4.0,
-    "residential": 9.0, "apartments": 15.0, "dormitory": 12.0, "hotel": 20.0,
-    "commercial": 12.0, "office": 15.0, "retail": 6.0, "supermarket": 6.0,
-    "industrial": 8.0, "warehouse": 8.0, "factory": 10.0,
-    "school": 12.0, "university": 15.0, "hospital": 18.0, "public": 12.0, "civic": 12.0,
-    "church": 12.0, "temple": 8.0, "shrine": 6.0,
-    "garage": 3.0, "garages": 3.0, "carport": 3.0, "shed": 3.0, "hut": 3.0, "kiosk": 3.0, "roof": 4.0,
-}
-# Roads: lanes (both directions) by highway class; width = width tag, else lanes x LANE_WIDTH_M.
-LANE_WIDTH_M = 3.25
-DEFAULT_LANES = 2
-LANES_BY_CLASS = {
-    "motorway": 4, "trunk": 4, "primary": 2, "secondary": 2, "tertiary": 2, "unclassified": 2,
-    "residential": 2, "living_street": 1, "service": 1, "road": 2,
-    "motorway_link": 1, "trunk_link": 1, "primary_link": 1, "secondary_link": 1, "tertiary_link": 1,
-}
-MIN_ROAD_WIDTH_M, MAX_ROAD_WIDTH_M = 2.5, 60.0
-EXCLUDED_HIGHWAYS = {
-    "footway", "path", "cycleway", "steps", "pedestrian", "track", "bridleway", "corridor", "platform",
-    "construction", "proposed", "abandoned", "bus_stop", "elevator", "via_ferrata", "raceway", "escape",
-    "bus_guideway", "services", "rest_area",
-}
 # Tags kept with each feature (as generic attributes) for provenance.
 KEPT_TAGS = ("building", "highway", "name", "height", "min_height", "building:levels", "building:min_level",
              "roof:shape", "lanes", "width", "oneway", "surface", "bridge", "tunnel", "layer")
@@ -108,63 +89,6 @@ NAMESPACES = {
     "gen": "http://www.opengis.net/citygml/generics/2.0",
     "gml": "http://www.opengis.net/gml",
 }
-
-
-class OsmConversionError(RuntimeError):
-    pass
-
-
-@dataclass(frozen=True)
-class Box:
-    south: float
-    west: float
-    north: float
-    east: float
-
-    @staticmethod
-    def parse(text: str) -> "Box":
-        try:
-            south, west, north, east = (float(part) for part in text.split(","))
-        except ValueError as exc:
-            raise OsmConversionError(f"bbox must be south,west,north,east in degrees: {text!r}") from exc
-        return Box.of(south, west, north, east)
-
-    @staticmethod
-    def of(south, west, north, east) -> "Box":
-        box = Box(float(south), float(west), float(north), float(east))
-        if not (-90 <= box.south < box.north <= 90 and -180 <= box.west < box.east <= 180):
-            raise OsmConversionError(f"bbox must have south < north within ±90 and west < east within ±180: {box}")
-        return box
-
-    @property
-    def center(self) -> tuple[float, float]:
-        return (self.south + self.north) / 2, (self.west + self.east) / 2
-
-    def half_extent_m(self) -> tuple[float, float]:
-        """(north_south, east_west) half sizes in metres at the centre."""
-        lat0, lon0 = self.center
-        (north_edge,), (east_edge,) = (
-            project_to_local_enu([(self.north, lon0, 0.0)], lat0, lon0, EPSG),
-            project_to_local_enu([(lat0, self.east, 0.0)], lat0, lon0, EPSG),
-        )
-        return round(north_edge[1], 3), round(east_edge[0], 3)
-
-    def as_json(self) -> dict:
-        return {"south": self.south, "west": self.west, "north": self.north, "east": self.east}
-
-
-@dataclass
-class Feature:
-    """One map feature in degrees: a building's polygons or a road's lines."""
-
-    kind: str  # "building" or "road"
-    provider: str
-    source_kind: str  # way, relation, feature
-    source_id: str
-    tags: dict
-    polygons: list[tuple[list, list[list]]] = field(default_factory=list)  # [(outer, [inner, ...])] of (lat, lon)
-    lines: list[list] = field(default_factory=list)
-    notes: list[str] = field(default_factory=list)  # what reading it left out
 
 
 @dataclass
@@ -182,234 +106,6 @@ class Report:
     def as_json(self) -> dict:
         return {"buildings": self.buildings, "roads": self.roads, "skipped": self.skipped,
                 "assumed": self.assumed, "notes": self.notes}
-
-
-# --- Reading map data -------------------------------------------------------------
-
-def _is_road(tags: dict) -> bool:
-    highway = tags.get("highway")
-    return bool(highway) and highway not in EXCLUDED_HIGHWAYS and tags.get("area") != "yes" \
-        and tags.get("tunnel") not in ("yes", "building_passage")
-
-
-def _is_building(tags: dict) -> bool:
-    return bool(tags.get("building")) and tags.get("building") != "no"
-
-
-def _rings(lines: list[list], notes: list[str] | None = None) -> list[list]:
-    """Join way pieces end to end into closed rings (multipolygon members);
-    pieces that close no ring are left out (and noted)."""
-    lines = [list(line) for line in lines if line]
-    rings = []
-    while lines:
-        ring = lines.pop(0)
-        while ring[0] != ring[-1]:
-            for index, line in enumerate(lines):
-                if line[0] == ring[-1]:
-                    ring += line[1:]
-                elif line[-1] == ring[-1]:
-                    ring += list(reversed(line))[1:]
-                else:
-                    continue
-                del lines[index]
-                break
-            else:
-                break  # an open ring: left out
-        if ring[0] == ring[-1] and len(ring) >= 4:
-            rings.append(ring)
-        elif notes is not None:
-            notes.append("a ring that does not close was left out")
-    return rings
-
-
-def _nest(outers: list[list], inners: list[list], notes: list[str] | None = None) -> list[tuple[list, list[list]]]:
-    """Each inner ring under the outer ring that contains it (lat, lon rings);
-    an inner ring inside no outer ring is left out (and noted)."""
-    shapes = [Polygon([(lon, lat) for lat, lon in outer]) for outer in outers]
-    nested = [(outer, []) for outer in outers]
-    for inner in inners:
-        point = Polygon([(lon, lat) for lat, lon in inner]).representative_point()
-        for index, shape in enumerate(shapes):
-            if shape.is_valid and shape.contains(point):
-                nested[index][1].append(inner)
-                break
-        else:
-            if notes is not None:
-                notes.append("an inner ring inside no outer ring was left out")
-    return nested
-
-
-def features_from_overpass(data: dict) -> list[Feature]:
-    """Buildings (closed ways, multipolygon relations with their courtyards) and
-    roads (highway ways) from Overpass API JSON (``out body; >; out skel qt;``)."""
-    if not isinstance(data, dict) or not isinstance(data.get("elements"), list):
-        raise OsmConversionError("Overpass JSON must have an elements list")
-    nodes, ways = {}, {}
-    for element in data["elements"]:
-        if element.get("type") == "node" and "lat" in element:
-            nodes[element["id"]] = (element["lat"], element["lon"])
-        elif element.get("type") == "way":
-            ways[element["id"]] = element
-
-    def points(way):
-        found = [nodes.get(node) for node in way.get("nodes", [])]
-        return None if any(point is None for point in found) else found
-
-    features = []
-    for element in data["elements"]:
-        tags = element.get("tags") or {}
-        if element.get("type") == "way":
-            line = points(element)
-            if _is_building(tags):
-                feature = Feature("building", "openstreetmap", "way", str(element["id"]), tags)
-                if line is not None and len(line) >= 4 and line[0] == line[-1]:
-                    feature.polygons = [(line, [])]
-                features.append(feature)
-            elif _is_road(tags):
-                features.append(Feature("road", "openstreetmap", "way", str(element["id"]), tags,
-                                        lines=[line] if line else []))
-        elif element.get("type") == "relation" and _is_building(tags) and tags.get("type") == "multipolygon":
-            members = [m for m in element.get("members", []) if m.get("type") == "way" and m.get("ref") in ways]
-            notes: list[str] = []
-            outer = _rings([points(ways[m["ref"]]) for m in members if m.get("role") == "outer"], notes)
-            inner = _rings([points(ways[m["ref"]]) for m in members if m.get("role") == "inner"], notes)
-            features.append(Feature("building", "openstreetmap", "relation", str(element["id"]), tags,
-                                    polygons=_nest(outer, inner, notes), notes=notes))
-    return features
-
-
-def features_from_geojson(data: dict) -> list[Feature]:
-    """Buildings (Polygon / MultiPolygon with a building property) and roads
-    (LineString / MultiLineString with a highway property); GeoJSON gives
-    coordinates as [lon, lat]."""
-    if not isinstance(data, dict) or data.get("type") != "FeatureCollection":
-        raise OsmConversionError("GeoJSON must be a FeatureCollection")
-    features = []
-    for index, item in enumerate(data.get("features") or []):
-        geometry = item.get("geometry") or {}
-        tags = {key: value for key, value in (item.get("properties") or {}).items()
-                if isinstance(value, (str, int, float)) and not isinstance(value, bool)}
-        raw_id = item.get("id", tags.get("@id", tags.get("id", index)))
-        match = re.fullmatch(r"(way|relation|node)/(\d+)", str(raw_id))
-        source_kind, source_id = (match.group(1), match.group(2)) if match else ("feature", str(raw_id))
-        kind = geometry.get("type")
-
-        def latlon(coords):
-            return [(float(lat), float(lon)) for lon, lat, *_ in coords]
-
-        try:
-            if _is_building(tags) and kind in ("Polygon", "MultiPolygon"):
-                polygons = [geometry["coordinates"]] if kind == "Polygon" else geometry["coordinates"]
-                features.append(Feature("building", "geojson", source_kind, source_id, tags, polygons=[
-                    (latlon(polygon[0]), [latlon(ring) for ring in polygon[1:]]) for polygon in polygons if polygon]))
-            elif _is_road(tags) and kind in ("LineString", "MultiLineString"):
-                lines = [geometry["coordinates"]] if kind == "LineString" else geometry["coordinates"]
-                features.append(Feature("road", "geojson", source_kind, source_id, tags,
-                                        lines=[latlon(line) for line in lines]))
-        except (KeyError, TypeError, ValueError) as exc:
-            raise OsmConversionError(f"GeoJSON feature {index} has malformed coordinates: {exc}") from exc
-    return features
-
-
-def geojson_box(data: dict) -> Box:
-    """The bbox of a FeatureCollection (its own bbox, else every coordinate)."""
-    if isinstance(data.get("bbox"), list) and len(data["bbox"]) == 4:
-        west, south, east, north = data["bbox"]
-        return Box.of(south, west, north, east)
-    lats, lons = [], []
-
-    def walk(coords):
-        if coords and isinstance(coords[0], (int, float)):
-            lons.append(coords[0])
-            lats.append(coords[1])
-        else:
-            for item in coords:
-                walk(item)
-
-    for item in data.get("features") or []:
-        walk((item.get("geometry") or {}).get("coordinates") or [])
-    if not lats:
-        raise OsmConversionError("the GeoJSON has no coordinates to take the area from; pass --bbox")
-    return Box.of(min(lats), min(lons), max(lats), max(lons))
-
-
-def overpass_query(box: Box) -> str:
-    area = f"{box.south},{box.west},{box.north},{box.east}"
-    return (f"[out:json][timeout:{OVERPASS_TIMEOUT_S - 10}];\n"
-            f"(\n  way[\"building\"]({area});\n  relation[\"building\"][\"type\"=\"multipolygon\"]({area});\n"
-            f"  way[\"highway\"]({area});\n);\nout body;\n>;\nout skel qt;")
-
-
-def fetch_overpass(box: Box, endpoint: str | None = None) -> dict:
-    """Buildings and roads in the bbox from an Overpass API instance
-    (HAKONIWA_OVERPASS_URL or ``endpoint`` instead of the public one)."""
-    endpoint = endpoint or os.environ.get("HAKONIWA_OVERPASS_URL") or DEFAULT_OVERPASS
-    request = Request(endpoint, data=urlencode({"data": overpass_query(box)}).encode(), method="POST", headers={
-        "User-Agent": f"hakoniwa-envsim-osm2citygml/{TOOL_VERSION}",
-        "Content-Type": "application/x-www-form-urlencoded"})
-    try:
-        with urlopen(request, timeout=OVERPASS_TIMEOUT_S) as response:
-            return json.loads(response.read())
-    except (OSError, ValueError) as exc:
-        raise OsmConversionError(f"cannot get map data from {endpoint}: {exc}") from exc
-
-
-# --- Filling in what the map lacks ------------------------------------------------
-
-_LENGTH = re.compile(r"^\s*([0-9]+(?:\.[0-9]+)?)\s*(m|meters?|metres?|ft|feet|')?\s*$", re.IGNORECASE)
-
-
-def parse_length(value) -> float | None:
-    """'12', '12 m', '12,5m', "40'" / '40 ft' (feet) -> metres; None when unreadable."""
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return float(value)
-    match = _LENGTH.match(str(value or "").replace(",", "."))
-    if not match:
-        return None
-    number = float(match.group(1))
-    return number * 0.3048 if (match.group(2) or "").lower() in ("ft", "feet", "'") else number
-
-
-def building_height(tags: dict) -> tuple[float, str]:
-    """(height, where it came from: height / levels / default)."""
-    height = parse_length(tags.get("height"))
-    if height and height > 0:
-        source, value = "height", height
-    else:
-        levels = parse_length(tags.get("building:levels"))
-        if levels and levels > 0:
-            roof = 1.0 if tags.get("roof:shape") not in (None, "flat") else 0.0
-            source, value = "levels", levels * LEVEL_HEIGHT_M + roof
-        else:
-            source, value = "default", HEIGHTS_BY_KIND.get(str(tags.get("building")), DEFAULT_HEIGHT_M)
-    return min(max(value, MIN_HEIGHT_M), MAX_HEIGHT_M), source
-
-
-def building_base(tags: dict, height: float) -> float:
-    """Where a building starts above the ground: min_height, else its lowest
-    level, else just under its roof for a canopy (building=roof); else 0."""
-    base = parse_length(tags.get("min_height"))
-    if base is None:
-        levels = parse_length(tags.get("building:min_level"))
-        base = levels * LEVEL_HEIGHT_M if levels is not None else None
-    if base is None and tags.get("building") == "roof":
-        base = height - ROOF_SLAB_M
-    return max(0.0, min(base or 0.0, height - ROOF_SLAB_M))
-
-
-def road_size(tags: dict) -> tuple[float, int, str, str]:
-    """(width, lanes, width source, lanes source) of a road."""
-    lanes = parse_length(tags.get("lanes"))
-    if lanes and lanes >= 1:
-        lanes, lanes_source = int(lanes), "lanes"
-    else:
-        lanes, lanes_source = LANES_BY_CLASS.get(str(tags.get("highway")), DEFAULT_LANES), "default"
-    width = parse_length(tags.get("width"))
-    if width and width > 0:
-        width_source = "width"
-    else:
-        width, width_source = lanes * LANE_WIDTH_M, "lanes" if lanes_source == "lanes" else "default"
-    return min(max(width, MIN_ROAD_WIDTH_M), MAX_ROAD_WIDTH_M), lanes, width_source, lanes_source
 
 
 # --- Writing CityGML --------------------------------------------------------------
