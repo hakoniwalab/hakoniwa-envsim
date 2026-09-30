@@ -23,7 +23,7 @@ from shapely.ops import unary_union
 from shapely.strtree import STRtree
 
 from citygml2glb import GML_ID, NS, _polygon_rings, triangulate_rings
-from geodesy import project_epsg6697_to_local_enu
+from geodesy import project_to_local_enu
 from mjcf_prism import (
     polygon_prism,
     polygon_prism_along_normal,
@@ -31,7 +31,7 @@ from mjcf_prism import (
     triangular_prism,
     triangular_prism_along_normal,
 )
-from gml_lod1_extract import validate_epsg6697_contract
+from gml_lod1_extract import validate_crs_contract
 from world_frame import load_world_frame
 from building_tolerant_planar import reduce_tolerant_planar
 
@@ -478,7 +478,7 @@ def _surface_pieces_for_classes(
     }
     for source_index, (source, classes) in enumerate(ordered_sources, start=1):
         root = ET.parse(source).getroot()
-        validate_epsg6697_contract(root, source)
+        epsg = validate_crs_contract(root, source)
         indexed = {element.get(GML_ID): element for element in root.findall(".//bldg:Building", NS)}
         for class_id in class_ids:
             buildings = classes.get(class_id, {})
@@ -502,8 +502,8 @@ def _surface_pieces_for_classes(
                                 continue
                             rings = []
                             for _, points in parsed:
-                                enu = project_epsg6697_to_local_enu(
-                                    points, center_lat, center_lon
+                                enu = project_to_local_enu(
+                                    points, center_lat, center_lon, epsg
                                 )
                                 rings.append([
                                     (north, -east, altitude - offset)

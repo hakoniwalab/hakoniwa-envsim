@@ -22,7 +22,7 @@ import numpy as np
 
 from bridge2glb import bridge_source_paths, validate_bridge_crs
 from citygml2glb import GlbError, _polygon_rings, triangulate_rings
-from geodesy import project_epsg6697_to_local_enu
+from geodesy import epsg_label, project_to_local_enu
 from mjcf_collision import COLLISION_MODES, collision_attributes
 from mjcf_prism import format_numbers, triangular_prism
 from road_terrain_probe import read_hfield, terrain_height
@@ -49,10 +49,10 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _mjcf_points(points, frame):
+def _mjcf_points(points, frame, epsg=6697):
     origin = frame["origin"]
-    enu = project_epsg6697_to_local_enu(
-        points, float(origin["latitude"]), float(origin["longitude"])
+    enu = project_to_local_enu(
+        points, float(origin["latitude"]), float(origin["longitude"]), epsg
     )
     offset = float(origin["altitude_offset_m"])
     # Hakoniwa/MuJoCo city-world coordinates: X=North, Y=-East, Z=Up.
@@ -96,8 +96,10 @@ def extract_prisms(source: Path, frame: dict, thickness_m: float, max_slope_deg:
     edges: Counter = Counter()
     edge_points = {}
 
+    source_crs = set()
     for path in bridge_source_paths(source):
-        validate_bridge_crs(path)
+        epsg = validate_bridge_crs(path)
+        source_crs.add(epsg_label(epsg))
         current_bridge = None
         floor_depth = lod3_depth = polygon_depth = 0
         stack: list[ET.Element] = []
@@ -121,7 +123,7 @@ def extract_prisms(source: Path, frame: dict, thickness_m: float, max_slope_deg:
                     parsed = _polygon_rings(element)
                     polygon_id = element.get(GML_ID, f"polygon-{source_surfaces}")
                     if parsed:
-                        rings = [_mjcf_points(points, frame).tolist() for _, points in parsed]
+                        rings = [_mjcf_points(points, frame, epsg).tolist() for _, points in parsed]
                         try:
                             vertices, faces = triangulate_rings(rings)
                         except (GlbError, ValueError):
@@ -187,6 +189,7 @@ def extract_prisms(source: Path, frame: dict, thickness_m: float, max_slope_deg:
                 boundary.append(point)
     boundary.sort(key=lambda point: (point[0], point[1], point[2]))
     return pieces, boundary, {
+        "source_crs": sorted(source_crs),
         "bridge_ids": sorted(bridge_ids),
         "source_bridge_ids": sorted(source_bridge_ids),
         "source_surface_count": source_surfaces,
@@ -312,6 +315,7 @@ def convert(source: Path, world_frame_path: Path, output: Path, receipt_path: Pa
     frame = load_world_frame(world_frame_path)
     sources = bridge_source_paths(source)
     pieces, boundary, counts = extract_prisms(source, frame, thickness_m, max_slope_deg)
+    source_crs = ",".join(counts.pop("source_crs", None) or ["EPSG:6697"])
     endpoint, endpoint_records = endpoint_validation(boundary, terrain_receipt)
     terrain_relationship = terrain_relationship_validation(pieces, terrain_receipt)
     write_mjcf(output, pieces, collision_mode)
@@ -333,7 +337,7 @@ def convert(source: Path, world_frame_path: Path, output: Path, receipt_path: Pa
         "reason": None if pieces else "usable_bridge_surface_not_available",
         "source": "PLATEAU CityGML",
         "sources": [{"path": str(path.resolve()), "sha256": _sha256(path)} for path in sources],
-        "source_crs": "EPSG:6697",
+        "source_crs": source_crs,
         "lod_used": 3 if pieces else None,
         "surface_source": "OuterFloorSurface",
         "surface_selection": {"maximum_slope_deg": max_slope_deg},

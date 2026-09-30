@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import fnmatch
 import importlib.util
 import json
 import math
@@ -39,6 +40,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "component": "hakoniwa-envsim",
     "pipeline": {"type": "plateau-citygml-to-assets"},
     "source": {
+        # plateau: the PLATEAU Distribution Service (Japan, by mesh code).
+        # files: local CityGML (a file or a directory), e.g. converted from
+        # OpenStreetMap by tools/osm2citygml.py; see docs/hakoniwa-build-reference.md.
+        "kind": "plateau",
+        "path": None,
         "api_base_url": "https://api.plateauview.mlit.go.jp",
         "cache_dir": None,
         "feature_type": "bldg",
@@ -85,6 +91,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "install_dir": ".hako/install",
         "name": "plateau-city",
     },
+}
+
+
+SOURCE_KINDS = ("plateau", "files")
+# File name patterns the pipeline tools look for, per feature type.
+FEATURE_PATTERNS = {
+    "bldg": "*bldg*_op.gml", "tran": "*tran*_op.gml", "dem": "*dem*_op.gml",
+    "frn": "*frn*_op.gml", "brid": "*brid*_op.gml",
 }
 
 
@@ -184,6 +198,14 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
         raise ConfigError("version must be 1 and component must be hakoniwa-envsim")
     if cfg["pipeline"]["type"] != "plateau-citygml-to-assets":
         raise ConfigError("pipeline.type must be plateau-citygml-to-assets")
+    if cfg["source"]["kind"] not in SOURCE_KINDS:
+        raise ConfigError("source.kind must be plateau or files")
+    source_path = cfg["source"]["path"]
+    if cfg["source"]["kind"] == "files":
+        if not isinstance(source_path, str) or not source_path.strip():
+            raise ConfigError("source.kind files requires source.path (a CityGML file or directory)")
+    elif source_path is not None:
+        raise ConfigError("source.path is used only with source.kind files")
     if cfg["source"]["feature_type"] != "bldg":
         raise ConfigError("source.feature_type currently supports only bldg")
     feature_types = cfg["source"]["feature_types"]
@@ -284,11 +306,17 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
     slope = cfg["city_world"]["bridge_max_surface_slope_deg"]
     if not isinstance(slope, (int, float)) or isinstance(slope, bool) or not 0 < slope < 90:
         raise ConfigError("city_world.bridge_max_surface_slope_deg must be in (0, 90)")
-    required_world_features = ("bldg", "tran", "dem", "frn")
+    # PLATEAU always has these; local files (e.g. from OpenStreetMap) may lack a
+    # DEM (flat ground with terrain_uncovered_policy constant) and markings.
+    required_world_features = (
+        ("bldg", "tran", "dem", "frn") if cfg["source"]["kind"] == "plateau" else ("bldg", "tran")
+    )
     if cfg["city_world"]["enabled"] and not all(
         feature_types[name] for name in required_world_features
     ):
-        raise ConfigError("city_world.enabled requires bldg, tran, dem, and frn feature types")
+        raise ConfigError(
+            f"city_world.enabled requires {', '.join(required_world_features)} feature types"
+        )
     for key in ("build_dir", "install_dir", "name"):
         if not isinstance(cfg["output"][key], str) or not cfg["output"][key]:
             raise ConfigError(f"output.{key} must be a non-empty string")
@@ -369,6 +397,40 @@ def _query_meta(cfg: dict[str, Any]) -> dict[str, Any]:
         "bbox": {"west": bbox[0], "south": bbox[1], "east": bbox[2], "north": bbox[3]},
         "third_mesh_codes": third_mesh_codes(bbox),
     }
+
+
+def _local_feature_sources(
+    cfg: dict[str, Any], feature_type: str, source_root: Path,
+) -> list[dict[str, Any]]:
+    """Copy local CityGML of one feature type into the build's source tree.
+
+    A directory is searched recursively with the pipeline's file pattern
+    (``*bldg*_op.gml`` and so on); a single file is used for the feature its
+    name matches. The copies keep the build self-contained and are recorded
+    with their SHA-256 like downloaded files.
+    """
+    source = _path(cfg["source"]["path"])
+    pattern = FEATURE_PATTERNS[feature_type]
+    if source.is_dir():
+        paths = sorted(source.rglob(pattern))
+    elif source.is_file():
+        paths = [source] if fnmatch.fnmatch(source.name, pattern) else []
+    else:
+        raise ConfigError(f"source.path does not exist: {source}")
+    target_dir = source_root / "local"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    records = []
+    for path in paths:
+        target = target_dir / path.name
+        if target.exists() and target.resolve() != path.resolve() and sha256_file(target) != sha256_file(path):
+            raise ConfigError(f"two local CityGML files share the name {path.name}")
+        if target.resolve() != path.resolve():
+            shutil.copyfile(path, target)
+        records.append({
+            "feature_type": feature_type, "mode": "local", "source_path": str(path),
+            "path": str(target), "bytes": target.stat().st_size, "sha256": sha256_file(target),
+        })
+    return records
 
 
 def _materialize_feature_sources(
@@ -477,10 +539,17 @@ def doctor(manifest: Path) -> int:
     query = _query_meta(cfg)
     bbox = query["bbox"]
     print(f"OK: Python {sys.version.split()[0]} and conversion dependencies")
-    print(f"OK: PLATEAU center lat={query['center_lat']} lon={query['center_lon']}")
+    if cfg["source"]["kind"] == "files":
+        source = _path(cfg["source"]["path"])
+        if not source.exists():
+            print(f"ERROR: source.path does not exist: {source}", file=sys.stderr)
+            return 1
+        print(f"OK: local CityGML source {source}")
+    print(f"OK: selection center lat={query['center_lat']} lon={query['center_lon']}")
     print(f"OK: query bbox west={bbox['west']:.8f} south={bbox['south']:.8f} east={bbox['east']:.8f} north={bbox['north']:.8f}")
     print("OK: output coordinates use query-centered local ENU meters")
-    print("INFO: PLATEAU Distribution Service is an external trial API; build records resolved URLs and SHA-256 values")
+    if cfg["source"]["kind"] == "plateau":
+        print("INFO: PLATEAU Distribution Service is an external trial API; build records resolved URLs and SHA-256 values")
     return 0
 
 
@@ -722,7 +791,23 @@ def build(manifest: Path, offline: bool = False) -> int:
         name for name, enabled in cfg["source"]["feature_types"].items() if enabled
     ]
     bbox = tuple(meta["bbox"][key] for key in ("west", "south", "east", "north"))
-    for feature_type in enabled_features:
+    local = cfg["source"]["kind"] == "files"
+    for feature_type in enabled_features if local else []:
+        records = _local_feature_sources(cfg, feature_type, source_root)
+        catalog_status[feature_type] = {"status": "available" if records else "not_available", "source": "local"}
+        if not records and feature_type in ("bldg", "tran"):
+            raise ConfigError(
+                f"no local {feature_type} CityGML ({FEATURE_PATTERNS[feature_type]}) under {cfg['source']['path']}"
+            )
+        if not records and feature_type == "dem" and cfg["city_world"]["enabled"] \
+                and cfg["city_world"]["terrain_uncovered_policy"] != "constant":
+            raise ConfigError(
+                "no local DEM CityGML: set city_world.terrain_uncovered_policy to constant for flat ground"
+            )
+        if not records:
+            print(f"INFO: no local {feature_type} CityGML; it is omitted")
+        downloaded.extend(records)
+    for feature_type in [] if local else enabled_features:
         response_path = build_dir / f"plateau-catalog-response-{feature_type}.json"
         query_path = build_dir / f"plateau-catalog-query-{feature_type}.json"
         if offline:

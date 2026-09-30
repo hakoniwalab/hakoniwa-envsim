@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Extract PLATEAU LOD1 buildings into query-centered local ENU JSON.
+"""Extract CityGML LOD1 buildings into query-centered local ENU JSON.
 
-The input contract is deliberately narrow: each CityGML file must declare the
-EPSG:6697 compound CRS with three-dimensional ``latitude longitude height``
-coordinates.  ``query_meta.json`` supplies the latitude/longitude origin and
+The input contract is deliberately narrow: each CityGML file must declare a
+supported three-dimensional geographic CRS (EPSG:6697 for PLATEAU, EPSG:4326
+for converted worldwide data; see geodesy.py) with ``latitude longitude
+height`` coordinates.  ``query_meta.json`` supplies the latitude/longitude origin and
 optional north/south and east/west half extents.  Both a single GML file and a
 directory containing ``*bldg*_op.gml`` files are accepted.
 
@@ -26,7 +27,7 @@ from shapely.geometry import Polygon
 from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
-from geodesy import project_epsg6697_to_local_enu
+from geodesy import declared_crs, epsg_label, project_epsg6697_to_local_enu, project_to_local_enu  # noqa: F401
 
 NS = {
     "gml":  "http://www.opengis.net/gml",
@@ -48,23 +49,13 @@ def parse_poslist(text):
     return pts
 
 
-def validate_epsg6697_contract(root, gml_path):
-    """Validate the authoritative PLATEAU compound CRS declaration."""
-    envelopes = root.findall(".//gml:Envelope", NS)
-    if not envelopes:
-        raise ValueError(f"CityGML gml:Envelope is missing: {gml_path}")
-    for envelope in envelopes:
-        srs_name = envelope.get("srsName", "")
-        match = re.search(r"(?:/|:)(\d+)$", srs_name)
-        if match is None or int(match.group(1)) != 6697:
-            raise ValueError(
-                f"CityGML must declare EPSG:6697; found srsName={srs_name!r}: {gml_path}"
-            )
-        if envelope.get("srsDimension") != "3":
-            raise ValueError(
-                "EPSG:6697 CityGML must declare srsDimension=3; "
-                f"found {envelope.get('srsDimension')!r}: {gml_path}"
-            )
+def validate_crs_contract(root, gml_path):
+    """The EPSG code (6697 or 4326) of a three-dimensional geographic CityGML."""
+    return declared_crs(root, gml_path, NS)
+
+
+# The name other modules import; it now accepts every supported CRS.
+validate_epsg6697_contract = validate_crs_contract
 
 
 def _open_ring(points):
@@ -99,7 +90,7 @@ def _canonical_polygon(polygon):
     }
 
 
-def _base_polygons(bldg, zmin, base_eps, local_origin):
+def _base_polygons(bldg, zmin, base_eps, local_origin, epsg=6697):
     """Extract ordered horizontal bottom surfaces without convexification."""
     polygons = []
     for element in bldg.findall(".//bldg:lod1Solid//gml:Polygon", NS):
@@ -110,8 +101,8 @@ def _base_polygons(bldg, zmin, base_eps, local_origin):
         if len(exterior_geo) < 4 or any(abs(point[2] - zmin) > base_eps for point in exterior_geo):
             continue
 
-        exterior_enu = project_epsg6697_to_local_enu(
-            exterior_geo, center_lat=local_origin[0], center_lon=local_origin[1]
+        exterior_enu = project_to_local_enu(
+            exterior_geo, center_lat=local_origin[0], center_lon=local_origin[1], epsg=epsg
         )
         holes = []
         for interior in element.findall("gml:interior/gml:LinearRing/gml:posList", NS):
@@ -120,8 +111,8 @@ def _base_polygons(bldg, zmin, base_eps, local_origin):
             interior_geo = parse_poslist(interior.text)
             if any(abs(point[2] - zmin) > base_eps for point in interior_geo):
                 raise ValueError("LOD1 bottom polygon has a non-horizontal interior ring")
-            interior_enu = project_epsg6697_to_local_enu(
-                interior_geo, center_lat=local_origin[0], center_lon=local_origin[1]
+            interior_enu = project_to_local_enu(
+                interior_geo, center_lat=local_origin[0], center_lon=local_origin[1], epsg=epsg
             )
             holes.append(_open_ring(interior_enu))
 
@@ -232,9 +223,9 @@ def extract_buildings_lod1(
     """
     tree = ET.parse(gml_path)
     root = tree.getroot()
-    validate_epsg6697_contract(root, gml_path)
+    epsg = validate_crs_contract(root, gml_path)
     if local_origin is None:
-        raise ValueError("EPSG:6697 conversion requires a query-centered local origin")
+        raise ValueError(f"{epsg_label(epsg)} conversion requires a query-centered local origin")
 
     print(f"[INFO] Processing GML: {gml_path}")
     results = []
@@ -258,10 +249,11 @@ def extract_buildings_lod1(
         if not pts_all:
             continue
 
-        xyz = project_epsg6697_to_local_enu(
+        xyz = project_to_local_enu(
             pts_all,
             center_lat=local_origin[0],
             center_lon=local_origin[1],
+            epsg=epsg,
         )
 
         # PLATEAU files are mesh-sized. Do not let malformed geometry outside
@@ -273,7 +265,7 @@ def extract_buildings_lod1(
         zmax = float(max(p[2] for p in xyz))
 
         try:
-            base_polygons = _base_polygons(bldg, zmin, base_eps, local_origin)
+            base_polygons = _base_polygons(bldg, zmin, base_eps, local_origin, epsg)
             if not base_polygons:
                 raise ValueError(f"LOD1 horizontal bottom surface was not found: building={bid}")
 
@@ -310,9 +302,16 @@ def extract_buildings_lod1(
                 ],
                 "zmin": zmin,
                 "zmax": zmax,
+                "source_crs": epsg_label(epsg),
             })
 
     return results
+
+
+def source_crs_label(records, default="EPSG:6697"):
+    """One CRS label for the records' source CRSs ("EPSG:6697", or "EPSG:4326,EPSG:6697" when mixed)."""
+    labels = sorted({record.get("source_crs", default) for record in records})
+    return ",".join(labels) if labels else default
 
 
 def collect_gml_paths(in_path: Path, pattern: str):
@@ -397,7 +396,7 @@ def main():
     origin_meta = load_query_meta(meta_path)
 
     if origin_meta is None:
-        raise SystemExit("EPSG:6697 conversion requires query_meta.json with center_lat/center_lon")
+        raise SystemExit("CityGML conversion requires query_meta.json with center_lat/center_lon")
     
     # 原点座標を投影座標系に変換
     if origin_meta is not None:
@@ -464,8 +463,8 @@ def main():
 
     out = {
         "version": "0.2",
-        "source_crs": "EPSG:6697",
-        "crs": "LOCAL_ENU_GRS80",
+        "source_crs": source_crs_label(all_footprints),
+        "crs": "LOCAL_ENU_GRS80" if source_crs_label(all_footprints) == "EPSG:6697" else "LOCAL_ENU",
         "coordinate_system": "local-enu",
         "deduplicated_buildings": duplicate_count,
         "skipped_buildings": len(extraction_issues),

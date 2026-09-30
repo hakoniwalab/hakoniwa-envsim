@@ -33,9 +33,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gml_lod1_extract import (  # noqa: E402
     NS as BASE_NS,
     parse_poslist,
-    project_epsg6697_to_local_enu,
-    validate_epsg6697_contract,
+    validate_crs_contract,
 )
+from geodesy import project_to_local_enu  # noqa: E402
 from world_frame import load_world_frame  # noqa: E402
 
 NS = {
@@ -344,6 +344,8 @@ def _source_records(download_manifest: Path | None) -> dict[Path, dict]:
     data = json.loads(download_manifest.read_text(encoding="utf-8"))
     records = {}
     for item in data.get("files", []):
+        if "url" not in item:  # a local CityGML file: no remote textures to resolve
+            continue
         cache = item.get("cache") or {}
         records[Path(item["path"]).resolve()] = {
             "url": item["url"],
@@ -352,8 +354,8 @@ def _source_records(download_manifest: Path | None) -> dict[Path, dict]:
     return records
 
 
-def _three_coordinates(points, center_lat, center_lon, z_offset):
-    enu = project_epsg6697_to_local_enu(points, center_lat, center_lon)
+def _three_coordinates(points, center_lat, center_lon, z_offset, epsg=6697):
+    enu = project_to_local_enu(points, center_lat, center_lon, epsg)
     return [(east, altitude - z_offset, -north) for east, north, altitude in enu]
 
 
@@ -427,7 +429,7 @@ def build_glb(
 
     for gml_path, buildings in selected.items():
         root = ET.parse(gml_path).getroot()
-        validate_epsg6697_contract(root, gml_path)
+        epsg = validate_crs_contract(root, gml_path)
         appearances = appearance_map(root)
         indexed = {building.get(GML_ID): building for building in root.findall(".//bldg:Building", NS)}
         for building_id, parts in buildings.items():
@@ -441,7 +443,7 @@ def build_glb(
                     continue
                 rings_geo = [ring for _, ring in parsed]
                 rings_three = [
-                    _three_coordinates(ring, center_lat, center_lon, z_offset) for ring in rings_geo
+                    _three_coordinates(ring, center_lat, center_lon, z_offset, epsg) for ring in rings_geo
                 ]
                 vertices, faces = triangulate_rings(rings_three)
                 texture_path = None

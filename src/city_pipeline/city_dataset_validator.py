@@ -112,8 +112,10 @@ def validate_dataset(
         "components": {
             "terrain": {
                 "status": "available",
-                "source": "PLATEAU DEM",
+                "source": "CityGML DEM" if terrain.get("dem", "available") == "available" else "none (flat ground)",
                 "grid": {"rows": terrain.get("nrow"), "columns": terrain.get("ncol")},
+                # Data without a DEM (e.g. from OpenStreetMap) is flat ground.
+                "dem": terrain.get("dem", "available"),
             },
             "buildings": {
                 "status": "available",
@@ -261,7 +263,9 @@ def format_report(report: dict) -> list[str]:
         return f"{label:<14}: NOT AVAILABLE"
 
     lines = [
-        f"{'Terrain':<14}: DEM hfield ({grid['rows']} x {grid['columns']})",
+        (f"{'Terrain':<14}: DEM hfield ({grid['rows']} x {grid['columns']})"
+         if terrain.get("dem", "available") == "available"
+         else f"{'Terrain':<14}: flat hfield ({grid['rows']} x {grid['columns']}; DEM not available)"),
         lod_line("Buildings", buildings, [("LOD2", "lod2"), ("LOD1", "lod1_fallback")]),
         lod_line("Road surfaces", roads, [
             ("LOD3", "lod3"), ("LOD2", "lod2_fallback"), ("LOD1", "lod1_fallback")

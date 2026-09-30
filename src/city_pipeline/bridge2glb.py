@@ -16,7 +16,7 @@ import trimesh
 from trimesh.visual.material import PBRMaterial
 
 from citygml2glb import GlbError, _polygon_rings, triangulate_rings
-from geodesy import project_epsg6697_to_local_enu
+from geodesy import SUPPORTED_CRS, epsg_label, project_to_local_enu, srs_code
 from world_frame import load_world_frame
 
 GML = "http://www.opengis.net/gml"
@@ -48,21 +48,23 @@ def bridge_source_paths(source: Path) -> list[Path]:
     raise BridgeGlbError(f"bridge source does not exist: {source}")
 
 
-def validate_bridge_crs(path: Path) -> None:
-    """Reject bridge data outside the Envsim EPSG:6697 3D contract."""
+def validate_bridge_crs(path: Path) -> int:
+    """The EPSG code of bridge data inside the Envsim 3D geographic CRS contract."""
     for _event, element in ET.iterparse(path, events=("start",)):
         if element.tag == f"{{{GML}}}Envelope":
             srs_name = element.get("srsName", "")
             dimension = element.get("srsDimension", "")
-            if not srs_name.rstrip("/").endswith("/6697"):
+            epsg = srs_code(srs_name)
+            if epsg not in SUPPORTED_CRS:
+                supported = " or ".join(epsg_label(code) for code in SUPPORTED_CRS)
                 raise BridgeGlbError(
-                    f"{path}: bridge CityGML must use EPSG:6697, got {srs_name!r}"
+                    f"{path}: bridge CityGML must use {supported}, got {srs_name!r}"
                 )
             if dimension != "3":
                 raise BridgeGlbError(
                     f"{path}: bridge CityGML must use srsDimension=3, got {dimension!r}"
                 )
-            return
+            return epsg
     raise BridgeGlbError(f"{path}: bridge CityGML has no gml:Envelope CRS contract")
 
 
@@ -119,8 +121,8 @@ def material_colors(path: Path) -> dict[str, tuple[int, int, int, int]]:
     return handler.colors
 
 
-def _in_range(points, latitude, longitude, ns_m, ew_m) -> bool:
-    enu = project_epsg6697_to_local_enu(points, latitude, longitude)
+def _in_range(points, latitude, longitude, ns_m, ew_m, epsg=6697) -> bool:
+    enu = project_to_local_enu(points, latitude, longitude, epsg)
     east = [point[0] for point in enu]
     north = [point[1] for point in enu]
     return (
@@ -129,8 +131,8 @@ def _in_range(points, latitude, longitude, ns_m, ew_m) -> bool:
     )
 
 
-def _glb_points(points, latitude, longitude, altitude_offset_m):
-    enu = project_epsg6697_to_local_enu(points, latitude, longitude)
+def _glb_points(points, latitude, longitude, altitude_offset_m, epsg=6697):
+    enu = project_to_local_enu(points, latitude, longitude, epsg)
     return [
         (east, altitude - altitude_offset_m, -north)
         for east, north, altitude in enu
@@ -143,7 +145,7 @@ def _append(batch, vertices, faces):
     batch["faces"].extend((face + offset).tolist() for face in faces)
 
 
-def _extract_geometry(path, colors, frame, batches):
+def _extract_geometry(path, colors, frame, batches, epsg=6697):
     origin = frame["origin"]
     extent = frame["half_extent_m"]
     latitude = float(origin["latitude"])
@@ -174,9 +176,9 @@ def _extract_geometry(path, colors, frame, batches):
         if element.tag == POLYGON_TAG:
             if lod3_depth:
                 parsed = _polygon_rings(element)
-                if parsed and _in_range(parsed[0][1], latitude, longitude, ns_m, ew_m):
+                if parsed and _in_range(parsed[0][1], latitude, longitude, ns_m, ew_m, epsg):
                     rings = [
-                        _glb_points(points, latitude, longitude, altitude_offset)
+                        _glb_points(points, latitude, longitude, altitude_offset, epsg)
                         for _, points in parsed
                     ]
                     polygon_id = element.get(GML_ID, "")
@@ -236,8 +238,8 @@ def convert(
         "rejected_polygon_count": 0, "rejected_polygon_ids": [],
     }
     for path in sources:
-        validate_bridge_crs(path)
-        result = _extract_geometry(path, material_colors(path), frame, batches)
+        epsg = validate_bridge_crs(path)
+        result = _extract_geometry(path, material_colors(path), frame, batches, epsg)
         totals["bridge_ids"].update(result.pop("bridge_ids"))
         for key, value in result.items():
             if key == "rejected_polygon_ids":
