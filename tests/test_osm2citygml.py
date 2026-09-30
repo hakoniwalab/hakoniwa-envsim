@@ -175,6 +175,23 @@ class ConversionTest(unittest.TestCase):
         self.assertTrue((world / "city-world.glb").is_file())
 
 
+class SharedWallTest(unittest.TestCase):
+    def test_neighbours_sharing_a_wall_do_not_overlap(self):
+        # OSM draws a shared wall with the same nodes, here one slightly off the
+        # straight line: both footprints keep it, so they only touch.
+        osm = Overpass()
+        wall = [(10, 0), (10.02, 5), (10, 10)]
+        osm.way(1, [(0, 0), *wall, (0, 10)], {"building": "yes"}, closed=True)
+        osm.way(2, [(20, 0), (20, 10), *reversed(wall)], {"building": "yes"}, closed=True)
+        with tempfile.TemporaryDirectory() as directory:
+            osm2citygml.run(BOX, Path(directory), "wall", osm_json=osm.data())
+            records = gml_lod1_extract.extract_buildings_lod1(Path(directory) / "wall_bldg_op.gml", local_origin=CENTER)
+        from shapely.geometry import Polygon
+        first, second = (Polygon(record["vertices"]) for record in records)
+        self.assertEqual((len(first.exterior.coords) - 1, len(second.exterior.coords) - 1), (5, 5))
+        self.assertLess(first.intersection(second).area, 1e-6)
+
+
 class GeoJsonTest(unittest.TestCase):
     def test_buildings_with_holes_and_roads_from_a_feature_collection(self):
         outer = [list(reversed(latlon(x, y))) for x, y in [(0, 0), (20, 0), (20, 20), (0, 20), (0, 0)]]
@@ -254,7 +271,7 @@ class SpecTest(unittest.TestCase):
         for text, value in (("**3 m**", osm2citygml.LEVEL_HEIGHT_M), ("**9 m**", osm2citygml.DEFAULT_HEIGHT_M),
                             ("**0.5 m**", osm2citygml.ROOF_SLAB_M), ("**3.25 m**", osm2citygml.LANE_WIDTH_M),
                             ("**2**", osm2citygml.DEFAULT_LANES), ("**2000 m**", osm2citygml.MAX_SIDE_M),
-                            ("**5 cm**", osm2citygml.MIN_STEP_M * 100), ("**4 m²**", osm2citygml.MIN_BUILDING_AREA_M2),
+                            ("**1 mm**", osm2citygml.MIN_STEP_M * 1000), ("**2.5 cm**", osm2citygml.ROAD_SIMPLIFY_M * 100), ("**4 m²**", osm2citygml.MIN_BUILDING_AREA_M2),
                             ("**1 m**", osm2citygml.MIN_ROAD_LENGTH_M), ("**EPSG:4326**", osm2citygml.EPSG)):
             with self.subTest(text=text):
                 self.assertIn(text, SPEC)
