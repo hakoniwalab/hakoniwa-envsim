@@ -164,6 +164,7 @@ class Feature:
     tags: dict
     polygons: list[tuple[list, list[list]]] = field(default_factory=list)  # [(outer, [inner, ...])] of (lat, lon)
     lines: list[list] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)  # what reading it left out
 
 
 @dataclass
@@ -195,8 +196,9 @@ def _is_building(tags: dict) -> bool:
     return bool(tags.get("building")) and tags.get("building") != "no"
 
 
-def _rings(lines: list[list]) -> list[list]:
-    """Join way pieces end to end into closed rings (multipolygon members)."""
+def _rings(lines: list[list], notes: list[str] | None = None) -> list[list]:
+    """Join way pieces end to end into closed rings (multipolygon members);
+    pieces that close no ring are left out (and noted)."""
     lines = [list(line) for line in lines if line]
     rings = []
     while lines:
@@ -215,11 +217,14 @@ def _rings(lines: list[list]) -> list[list]:
                 break  # an open ring: left out
         if ring[0] == ring[-1] and len(ring) >= 4:
             rings.append(ring)
+        elif notes is not None:
+            notes.append("a ring that does not close was left out")
     return rings
 
 
-def _nest(outers: list[list], inners: list[list]) -> list[tuple[list, list[list]]]:
-    """Each inner ring under the outer ring that contains it (lat, lon rings)."""
+def _nest(outers: list[list], inners: list[list], notes: list[str] | None = None) -> list[tuple[list, list[list]]]:
+    """Each inner ring under the outer ring that contains it (lat, lon rings);
+    an inner ring inside no outer ring is left out (and noted)."""
     shapes = [Polygon([(lon, lat) for lat, lon in outer]) for outer in outers]
     nested = [(outer, []) for outer in outers]
     for inner in inners:
@@ -228,6 +233,9 @@ def _nest(outers: list[list], inners: list[list]) -> list[tuple[list, list[list]
             if shape.is_valid and shape.contains(point):
                 nested[index][1].append(inner)
                 break
+        else:
+            if notes is not None:
+                notes.append("an inner ring inside no outer ring was left out")
     return nested
 
 
@@ -262,10 +270,11 @@ def features_from_overpass(data: dict) -> list[Feature]:
                                         lines=[line] if line else []))
         elif element.get("type") == "relation" and _is_building(tags) and tags.get("type") == "multipolygon":
             members = [m for m in element.get("members", []) if m.get("type") == "way" and m.get("ref") in ways]
-            outer = _rings([points(ways[m["ref"]]) for m in members if m.get("role") == "outer"])
-            inner = _rings([points(ways[m["ref"]]) for m in members if m.get("role") == "inner"])
+            notes: list[str] = []
+            outer = _rings([points(ways[m["ref"]]) for m in members if m.get("role") == "outer"], notes)
+            inner = _rings([points(ways[m["ref"]]) for m in members if m.get("role") == "inner"], notes)
             features.append(Feature("building", "openstreetmap", "relation", str(element["id"]), tags,
-                                    polygons=_nest(outer, inner)))
+                                    polygons=_nest(outer, inner, notes), notes=notes))
     return features
 
 
@@ -288,14 +297,17 @@ def features_from_geojson(data: dict) -> list[Feature]:
         def latlon(coords):
             return [(float(lat), float(lon)) for lon, lat, *_ in coords]
 
-        if _is_building(tags) and kind in ("Polygon", "MultiPolygon"):
-            polygons = [geometry["coordinates"]] if kind == "Polygon" else geometry["coordinates"]
-            features.append(Feature("building", "geojson", source_kind, source_id, tags, polygons=[
-                (latlon(polygon[0]), [latlon(ring) for ring in polygon[1:]]) for polygon in polygons if polygon]))
-        elif _is_road(tags) and kind in ("LineString", "MultiLineString"):
-            lines = [geometry["coordinates"]] if kind == "LineString" else geometry["coordinates"]
-            features.append(Feature("road", "geojson", source_kind, source_id, tags,
-                                    lines=[latlon(line) for line in lines]))
+        try:
+            if _is_building(tags) and kind in ("Polygon", "MultiPolygon"):
+                polygons = [geometry["coordinates"]] if kind == "Polygon" else geometry["coordinates"]
+                features.append(Feature("building", "geojson", source_kind, source_id, tags, polygons=[
+                    (latlon(polygon[0]), [latlon(ring) for ring in polygon[1:]]) for polygon in polygons if polygon]))
+            elif _is_road(tags) and kind in ("LineString", "MultiLineString"):
+                lines = [geometry["coordinates"]] if kind == "LineString" else geometry["coordinates"]
+                features.append(Feature("road", "geojson", source_kind, source_id, tags,
+                                        lines=[latlon(line) for line in lines]))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise OsmConversionError(f"GeoJSON feature {index} has malformed coordinates: {exc}") from exc
     return features
 
 
@@ -416,8 +428,17 @@ def _polygon_xml(exterior, interiors=()) -> str:
     return f"<gml:Polygon><gml:exterior>{_ring_xml(exterior)}</gml:exterior>{inner}</gml:Polygon>"
 
 
+_XML_ILLEGAL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]")
+
+
+def _text(value) -> str:
+    """Text for an XML element: escaped, without characters XML 1.0 forbids
+    (OSM tags occasionally carry control characters)."""
+    return escape(_XML_ILLEGAL.sub("", str(value)))
+
+
 def _generic(name: str, value) -> str:
-    return (f"<gen:stringAttribute name={quoteattr(name)}><gen:value>{escape(str(value))}</gen:value>"
+    return (f"<gen:stringAttribute name={quoteattr(_XML_ILLEGAL.sub('', name))}><gen:value>{_text(value)}</gen:value>"
             f"</gen:stringAttribute>")
 
 
@@ -450,11 +471,14 @@ def _solid_xml(polygon: Polygon, base: float, top: float, to_geo) -> str:
             f"</gml:CompositeSurface></gml:exterior></gml:Solid></bldg:lod1Solid>")
 
 
-def _document(members: list[str], box: Box, top: float) -> str:
+def _document(members: list[str], bounds: list[float] | None, box: Box, top: float) -> str:
+    """A CityModel of the members; its envelope bounds the coordinates written
+    (features are not clipped to the bbox), or the bbox when there are none."""
+    south, west, north, east = bounds or (box.south, box.west, box.north, box.east)
     declarations = " ".join(f'xmlns:{prefix}="{uri}"' for prefix, uri in NAMESPACES.items())
     envelope = (f'<gml:boundedBy><gml:Envelope srsName="{SRS_NAME}" srsDimension="3">'
-                f"<gml:lowerCorner>{box.south:.9f} {box.west:.9f} 0.000</gml:lowerCorner>"
-                f"<gml:upperCorner>{box.north:.9f} {box.east:.9f} {top:.3f}</gml:upperCorner>"
+                f"<gml:lowerCorner>{south:.9f} {west:.9f} 0.000</gml:lowerCorner>"
+                f"<gml:upperCorner>{north:.9f} {east:.9f} {top:.3f}</gml:upperCorner>"
                 f"</gml:Envelope></gml:boundedBy>")
     body = "\n".join(f"<core:cityObjectMember>{member}</core:cityObjectMember>" for member in members)
     return (f'<?xml version="1.0" encoding="UTF-8"?>\n<core:CityModel {declarations}>\n{envelope}\n'
@@ -503,8 +527,17 @@ def convert(features: list[Feature], box: Box) -> tuple[str, str, Report, float]
     def to_local(points):
         return [(x, y) for x, y, _ in project_to_local_enu([(lat, lon, 0.0) for lat, lon in points], lat0, lon0, EPSG)]
 
+    bounds = {"building": None, "road": None}  # [south, west, north, east] of what each file holds
+    current = ["building"]
+
     def to_geo(points):
-        return local_enu_to_geodetic(points, lat0, lon0, EPSG)
+        found = local_enu_to_geodetic(points, lat0, lon0, EPSG)
+        known = bounds[current[0]]
+        lats, lons = [lat for lat, _, _ in found], [lon for _, lon, _ in found]
+        box_now = [min(lats), min(lons), max(lats), max(lons)]
+        bounds[current[0]] = box_now if known is None else [min(known[0], box_now[0]), min(known[1], box_now[1]),
+                                                             max(known[2], box_now[2]), max(known[3], box_now[3])]
+        return found
 
     report = Report()
     buildings, roads = [], []
@@ -522,8 +555,10 @@ def convert(features: list[Feature], box: Box) -> tuple[str, str, Report, float]
     for feature in sorted(features, key=lambda f: (order[f.kind], f.source_kind,
                                                    int(f.source_id) if f.source_id.isdigit() else 0, f.source_id)):
         base_id = _feature_id(feature)
+        current[0] = feature.kind
         name = feature.tags.get("name")
-        name_xml = f"<gml:name>{escape(str(name))}</gml:name>" if name else ""
+        name_xml = f"<gml:name>{_text(name)}</gml:name>" if name else ""
+        report.notes.extend(f"{feature.source_kind}/{feature.source_id}: {note}" for note in feature.notes)
         if feature.kind == "building":
             if not feature.polygons:
                 report.skip(feature, "its outline is incomplete in the data")
@@ -586,7 +621,8 @@ def convert(features: list[Feature], box: Box) -> tuple[str, str, Report, float]
             report.roads += kept
             report.assumed["road_width"] += int(width_source != "width") * kept
             report.assumed["road_lanes"] += int(lanes_source != "lanes") * kept
-    return _document(buildings, box, top_all), _document(roads, box, 0.0), report, top_all
+    return (_document(buildings, bounds["building"], box, top_all), _document(roads, bounds["road"], box, 0.0),
+            report, top_all)
 
 
 def build_manifest(box: Box, source_dir: Path, name: str) -> str:
@@ -715,7 +751,7 @@ def main() -> int:
         if args.save_data and (osm_json or geojson) is not None:
             args.save_data.parent.mkdir(parents=True, exist_ok=True)
             args.save_data.write_text(json.dumps(osm_json or geojson, ensure_ascii=False), encoding="utf-8")
-    except OsmConversionError as exc:
+    except (OsmConversionError, OSError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     print(f"OK: {receipt['buildings']} buildings, {receipt['roads']} roads -> {args.out_dir}"

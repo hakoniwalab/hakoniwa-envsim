@@ -8,9 +8,11 @@ height``) in one of these coordinate reference systems:
   used for CityGML converted from worldwide data such as OpenStreetMap.
 
 Both are projected to the same query-centered local ENU tangent plane on their
-own ellipsoid. The datums are treated as coincident: JGD2011 and WGS 84 differ
-by at most decimetres in Japan (crustal motion since the 2011 epoch), well below
-the positional accuracy of data that arrives in EPSG:4326.
+own ellipsoid. The datums are treated as coincident: JGD2011 is fixed at its
+2011 epoch while WGS 84 follows the plates, so they drift apart by crustal
+motion (decimetres in most of Japan, up to metres where large earthquakes moved
+the ground). That is within the positional accuracy of the map data that
+arrives in EPSG:4326, but do not mix the two for survey-grade alignment.
 """
 
 from __future__ import annotations

@@ -42,7 +42,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "source": {
         # plateau: the PLATEAU Distribution Service (Japan, by mesh code).
         # files: local CityGML (a file or a directory), e.g. converted from
-        # OpenStreetMap by tools/osm2citygml.py; see docs/hakoniwa-build-reference.md.
+        # OpenStreetMap by src/city_pipeline/osm2citygml.py; see docs/hakoniwa-build-reference.md.
         "kind": "plateau",
         "path": None,
         "api_base_url": "https://api.plateauview.mlit.go.jp",
@@ -411,8 +411,12 @@ def _local_feature_sources(
     """
     source = _path(cfg["source"]["path"])
     pattern = FEATURE_PATTERNS[feature_type]
+    # The build's own output (often inside the data directory, as osm2citygml
+    # writes it) is never an input: its source/local holds copies.
+    outputs = [_path(cfg["output"][key]) for key in ("build_dir", "install_dir")]
     if source.is_dir():
-        paths = sorted(source.rglob(pattern))
+        paths = sorted(path for path in source.rglob(pattern)
+                       if not any(path.resolve().is_relative_to(output) for output in outputs))
     elif source.is_file():
         paths = [source] if fnmatch.fnmatch(source.name, pattern) else []
     else:
@@ -421,11 +425,10 @@ def _local_feature_sources(
     target_dir.mkdir(parents=True, exist_ok=True)
     records = []
     for path in paths:
-        target = target_dir / path.name
-        if target.exists() and target.resolve() != path.resolve() and sha256_file(target) != sha256_file(path):
-            raise ConfigError(f"two local CityGML files share the name {path.name}")
-        if target.resolve() != path.resolve():
-            shutil.copyfile(path, target)
+        # Keep the path below source.path, so equal names in two folders do not collide.
+        target = target_dir / (path.relative_to(source) if source.is_dir() else Path(path.name))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, target)
         records.append({
             "feature_type": feature_type, "mode": "local", "source_path": str(path),
             "path": str(target), "bytes": target.stat().st_size, "sha256": sha256_file(target),
@@ -559,6 +562,7 @@ def _convert(
     build_dir: Path,
     download_manifest: Path | None = None,
     offline: bool = True,
+    allow_missing_dem: bool = False,
 ) -> dict[str, Path]:
     output_name = cfg["output"]["name"]
     lod1 = build_dir / f"{output_name}-lod1.json"
@@ -602,6 +606,7 @@ def _convert(
             "--workers", str(city_world["dem_parallel_workers"]),
             "--uncovered-policy", str(city_world["terrain_uncovered_policy"]),
             "--uncovered-elevation", str(city_world["terrain_uncovered_elevation_m"]),
+            *(["--allow-missing-dem"] if allow_missing_dem else []),
         ])
         world_frame = terrain_dir / "world-frame.json"
         terrain_receipt = terrain_dir / "terrain-receipt.json"
@@ -792,6 +797,16 @@ def build(manifest: Path, offline: bool = False) -> int:
     ]
     bbox = tuple(meta["bbox"][key] for key in ("west", "south", "east", "north"))
     local = cfg["source"]["kind"] == "files"
+    # The pipeline tools search their input tree for CityGML by file name, so
+    # nothing from an earlier build may stay there: local copies are made
+    # afresh, and a local build reads only them (never old PLATEAU downloads).
+    local_root = source_root / "local"
+    if local_root.exists():
+        shutil.rmtree(local_root)
+    if local:
+        local_root.mkdir(parents=True)
+        (local_root / "query_meta.json").write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     for feature_type in enabled_features if local else []:
         records = _local_feature_sources(cfg, feature_type, source_root)
         catalog_status[feature_type] = {"status": "available" if records else "not_available", "source": "local"}
@@ -898,9 +913,10 @@ def build(manifest: Path, offline: bool = False) -> int:
     download_manifest_path = build_dir / "download-manifest.json"
     download_manifest_path.write_text(json.dumps(download_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     outputs = _convert(
-        cfg, source_root, build_dir,
+        cfg, local_root if local else source_root, build_dir,
         download_manifest=download_manifest_path,
         offline=offline,
+        allow_missing_dem=local and not any(item["feature_type"] == "dem" for item in downloaded),
     )
     mjcf = outputs["mjcf"]
     root = ET.parse(mjcf).getroot()
