@@ -43,6 +43,24 @@ python tools/hako.py install
 取得データのprovenance、オフライン再変換、変換仕様については
 [PLATEAU CityGML → MuJoCo変換](docs/plateau-citygml-to-mujoco.md)を参照してください。
 
+### OpenStreetMapなど、PLATEAU以外の地図データから
+
+CityGMLを街データの共通の中間表現とし、PLATEAUの無い地域でも同じパイプラインで
+City Worldを作れます。OpenStreetMap（Overpass API、保存済みJSON）やGeoJSONを、
+EPSG:4326のCityGML LOD1（建物は外形を高さまで押し出したソリッド、道路は中心線を幅で広げた面）
+に変換し、`source.kind: files`で手元のCityGMLとしてビルドします。OSMには標高が無いため、
+地形は平らな地面になります。高さの多くは階数や建物の種類からの推定値です。
+
+```bash
+python src/city_pipeline/osm2citygml.py --bbox 35.6795,139.7650,35.6822,139.7683 --overpass \
+  --out-dir work/osm/tokyo --name tokyo --build-manifest work/osm/tokyo/hakoniwa-build.yaml
+python tools/hako.py build --config work/osm/tokyo/hakoniwa-build.yaml
+```
+
+変換規則（高さ・幅の補完表、ID、出典の記録）は
+[OpenStreetMap → CityGML LOD1変換仕様](docs/osm-to-citygml.md)にあります。
+OpenStreetMap由来のデータは © OpenStreetMap contributors、ODbL-1.0です。
+
 # プレゼンテーション
 
 本プロジェクトの全体像については、以下のプレゼンテーション資料をご参照ください。

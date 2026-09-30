@@ -16,10 +16,12 @@
 | `component` | `hakoniwa-envsim`固定 | `hakoniwa-envsim` | マニフェストの所有コンポーネント |
 | `pipeline.type` | `plateau-citygml-to-assets`固定 | `plateau-citygml-to-assets` | 使用する変換パイプライン |
 
-## PLATEAUデータ取得 (`source`)
+## CityGMLの取得 (`source`)
 
 | 設定 | 型・範囲 | 既定値 | 意味 |
 |---|---|---|---|
+| `source.kind` | `plateau` / `files` | `plateau` | `plateau`：PLATEAU配信サービスからメッシュ単位で取得する。`files`：手元のCityGML（`source.path`）を使う |
+| `source.path` | path / `null` | `null` | `files`のときのCityGMLファイルまたはディレクトリ。ディレクトリは`*bldg*_op.gml`・`*tran*_op.gml`・`*dem*_op.gml`・`*frn*_op.gml`・`*brid*_op.gml`を再帰的に探す |
 | `source.api_base_url` | HTTPS URL | `https://api.plateauview.mlit.go.jp` | PLATEAU配信サービスのAPI基点 |
 | `source.cache_dir` | path / `null` | `null` | source URL単位の共有cache。サイズとSHA-256を検証して再利用する。`null`ではbuild単位 |
 | `source.feature_type` | `bldg`固定 | `bldg` | 単体変換との互換用の主地物型。現在は建物のみ |
@@ -30,9 +32,27 @@
 | `source.feature_types.brid` | boolean | `false` | 橋梁を取得し、Visualと利用可能な橋面Physicsを生成する |
 | `source.year` | `latest` / 2000以上の西暦 | `latest` | 使用年度。`latest`は市区町村ごとの最新データを選ぶ |
 
-`city_world.enabled: true`では、`bldg`、`tran`、`dem`、`frn`をすべて
+`city_world.enabled: true`では、`source.kind: plateau`なら`bldg`、`tran`、`dem`、`frn`をすべて
 `true`にする必要があります。`brid`は任意です。データが存在しない地物は、可能な場合は
 Dataset Validatorで`scoped_out`として明示されます。
+
+`source.kind: files`では`bldg`と`tran`が必須で、`dem`・`frn`・`brid`は任意です。
+手元のファイルは`build_dir/source/local/`へSHA-256付きでコピーされ、`download-manifest.json`に
+`mode: local`として記録されます（ネットワークは使いません）。DEMが無い場合は
+`city_world.terrain_uncovered_policy: constant`が必要で、地形は
+`terrain_uncovered_elevation_m`の高さの平らなhfieldになります。
+
+CityGMLの座標参照系は、三次元の緯度・経度・高さで次のいずれかです（`gml:Envelope`の`srsName`と
+`srsDimension="3"`で宣言）。
+
+| EPSG | 用途 | 楕円体 |
+|---|---|---|
+| 6697 | PLATEAU（JGD2011 + 標高） | GRS80 |
+| 4326 | 世界の地図データを変換したもの（WGS 84） | WGS 84 |
+
+どちらも選択範囲の中心で接する同じ局所ENU平面へ変換します。JGD2011とWGS 84の測地系の差
+（日本では地殻変動により最大でdm程度）は無視します。OpenStreetMapからのCityGMLは
+`src/city_pipeline/osm2citygml.py`で作ります（[osm-to-citygml.md](osm-to-citygml.md)）。
 
 ## 対象範囲 (`selection`)
 
@@ -94,6 +114,8 @@ Dataset Validatorで`scoped_out`として明示されます。
 | `city_world.parallel_workers` | 整数1〜16 | `8` | source・LOD2 texture取得、建物GML抽出、独立component生成、道路・路面標示の面分割に使うworker上限。建物GML抽出と面分割は最大4process |
 | `city_world.dem_parallel_workers` | 整数1〜4 | `4` | DEM source抽出専用のprocess上限。メモリ保護のため最大4 |
 | `city_world.building_physics_workers` | 整数1〜8 | `4` | 建物Physicsのsource GML解析・三角形化に使うprocess上限。`safe` reductionでsourceが複数ある場合に有効 |
+| `city_world.terrain_uncovered_policy` | `error` / `constant` | `error` | 近傍補間後もDEMで覆われないsampleの扱い。`constant`は`terrain_uncovered_elevation_m`で埋める。DEMの無い`files`ではこれが地形全体になる |
+| `city_world.terrain_uncovered_elevation_m` | 数値m | `0` | `constant`で使う高さ |
 | `city_world.terrain_spacing_m` | 0より大きいm | `2` | DEM hfieldの目標最大格子間隔。小さいほど詳細だが、sample数とメモリが増える |
 | `city_world.marking_vertical_offset_m` | 0より大きいm | `0.055` | 路面標示Visualを道路面から浮かせる描画用offset |
 | `city_world.bridge_collision_thickness_m` | 0より大きいm | `0.02` | 橋面collision meshへ与える数値上の厚み |
