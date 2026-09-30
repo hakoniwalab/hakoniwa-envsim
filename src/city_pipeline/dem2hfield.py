@@ -14,11 +14,10 @@ import struct
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from geodesy import project_epsg6697_to_local_enu
+from geodesy import SUPPORTED_CRS, epsg_label, project_to_local_enu, srs_code
 from world_frame import create_world_frame, write_world_frame
 
 GML = "http://www.opengis.net/gml"
-EXPECTED_CRS = "http://www.opengis.net/def/crs/EPSG/0/6697"
 
 
 class DemError(RuntimeError):
@@ -32,9 +31,10 @@ def geographic_bounds(latitude: float, longitude: float, ns_m: float, ew_m: floa
 
 
 def _dem_header(path: Path, west: float, south: float, east: float, north: float):
-    """Validate CRS, return the document GML prefix and bbox intersection."""
+    """Validate CRS, return the document GML prefix, bbox intersection and EPSG code."""
     gml_prefix = None
     envelope_seen = False
+    epsg = None
     with path.open("rb") as stream:
         parser = ET.iterparse(stream, events=("start-ns", "start", "end"))
         for event, payload in parser:
@@ -46,8 +46,10 @@ def _dem_header(path: Path, west: float, south: float, east: float, north: float
             element = payload
             if event == "start" and element.tag == f"{{{GML}}}Envelope" and not envelope_seen:
                 envelope_seen = True
-                if element.get("srsName") != EXPECTED_CRS or element.get("srsDimension") != "3":
-                    raise DemError("PLATEAU DEM must use three-dimensional EPSG:6697")
+                epsg = srs_code(element.get("srsName", ""))
+                if epsg not in SUPPORTED_CRS or element.get("srsDimension") != "3":
+                    supported = " or ".join(epsg_label(code) for code in SUPPORTED_CRS)
+                    raise DemError(f"DEM must use three-dimensional {supported}")
                 continue
             if event != "end" or element.tag != f"{{{GML}}}Envelope" or not envelope_seen:
                 continue
@@ -65,7 +67,7 @@ def _dem_header(path: Path, west: float, south: float, east: float, north: float
                 file_north < south or file_south > north
                 or file_east < west or file_west > east
             )
-            return gml_prefix, intersects
+            return gml_prefix, intersects, epsg
     if not envelope_seen:
         raise DemError("PLATEAU DEM has no CRS envelope")
     raise DemError("PLATEAU DEM has an invalid CRS envelope")
@@ -102,7 +104,7 @@ def _iter_pos_lists(path: Path, gml_prefix: str | None):
 def extract_triangles(path: Path, latitude: float, longitude: float, ns_m: float, ew_m: float):
     west, south, east, north = geographic_bounds(latitude, longitude, ns_m, ew_m)
     triangles = []
-    gml_prefix, intersects = _dem_header(path, west, south, east, north)
+    gml_prefix, intersects, epsg = _dem_header(path, west, south, east, north)
     if not intersects:
         return []
     for tokens in _iter_pos_lists(path, gml_prefix):
@@ -118,7 +120,7 @@ def extract_triangles(path: Path, latitude: float, longitude: float, ns_m: float
         lons = [point[1] for point in points]
         if max(lats) < south or min(lats) > north or max(lons) < west or min(lons) > east:
             continue
-        enu = project_epsg6697_to_local_enu(points, latitude, longitude)
+        enu = project_to_local_enu(points, latitude, longitude, epsg)
         # MuJoCo hfield axes: X=North, Y=-East, Z=Up.
         triangles.append(tuple((north_m, -east_m, altitude) for east_m, north_m, altitude in enu))
     return triangles
@@ -370,7 +372,9 @@ def write_hfield(path: Path, nrow: int, ncol: int, samples) -> str:
 def write_mjcf(path: Path, hfield_path: Path, nrow: int, ncol: int, samples, ns_m: float, ew_m: float):
     minimum = min(samples)
     maximum = max(samples)
-    elevation = maximum - minimum
+    # MuJoCo needs a positive elevation range; flat ground (no DEM) gets a
+    # token 1 mm range and all-equal samples, so its surface stays at z = 0.
+    elevation = max(maximum - minimum, 0.001)
     relative = Path(hfield_path.name)
     text = f'''<mujoco model="plateau_terrain_probe">
   <asset>
@@ -413,8 +417,16 @@ def main() -> int:
     # geographic bbox is only a discovery guard; exact clipping happens in
     # local MuJoCo coordinates during grid sampling.
     extraction_margin = 2.0 * args.spacing
-    sources = source_paths(args.source)
-    extracted = extract_sources_parallel(
+    try:
+        sources = source_paths(args.source)
+    except DemError:
+        # Data without a DEM (e.g. CityGML converted from OpenStreetMap):
+        # with the constant policy the whole range is flat ground.
+        if args.uncovered_policy != "constant":
+            raise
+        sources = []
+        print("INFO: no DEM source; the terrain is flat at the uncovered elevation")
+    extracted = [] if not sources else extract_sources_parallel(
         sources,
         args.latitude,
         args.longitude,
@@ -423,7 +435,7 @@ def main() -> int:
         args.workers,
     )
     triangles = [triangle for result in extracted for triangle in result]
-    if not triangles:
+    if not triangles and sources:
         raise DemError("PLATEAU DEM contains no triangle intersecting the requested range")
     nrow, ncol, samples, gap_report = sample_heightfield(
         triangles,
@@ -448,7 +460,8 @@ def main() -> int:
         "spacing_m": args.spacing,
         "effective_spacing_m": gap_report["effective_spacing_m"],
         "triangle_extraction_margin_m": extraction_margin,
-        "parallel_workers": min(args.workers, len(sources)),
+        "parallel_workers": max(1, min(args.workers, len(sources))),
+        "dem": "available" if sources else "not_available",
         "nrow": nrow,
         "ncol": ncol,
         "triangle_count": len(triangles),

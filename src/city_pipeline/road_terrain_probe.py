@@ -14,7 +14,7 @@ import numpy as np
 import trimesh
 from shapely.geometry import Polygon, box
 
-from geodesy import project_epsg6697_to_local_enu
+from geodesy import file_crs, project_to_local_enu
 from terrain_surface import SURFACE_POLICY, TerrainSurface, drape_polygons
 from world_frame import load_world_frame
 
@@ -63,7 +63,8 @@ def terrain_height(x, y, samples, nrow, ncol, ns_m, ew_m):
     )
 
 
-def extract_lod1_roads(path: Path, latitude: float, longitude: float, ns_m: float, ew_m: float):
+def extract_lod1_roads(path: Path, latitude: float, longitude: float, ns_m: float, ew_m: float, epsg=None):
+    epsg = epsg or file_crs(path, default=6697)
     clip = box(-ns_m, -ew_m, ns_m, ew_m)
     roads = []
     for _, element in ET.iterparse(path, events=("end",)):
@@ -80,7 +81,7 @@ def extract_lod1_roads(path: Path, latitude: float, longitude: float, ns_m: floa
                 continue
             values = [float(value) for value in exterior.text.split()]
             points = [values[offset:offset + 3] for offset in range(0, len(values), 3)]
-            enu = project_epsg6697_to_local_enu(points, latitude, longitude)
+            enu = project_to_local_enu(points, latitude, longitude, epsg)
             polygon = Polygon([(north, -east) for east, north, _ in enu])
             if not polygon.is_valid:
                 polygon = polygon.buffer(0)
@@ -97,7 +98,7 @@ def extract_lod1_roads(path: Path, latitude: float, longitude: float, ns_m: floa
     return roads
 
 
-def _surface_polygon(polygon_element, latitude, longitude):
+def _surface_polygon(polygon_element, latitude, longitude, epsg=6697):
     exterior = polygon_element.find(
         f"./{{{GML}}}exterior/{{{GML}}}LinearRing/{{{GML}}}posList"
     )
@@ -107,7 +108,7 @@ def _surface_polygon(polygon_element, latitude, longitude):
     def ring(pos_list):
         values = [float(value) for value in pos_list.text.split()]
         points = [values[offset:offset + 3] for offset in range(0, len(values), 3)]
-        enu = project_epsg6697_to_local_enu(points, latitude, longitude)
+        enu = project_to_local_enu(points, latitude, longitude, epsg)
         return [(north, -east) for east, north, _ in enu]
 
     holes = []
@@ -121,9 +122,10 @@ def _surface_polygon(polygon_element, latitude, longitude):
 
 def extract_transport_surfaces(
     path: Path, latitude: float, longitude: float, ns_m: float, ew_m: float,
-    lod_evidence: dict[str, int] | None = None,
+    lod_evidence: dict[str, int] | None = None, epsg=None,
 ):
     """Extract semantic LOD2 road surfaces and clip them to the requested area."""
+    epsg = epsg or file_crs(path, default=6697)
     clip = box(-ns_m, -ew_m, ns_m, ew_m)
     surfaces = {name: [] for name in SURFACE_STYLE}
     classification = {
@@ -154,7 +156,7 @@ def extract_transport_surfaces(
                     )
                     selected_lod = "lod2_fallback"
                 for index, polygon_element in enumerate(polygons):
-                    polygon = _surface_polygon(polygon_element, latitude, longitude)
+                    polygon = _surface_polygon(polygon_element, latitude, longitude, epsg)
                     if polygon is None:
                         continue
                     if not polygon.is_valid:
@@ -193,15 +195,16 @@ def extract_all_transport_surfaces(
     }
     paths = transport_source_paths(source)
     for path in paths:
+        epsg = file_crs(path, default=6697)
         try:
             surfaces = extract_transport_surfaces(
-                path, latitude, longitude, ns_m, ew_m, lod_evidence
+                path, latitude, longitude, ns_m, ew_m, lod_evidence, epsg
             )
         except RoadProbeError as exc:
             if "no classified" in str(exc):
                 try:
                     lod1_roads = extract_lod1_roads(
-                        path, latitude, longitude, ns_m, ew_m
+                        path, latitude, longitude, ns_m, ew_m, epsg
                     )
                 except RoadProbeError as lod1_exc:
                     if "no LOD1" in str(lod1_exc):

@@ -265,9 +265,11 @@ APIの`fileSize`と配信された実体サイズが一致しない場合があ�
 局所接平面ENU（East, North, Up、単位m）へ変換します。これにより、日本の地域ごとに
 異なる平面直角座標系EPSGを利用者が選ぶ必要はありません。
 
-変換前にCityGMLの`gml:Envelope`を読み、`srsName`がEPSG:6697、
-`srsDimension`が3であることを検証します。EPSG:4326としての読み替えや、
-EPSG:6677への旧投影、利用者による軸順切替はサポートしません。
+変換前にCityGMLの`gml:Envelope`を読み、`srsName`がEPSG:6697かEPSG:4326、
+`srsDimension`が3であることを検証します。EPSG:4326（WGS 84）は、OpenStreetMapなど世界の地図データから
+変換したCityGML（[osm-to-citygml.md](osm-to-citygml.md)）のためのもので、WGS 84楕円体から同じ局所ENUへ
+変換します（JGD2011との測地系の差は無視します）。それ以外のEPSG、EPSG:6677への旧投影、
+利用者による軸順切替はサポートしません。
 
 MJCF出力時は既存の箱庭/MuJoCo規約に合わせて
 `ENU (East, North, Up) → (North, -East, Up)`へ軸変換します。

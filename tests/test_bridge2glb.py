@@ -91,14 +91,14 @@ class BridgeGlbTest(unittest.TestCase):
             self.assertEqual(receipt["geometry_policy"],
                 "source altitude preserved; no terrain draping or inferred bridge geometry")
 
-    def test_rejects_non_epsg6697_bridge_source(self):
+    def test_rejects_bridge_source_outside_the_supported_crs(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = bridge_gml(
                 root / "tiny_brid_6697_op.gml",
-                srs="http://www.opengis.net/def/crs/EPSG/0/4326",
+                srs="http://www.opengis.net/def/crs/EPSG/0/3857",
             )
-            with self.assertRaisesRegex(module.BridgeGlbError, "EPSG:6697"):
+            with self.assertRaisesRegex(module.BridgeGlbError, "EPSG:6697 or EPSG:4326"):
                 module.convert(
                     source, world_frame(root / "world-frame.json"),
                     root / "bridges.glb",

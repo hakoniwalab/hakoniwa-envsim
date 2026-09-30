@@ -29,7 +29,7 @@ def create_world_frame(terrain_receipt: dict) -> dict:
             "mjcf": "X=North,Y=-East,Z=Up",
             "glb": "X=East,Y=Up,Z=-North",
         },
-        "altitude_reference": "PLATEAU EPSG:6697 height minus origin.altitude_offset_m",
+        "altitude_reference": "source CityGML height (EPSG:6697 or EPSG:4326) minus origin.altitude_offset_m",
     }
 
 

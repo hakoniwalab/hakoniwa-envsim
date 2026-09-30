@@ -140,7 +140,7 @@ class CityFurnitureGlbTest(unittest.TestCase):
                 (-0.75, 0.75, 0), (-0.75, -0.75, 0), (0.75, -0.75, 0),
             ]
             with mock.patch.object(
-                module, "project_epsg6697_to_local_enu", return_value=local_enu
+                module, "project_to_local_enu", return_value=local_enu
             ):
                 receipt = module.convert(source, frame, terrain_receipt, output)
 

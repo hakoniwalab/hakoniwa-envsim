@@ -33,7 +33,8 @@ from citygml2glb import (  # noqa: E402
     _three_coordinates,
     triangulate_rings,
 )
-from gml_lod1_extract import validate_epsg6697_contract  # noqa: E402
+from gml_lod1_extract import source_crs_label, validate_crs_contract  # noqa: E402
+from geodesy import epsg_label  # noqa: E402
 from world_frame import load_world_frame  # noqa: E402
 
 
@@ -222,11 +223,12 @@ def classify_selection(
     selected, center_lat, center_lon, selection_z_offset = _selection(selection_path)
     z_offset = selection_z_offset if altitude_offset_m is None else float(altitude_offset_m)
     records = []
+    crs_seen = []
     batches = defaultdict(lambda: {"vertices": [], "faces": []})
 
     for source, ids in sorted(selected.items(), key=lambda item: str(item[0])):
         root = ET.parse(source).getroot()
-        validate_epsg6697_contract(root, source)
+        crs_seen.append({"source_crs": epsg_label(validate_crs_contract(root, source))})
         indexed = {element.get(GML_ID): element for element in root.findall(".//bldg:Building", NS)}
         for building_id, parts in sorted(ids.items()):
             building = indexed.get(building_id)
@@ -281,7 +283,7 @@ def classify_selection(
         "precedence": [f"P{level}" for level in range(max_level, -1, -1)],
         "classification_only": True,
         "physics_modified": False,
-        "source_crs": "EPSG:6697",
+        "source_crs": source_crs_label(crs_seen),
         "coordinate_system": "query-centered local ENU; debug GLB X=East,Y=Up,Z=-North",
         "thresholds": {
             "roof_relief_m": roof_relief_m,

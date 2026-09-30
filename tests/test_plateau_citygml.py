@@ -399,23 +399,36 @@ class PlateauCityGmlTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "local-enu"):
             module.coordinate_transform("relative")
 
-    def test_citygml_crs_contract_requires_epsg6697_and_three_dimensions(self):
+    def test_citygml_crs_contract_accepts_epsg6697_and_epsg4326_in_three_dimensions(self):
         module = load_pipeline_module()
-        valid = ET.fromstring(
-            '<core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0" '
-            'xmlns:gml="http://www.opengis.net/gml"><gml:boundedBy>'
-            '<gml:Envelope srsName="http://www.opengis.net/def/crs/EPSG/0/6697" '
-            'srsDimension="3"/></gml:boundedBy></core:CityModel>'
-        )
-        module.validate_epsg6697_contract(valid, Path("valid.gml"))
-        invalid = ET.fromstring(
-            '<core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0" '
-            'xmlns:gml="http://www.opengis.net/gml"><gml:boundedBy>'
-            '<gml:Envelope srsName="http://www.opengis.net/def/crs/EPSG/0/4326" '
-            'srsDimension="3"/></gml:boundedBy></core:CityModel>'
-        )
-        with self.assertRaisesRegex(ValueError, "EPSG:6697"):
-            module.validate_epsg6697_contract(invalid, Path("invalid.gml"))
+
+        def document(srs):
+            return ET.fromstring(
+                '<core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0" '
+                'xmlns:gml="http://www.opengis.net/gml"><gml:boundedBy>'
+                f'<gml:Envelope srsName="{srs}" '
+                'srsDimension="3"/></gml:boundedBy></core:CityModel>'
+            )
+
+        self.assertEqual(module.validate_crs_contract(
+            document("http://www.opengis.net/def/crs/EPSG/0/6697"), Path("plateau.gml")), 6697)
+        self.assertEqual(module.validate_crs_contract(
+            document("urn:ogc:def:crs:EPSG::4326"), Path("osm.gml")), 4326)
+        # The historical name still validates (and now accepts EPSG:4326 too).
+        self.assertEqual(module.validate_epsg6697_contract(
+            document("EPSG:4326"), Path("osm.gml")), 4326)
+        with self.assertRaisesRegex(ValueError, "EPSG:6697, EPSG:4326"):
+            module.validate_crs_contract(
+                document("http://www.opengis.net/def/crs/EPSG/0/3857"), Path("mercator.gml"))
+
+    def test_epsg4326_projects_like_epsg6697_within_a_millimetre(self):
+        module = load_pipeline_module()
+        center_lat, center_lon = 35.681236, 139.767125
+        point = (center_lat + 0.004, center_lon - 0.005, 20.0)
+        plateau = module.project_to_local_enu([point], center_lat, center_lon, 6697)[0]
+        osm = module.project_to_local_enu([point], center_lat, center_lon, 4326)[0]
+        self.assertLess(math.dist(plateau[:2], osm[:2]), 0.001)
+        self.assertEqual(osm[2], 20.0)
 
     def test_lod1_extractor_preserves_original_concave_footprint(self):
         extractor = load_pipeline_module()
@@ -714,8 +727,8 @@ class PlateauCityGmlTest(unittest.TestCase):
         )
         cases = {
             "wrong_epsg": (
-                fixture.replace("/6697\"", "/4326\"", 1),
-                "CityGML must declare EPSG:6697",
+                fixture.replace("/6697\"", "/3857\"", 1),
+                "CityGML must declare one of EPSG:6697, EPSG:4326",
             ),
             "two_dimensions": (
                 fixture.replace('srsDimension="3"', 'srsDimension="2"', 1),

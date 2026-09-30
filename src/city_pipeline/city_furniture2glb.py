@@ -20,7 +20,7 @@ from shapely.geometry import Polygon
 from trimesh.visual.material import PBRMaterial
 
 from citygml2glb import _polygon_rings
-from geodesy import project_epsg6697_to_local_enu
+from geodesy import file_crs, project_to_local_enu
 from road_terrain_probe import read_hfield
 from terrain_surface import SURFACE_POLICY, TerrainSurface, drape_polygons
 from world_frame import load_world_frame
@@ -87,10 +87,10 @@ def furniture_source_paths(source: Path) -> list[Path]:
     raise CityFurnitureError(f"no PLATEAU CityFurniture CityGML source found: {source}")
 
 
-def _horizontal_polygon(rings, latitude, longitude):
+def _horizontal_polygon(rings, latitude, longitude, epsg=6697):
     projected = []
     for points in rings:
-        enu = project_epsg6697_to_local_enu(points, latitude, longitude)
+        enu = project_to_local_enu(points, latitude, longitude, epsg)
         projected.append([(north, -east) for east, north, _ in enu])
     polygon = Polygon(projected[0], projected[1:])
     return polygon if polygon.is_valid else polygon.buffer(0)
@@ -135,6 +135,7 @@ def convert(
 
     furniture_tag = f"{{{FRN}}}CityFurniture"
     for source_path in sources:
+        epsg = file_crs(source_path, default=6697)
         for _, furniture in ET.iterparse(source_path, events=("end",)):
             if furniture.tag != furniture_tag:
                 continue
@@ -151,7 +152,7 @@ def convert(
                 if not rings_with_ids:
                     continue
                 source_rings = [points for _, points in rings_with_ids]
-                horizontal = _horizontal_polygon(source_rings, latitude, longitude)
+                horizontal = _horizontal_polygon(source_rings, latitude, longitude, epsg)
                 if (
                     horizontal.is_empty
                     or horizontal.intersection(terrain_surface.bounds).area <= 1e-10
