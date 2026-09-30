@@ -3,8 +3,11 @@
 CityGMLをEnvsimの街データの標準中間表現とし、PLATEAU以外の地図データ（OpenStreetMap、GeoJSON）も
 同じパイプラインでCity Worldにするための変換規則です。
 
-- 実装：`src/city_pipeline/osm2citygml.py`
-- 照合：この文書の表は`tests/test_osm2citygml.py`がコードの定数と照合します。どちらかだけを変えるとテストが落ちます。
+- 実装：`src/city_pipeline/`の3つのモジュール
+  - `osm_source.py`：地図データの読み取り（範囲、Overpassのクエリと取得、Overpass JSON・GeoJSONからの地物とリング）
+  - `osm_rules.py`：変換規則（どの地物を建物・道路とするか、高さ・下端・道路の幅と車線の補完）。この文書の表の定数はここにあります
+  - `osm2citygml.py`：CityGMLの書き出し、レシート、ビルド設定、コマンド。ほかの2つの名前も引き継いでいるので、`osm2citygml.Box`などの従来の使い方はそのまま使えます
+- 照合：この文書の表は`tests/test_osm2citygml.py`がコードの定数と照合します。どちらかだけを変えるとテストが落ちます。補完規則だけの単体テストは`tests/test_osm_rules.py`です。
 
 OpenStreetMapには実測の3D形状も標高もありません。変換結果は「外形を高さまで押し出したLOD1」で、
 高さの多くは推定値です。精度が必要な日本の都市ではPLATEAUを使ってください
