@@ -467,6 +467,88 @@ def carve_by_roads(samples, nrow: int, ncol: int, ns_m: float, ew_m: float, road
     }
 
 
+# --- Lowering the DEM under bridges (optional, inferred) -------------------------------------
+#
+# The DEM also fills the space under some bridges up to their deck (around
+# Shinjuku: a road bridge on 都庁通り stands on a DEM bank at its deck height,
+# the lower street beside it 5 m down). Nothing measures the ground there, so
+# this is an inference, off unless asked: under a bridge's floor, samples the
+# DEM holds within near_m of the deck are lowered to the low ground just
+# outside the bridge (a low percentile of the samples ring_m around it), by at
+# most max_depth_m. Cars on the bridge stand on its deck collision.
+
+
+def bridge_floor_triangles(source: Path, latitude: float, longitude: float, ns_m: float, ew_m: float):
+    """{bridge id: [MuJoCo-frame triangles (X=North, Y=-East, Z=altitude)]} of the bridges' floors
+    (LOD3, else LOD2 OuterFloorSurface; bridge2mjcf's selection)."""
+    from bridge2mjcf import extract_prisms
+
+    paths = sorted(source.rglob("*brid*_op.gml")) if source.is_dir() else []
+    if not paths:
+        return {}
+    frame = {"origin": {"latitude": latitude, "longitude": longitude, "altitude_offset_m": 0.0},
+             "half_extent_m": {"north_south": ns_m, "east_west": ew_m}}
+    pieces, _boundary, _counts = extract_prisms(source, frame, 0.02, 60.0)
+    floors: dict[str, list] = {}
+    for piece in pieces:
+        floors.setdefault(piece["bridge_id"], []).append(tuple(tuple(v) for v in piece["source_vertices"]))
+    return floors
+
+
+def carve_under_bridges(samples, nrow: int, ncol: int, ns_m: float, ew_m: float, floors: dict,
+                        near_m: float = 1.0, ring_m: float = 6.0, max_depth_m: float = 8.0,
+                        tolerance_m: float = 0.2) -> dict:
+    """Lower the DEM under the bridges' floors to the low ground around them (in place); a report."""
+    col_spacing_m = (2.0 * ns_m) / (ncol - 1)
+    row_spacing_m = (2.0 * ew_m) / (nrow - 1)
+    reach_cols = max(1, round(ring_m / col_spacing_m))
+    reach_rows = max(1, round(ring_m / row_spacing_m))
+    report = {"policy": "lower the DEM under bridge floors to the low ground around them (inferred)",
+              "near_m": near_m, "ring_m": ring_m, "max_depth_m": max_depth_m, "bridges": {}}
+    lowered_total = 0
+    for bridge, triangles in sorted(floors.items()):
+        deck: dict[int, float] = {}
+        for triangle in triangles:
+            xs = [point[0] for point in triangle]
+            ys = [point[1] for point in triangle]
+            col_first = max(0, math.ceil((min(xs) + ns_m) / col_spacing_m - 1e-9))
+            col_last = min(ncol - 1, math.floor((max(xs) + ns_m) / col_spacing_m + 1e-9))
+            row_first = max(0, math.ceil((min(ys) + ew_m) / row_spacing_m - 1e-9))
+            row_last = min(nrow - 1, math.floor((max(ys) + ew_m) / row_spacing_m + 1e-9))
+            for row in range(row_first, row_last + 1):
+                for col in range(col_first, col_last + 1):
+                    height = _barycentric_height(-ns_m + col * col_spacing_m, -ew_m + row * row_spacing_m, triangle)
+                    if height is not None:
+                        index = row * ncol + col
+                        deck[index] = min(deck.get(index, height), height)
+        if not deck:
+            continue
+        ring = set()
+        for index in deck:
+            row, col = divmod(index, ncol)
+            for r in range(max(0, row - reach_rows), min(nrow, row + reach_rows + 1)):
+                for c in range(max(0, col - reach_cols), min(ncol, col + reach_cols + 1)):
+                    if r * ncol + c not in deck:
+                        ring.add(r * ncol + c)
+        if not ring:
+            continue
+        around = sorted(samples[index] for index in ring)
+        target = around[len(around) // 5]  # the low ground around (20th percentile)
+        lowered = []
+        for index, height in deck.items():
+            current = samples[index]
+            if current < height - near_m or current - target <= tolerance_m:
+                continue  # clear of the deck already, or no lower ground around
+            new = max(target, current - max_depth_m)
+            lowered.append(current - new)
+            samples[index] = new
+        lowered_total += len(lowered)
+        report["bridges"][bridge] = {"samples_under": len(deck), "lowered": len(lowered),
+                                     "ground_around_m": target, "max_lowered_m": max(lowered, default=0.0)}
+    report["lowered_sample_count"] = lowered_total
+    return report
+
+
 def write_hfield(path: Path, nrow: int, ncol: int, samples) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as stream:
@@ -527,6 +609,8 @@ def main() -> int:
                         help="lower the DEM by at most this much (a road deeper is a tunnel or an underpass)")
     parser.add_argument("--road-carve-tolerance", type=float, default=0.2,
                         help="leave the DEM when a road is less than this below it")
+    parser.add_argument("--bridge-carve", action="store_true",
+                        help="also lower the DEM under bridges to the low ground around them (inferred; default off)")
     args = parser.parse_args()
     if args.workers < 1:
         parser.error("--workers must be at least 1")
@@ -578,6 +662,12 @@ def main() -> int:
         print(f"OK: road carving: {road_carving['carved_sample_count']} samples lowered "
               f"(max {road_carving['max_carved_depth_m']:.2f} m), "
               f"{road_carving['skipped_deeper_sample_count']} deeper left out")
+    bridge_carving = {"policy": "off"}
+    if sources and args.bridge_carve:
+        floors = bridge_floor_triangles(args.source, args.latitude, args.longitude, args.north_south, args.east_west)
+        bridge_carving = carve_under_bridges(samples, nrow, ncol, args.north_south, args.east_west, floors)
+        print(f"OK: bridge carving: {bridge_carving['lowered_sample_count']} samples lowered under "
+              f"{len(bridge_carving['bridges'])} bridges")
     hfield = args.out.with_suffix(".hf")
     digest = write_hfield(hfield, nrow, ncol, samples)
     minimum, maximum = write_mjcf(
@@ -599,6 +689,7 @@ def main() -> int:
         "triangle_count": len(triangles),
         "gap_fill": gap_report,
         "road_carving": road_carving,
+        "bridge_carving": bridge_carving,
         "minimum_altitude_m": minimum,
         "maximum_altitude_m": maximum,
         "altitude_offset_m": minimum,

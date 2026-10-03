@@ -49,6 +49,22 @@ class DemToHeightfieldTest(unittest.TestCase):
         dem.carve_by_roads(samples, 3, 3, 1.0, 1.0, road(9.9))  # within the tolerance: the DEM stays
         self.assertEqual(samples, [10.0] * 9)
 
+    def test_the_dem_under_a_bridge_is_lowered_to_the_ground_around_it(self):
+        # A 9 x 9 grid (1 m) at 5 m, a 10 m bank under a deck at 10 m over the middle 3 x 3.
+        samples = [5.0] * 81
+        for row in range(3, 6):
+            for col in range(3, 6):
+                samples[row * 9 + col] = 10.0
+        deck = [((-1.2, -1.2, 10.0), (1.2, -1.2, 10.0), (1.2, 1.2, 10.0)),
+                ((-1.2, -1.2, 10.0), (1.2, 1.2, 10.0), (-1.2, 1.2, 10.0))]
+        report = dem.carve_under_bridges(samples, 9, 9, 4.0, 4.0, {"bridge-1": deck}, ring_m=2.0)
+        self.assertEqual([samples[row * 9 + col] for row in range(3, 6) for col in range(3, 6)], [5.0] * 9)
+        self.assertEqual(report["bridges"]["bridge-1"]["lowered"], 9)
+        # Ground well below the deck already: left as it is.
+        samples = [5.0] * 81
+        dem.carve_under_bridges(samples, 9, 9, 4.0, 4.0, {"bridge-1": deck}, ring_m=2.0)
+        self.assertEqual(samples, [5.0] * 81)
+
     def test_rejects_uncovered_grid_samples(self):
         triangles = [((-1.0, -1.0, 0.0), (0.0, -1.0, 0.0), (-1.0, 0.0, 0.0))]
         with self.assertRaisesRegex(dem.DemError, "uncovered"):

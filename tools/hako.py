@@ -85,6 +85,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "marking_vertical_offset_m": 0.055,
         "bridge_collision_thickness_m": 0.02,
         "bridge_max_surface_slope_deg": 60.0,
+        # Lower the DEM under bridges to the low ground around them (inferred).
+        "terrain_bridge_carve": False,
     },
     "output": {
         "build_dir": ".hako/build/plateau-city-mjcf",
@@ -294,6 +296,8 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
         value = cfg["city_world"][key]
         if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
             raise ConfigError(f"city_world.{key} must be positive")
+    if not isinstance(cfg["city_world"]["terrain_bridge_carve"], bool):
+        raise ConfigError("city_world.terrain_bridge_carve must be true or false")
     if cfg["city_world"]["terrain_uncovered_policy"] not in {"error", "constant"}:
         raise ConfigError("city_world.terrain_uncovered_policy must be error or constant")
     uncovered_elevation = cfg["city_world"]["terrain_uncovered_elevation_m"]
@@ -607,6 +611,7 @@ def _convert(
             "--uncovered-policy", str(city_world["terrain_uncovered_policy"]),
             "--uncovered-elevation", str(city_world["terrain_uncovered_elevation_m"]),
             *(["--allow-missing-dem"] if allow_missing_dem else []),
+            *(["--bridge-carve"] if city_world["terrain_bridge_carve"] else []),
         ])
         world_frame = terrain_dir / "world-frame.json"
         terrain_receipt = terrain_dir / "terrain-receipt.json"

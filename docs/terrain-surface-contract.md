@@ -18,6 +18,16 @@ ground as it is; a road more than `--road-carve-max-depth` (8 m) below it (a
 tunnel, an underpass) is left out. The terrain receipt's `road_carving`
 records the samples lowered, their depths and those left out.
 
+Optionally (`city_world.terrain_bridge_carve: true`, `dem2hfield.py
+--bridge-carve`; off by default) the DEM is also lowered under bridges. Some
+bridges stand on a DEM bank at their deck height (a road bridge on 都庁通り,
+the lower street 5 m down beside it), and nothing measures the ground under
+them, so this is an inference: under each bridge's floor (LOD3, else LOD2
+OuterFloorSurface), samples within 1 m of the deck are lowered to the low
+ground around the bridge (the 20th percentile of the samples within 6 m
+outside it), by at most 8 m. The receipt's `bridge_carving` lists each
+bridge's lowered samples and the ground used.
+
 All components consume the same row-major DEM samples and world frame:
 
 ```text
