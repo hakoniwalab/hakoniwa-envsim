@@ -29,6 +29,26 @@ class DemToHeightfieldTest(unittest.TestCase):
         self.assertEqual(samples, [7.0, 8.0, 9.0, 9.0, 10.0, 11.0, 11.0, 12.0, 13.0])
         self.assertEqual(gaps["source_missing_samples"], 0)
 
+    def test_road_surfaces_below_the_dem_lower_it_within_the_depth_limit(self):
+        # A 3 x 3 grid at 10 m; one road triangle over the whole window.
+        def road(z):
+            return [((-2.0, -2.0, z), (2.0, -2.0, z), (2.0, 2.0, z)), ((-2.0, -2.0, z), (2.0, 2.0, z), (-2.0, 2.0, z))]
+
+        samples = [10.0] * 9
+        report = dem.carve_by_roads(samples, 3, 3, 1.0, 1.0, road(6.0))  # a road cut 4 m into the DEM
+        self.assertEqual(samples, [6.0] * 9)
+        self.assertEqual((report["carved_sample_count"], round(report["max_carved_depth_m"], 3)), (9, 4.0))
+        samples = [10.0] * 9
+        dem.carve_by_roads(samples, 3, 3, 1.0, 1.0, road(12.0))  # a viaduct: the ground stays
+        self.assertEqual(samples, [10.0] * 9)
+        samples = [10.0] * 9
+        report = dem.carve_by_roads(samples, 3, 3, 1.0, 1.0, road(-5.0))  # 15 m below: a tunnel, left out
+        self.assertEqual(samples, [10.0] * 9)
+        self.assertEqual((report["carved_sample_count"], report["skipped_deeper_sample_count"]), (0, 9))
+        samples = [10.0] * 9
+        dem.carve_by_roads(samples, 3, 3, 1.0, 1.0, road(9.9))  # within the tolerance: the DEM stays
+        self.assertEqual(samples, [10.0] * 9)
+
     def test_rejects_uncovered_grid_samples(self):
         triangles = [((-1.0, -1.0, 0.0), (0.0, -1.0, 0.0), (-1.0, 0.0, 0.0))]
         with self.assertRaisesRegex(dem.DemError, "uncovered"):

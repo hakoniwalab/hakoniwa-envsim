@@ -6,6 +6,18 @@ The MuJoCo hfield is the physical ground authority for a City World. Terrain
 visualization, road visualization, and road-marking visualization use the same
 piecewise-planar surface as that hfield.
 
+The hfield is sampled from the PLATEAU DEM, then carved with the LOD3 road
+surfaces (`dem2hfield.py`, on by default; `--no-road-carve` turns it off).
+The DEM does not follow roads cut into the ground: around Shinjuku's
+pedestrian bridges it fills sunken roads up to the ground around them, up to
+about 6 m above the measured road, so roads draped on it rose into the
+bridges. Where a LOD3 road surface (traffic and auxiliary traffic areas, 3D)
+lies more than `--road-carve-tolerance` (0.2 m) below the DEM, the samples
+under it are lowered to the road. Roads above the DEM (viaducts) leave the
+ground as it is; a road more than `--road-carve-max-depth` (8 m) below it (a
+tunnel, an underpass) is left out. The terrain receipt's `road_carving`
+records the samples lowered, their depths and those left out.
+
 All components consume the same row-major DEM samples and world frame:
 
 ```text

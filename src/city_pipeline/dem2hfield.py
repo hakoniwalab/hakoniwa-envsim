@@ -10,6 +10,7 @@ import json
 import math
 import mmap
 import os
+import re
 import struct
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -361,6 +362,111 @@ def sample_heightfield(
     return nrow, ncol, samples, gap_report
 
 
+# --- Carving the DEM with the LOD3 road surfaces ------------------------------------------
+#
+# PLATEAU's DEM does not follow roads cut into the ground (Shinjuku's sunken
+# roads under its pedestrian bridges: the DEM fills them up to the ground
+# around, up to about 6 m above the measured road), so roads draped on it rose
+# into the bridges and cars could not pass. Where a LOD3 road surface (its
+# traffic and auxiliary traffic areas, measured in 3D) lies below the DEM, the
+# hfield samples under it are lowered to the road. Roads above the DEM
+# (viaducts) leave the ground as it is, and a road far below it (deeper than
+# max_depth_m: a tunnel, an underpass) is left out and counted.
+
+TRAN_LOD3 = "{http://www.opengis.net/citygml/transportation/2.0}lod3MultiSurface"
+POLYGON = f"{{{GML}}}Polygon"
+
+
+def road_source_paths(source: Path) -> list[Path]:
+    if source.is_file():
+        return [source] if "_tran_" in source.name else []
+    return sorted(source.rglob("*_tran_*_op.gml")) if source.is_dir() else []
+
+
+def extract_road_triangles(paths: list[Path], latitude: float, longitude: float, ns_m: float, ew_m: float):
+    """The LOD3 road surfaces near the window as MuJoCo-frame triangles (X=North, Y=-East, Z=altitude)."""
+    from citygml2glb import GlbError, _polygon_rings, triangulate_rings
+
+    west, south, east, north = geographic_bounds(latitude, longitude, ns_m, ew_m)
+    triangles = []
+    for path in paths:
+        epsg = 6697
+        with path.open("rb") as stream:
+            head = stream.read(65536).decode("utf-8", "replace")
+        name = re.search(r'srsName="([^"]+)"', head)
+        found = srs_code(name.group(1)) if name else None
+        if found in SUPPORTED_CRS:
+            epsg = found
+        depth = 0
+        for event, element in ET.iterparse(path, events=("start", "end")):
+            if element.tag == TRAN_LOD3:
+                depth += 1 if event == "start" else -1
+                continue
+            if event != "end" or element.tag != POLYGON:
+                continue
+            if depth:
+                rings = _polygon_rings(element)
+                if rings:
+                    lats = [point[0] for _, ring in rings for point in ring]
+                    lons = [point[1] for _, ring in rings for point in ring]
+                    if not (max(lats) < south or min(lats) > north or max(lons) < west or min(lons) > east):
+                        local = [[(n, -e, z) for e, n, z in project_to_local_enu(ring, latitude, longitude, epsg)]
+                                 for _, ring in rings]
+                        try:
+                            vertices, faces = triangulate_rings(local)
+                        except (GlbError, ValueError):
+                            pass
+                        else:
+                            triangles.extend(tuple(tuple(float(v) for v in vertices[i]) for i in face) for face in faces)
+            element.clear()
+    return triangles
+
+
+def carve_by_roads(samples, nrow: int, ncol: int, ns_m: float, ew_m: float, road_triangles,
+                   tolerance_m: float = 0.2, max_depth_m: float = 8.0) -> dict:
+    """Lower the samples under the road triangles that lie below the DEM (in place); a report."""
+    col_spacing_m = (2.0 * ns_m) / (ncol - 1)
+    row_spacing_m = (2.0 * ew_m) / (nrow - 1)
+    lowest: dict[int, float] = {}
+    too_deep: set[int] = set()
+    for triangle in road_triangles:
+        xs = [point[0] for point in triangle]
+        ys = [point[1] for point in triangle]
+        col_first = max(0, math.ceil((min(xs) + ns_m) / col_spacing_m - 1e-9))
+        col_last = min(ncol - 1, math.floor((max(xs) + ns_m) / col_spacing_m + 1e-9))
+        row_first = max(0, math.ceil((min(ys) + ew_m) / row_spacing_m - 1e-9))
+        row_last = min(nrow - 1, math.floor((max(ys) + ew_m) / row_spacing_m + 1e-9))
+        for row in range(row_first, row_last + 1):
+            y = -ew_m + row * row_spacing_m
+            for col in range(col_first, col_last + 1):
+                height = _barycentric_height(-ns_m + col * col_spacing_m, y, triangle)
+                if height is None:
+                    continue
+                index = row * ncol + col
+                depth = samples[index] - height
+                if depth <= tolerance_m:
+                    continue
+                if depth > max_depth_m:
+                    too_deep.add(index)
+                    continue
+                lowest[index] = min(lowest.get(index, height), height)
+    depths = []
+    for index, height in lowest.items():
+        depths.append(samples[index] - height)
+        samples[index] = height
+    too_deep -= set(lowest)
+    return {
+        "policy": "lower the DEM to LOD3 road surfaces below it",
+        "road_triangle_count": len(road_triangles),
+        "tolerance_m": tolerance_m,
+        "max_depth_m": max_depth_m,
+        "carved_sample_count": len(depths),
+        "max_carved_depth_m": max(depths, default=0.0),
+        "mean_carved_depth_m": sum(depths) / len(depths) if depths else 0.0,
+        "skipped_deeper_sample_count": len(too_deep),
+    }
+
+
 def write_hfield(path: Path, nrow: int, ncol: int, samples) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as stream:
@@ -415,6 +521,12 @@ def main() -> int:
         "--workers", type=int, default=min(2, os.cpu_count() or 1),
         help="parallel DEM source extraction processes (default: up to 2)",
     )
+    parser.add_argument("--no-road-carve", action="store_true",
+                        help="keep the DEM as it is under LOD3 roads below it (default: lower it to the roads)")
+    parser.add_argument("--road-carve-max-depth", type=float, default=8.0,
+                        help="lower the DEM by at most this much (a road deeper is a tunnel or an underpass)")
+    parser.add_argument("--road-carve-tolerance", type=float, default=0.2,
+                        help="leave the DEM when a road is less than this below it")
     args = parser.parse_args()
     if args.workers < 1:
         parser.error("--workers must be at least 1")
@@ -451,6 +563,21 @@ def main() -> int:
         uncovered_policy=args.uncovered_policy,
         uncovered_elevation_m=args.uncovered_elevation,
     )
+    road_carving = {"policy": "off"}
+    if sources and not args.no_road_carve:
+        roads = road_source_paths(args.source)
+        road_triangles = extract_road_triangles(
+            roads, args.latitude, args.longitude,
+            args.north_south + extraction_margin, args.east_west + extraction_margin,
+        ) if roads else []
+        road_carving = carve_by_roads(
+            samples, nrow, ncol, args.north_south, args.east_west, road_triangles,
+            args.road_carve_tolerance, args.road_carve_max_depth,
+        )
+        road_carving["sources"] = [str(path.resolve()) for path in roads]
+        print(f"OK: road carving: {road_carving['carved_sample_count']} samples lowered "
+              f"(max {road_carving['max_carved_depth_m']:.2f} m), "
+              f"{road_carving['skipped_deeper_sample_count']} deeper left out")
     hfield = args.out.with_suffix(".hf")
     digest = write_hfield(hfield, nrow, ncol, samples)
     minimum, maximum = write_mjcf(
@@ -471,6 +598,7 @@ def main() -> int:
         "ncol": ncol,
         "triangle_count": len(triangles),
         "gap_fill": gap_report,
+        "road_carving": road_carving,
         "minimum_altitude_m": minimum,
         "maximum_altitude_m": maximum,
         "altitude_offset_m": minimum,
