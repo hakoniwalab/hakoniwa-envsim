@@ -51,6 +51,16 @@ def _lod_resolution(levels: list[tuple[str, int]]) -> dict:
     }
 
 
+
+def _bridge_source_lod(bridges: dict) -> str:
+    """LOD3, LOD2 or "LOD3+LOD2": the LODs the bridge GLB was drawn from
+    (each bridge from its LOD3 geometry when it has any, else LOD2)."""
+    lod3 = int(bridges.get("lod3_bridge_count", 0))
+    lod2 = int(bridges.get("lod2_bridge_count", 0))
+    if lod2 and lod3:
+        return "LOD3+LOD2"
+    return "LOD2" if lod2 else "LOD3"
+
 def validate_dataset(
     terrain_receipt_path: Path,
     buildings_receipt_path: Path,
@@ -174,7 +184,7 @@ def validate_dataset(
             },
             "bridges": {
                 "status": "available" if bridge_available else "not_available",
-                "source_lod": "LOD3" if bridge_available else None,
+                "source_lod": _bridge_source_lod(bridges) if bridge_available else None,
                 "bridge_count": int(bridges.get("bridge_count", 0)),
                 "polygon_count": int(bridges.get("polygon_count", 0)),
                 "rejected_polygon_count": int(bridges.get("rejected_polygon_count", 0)),
@@ -299,7 +309,7 @@ def format_report(report: dict) -> list[str]:
             if bridges.get("physics_collision") == "available" else "visual only"
         )
         lines.append(
-            f"{'Bridges':<14}: LOD3 ({bridges['bridge_count']} bridges, "
+            f"{'Bridges':<14}: {bridges['source_lod']} ({bridges['bridge_count']} bridges, "
             f"{bridges['polygon_count']} polygons; {suffix})"
         )
     else:
