@@ -76,13 +76,29 @@ class DemToHeightfieldTest(unittest.TestCase):
         self.assertAlmostEqual(at(4, 0), 10.0 + (8.0 - 10.0) * 1 / 4)   # 1 m outside the edge: most of the way up
         self.assertAlmostEqual(at(6, 0), 10.0 + (8.0 - 10.0) * 3 / 4)   # 3 m outside: nearly the DEM
         self.assertEqual(at(8, 0), 8.0)                                 # beyond the blend: the DEM
-        self.assertEqual(at(0, 0), 8.0)                                 # under the deck, away from its edges: not touched
+        self.assertAlmostEqual(at(0, 0), 10.0 - dem.UNDER_FLOOR_GAP_M)  # under a deck 2 m above the ground: seated
         self.assertGreater(report["samples_changed"], 0)
         # A deck high above the ground (a side over a road below) is left alone.
         samples = [8.0] * 441
         report = dem.blend_to_bridge_edges(samples, 21, 21, 10.0, 10.0, {"bridge-1": deck(15.0)}, blend_m=4.0)
         self.assertEqual(samples, [8.0] * 441)
         self.assertEqual(report["bridges"]["bridge-1"]["edge_points_joined"], 0)
+
+    def test_a_floor_near_the_ground_is_seated_on_it(self):
+        # Ground at 8; a ramp deck from 8.5 (x = -6) up to 14 (x = 6), y -2..2. Bridge carving dug a pit
+        # under it to 4: the low half (deck within 2.5 m of the ground before carving) is seated again.
+        n = 21
+        reference = [8.0] * (n * n)
+        samples = [4.0 if -6 <= col - 10 <= 6 and -2 <= row - 10 <= 2 else 8.0 for row in range(n) for col in range(n)]
+        z = lambda x: 8.5 + (x + 6) * 5.5 / 12
+        deck = [((-6.0, -2.0, z(-6)), (6.0, -2.0, z(6)), (6.0, 2.0, z(6))),
+                ((-6.0, -2.0, z(-6)), (6.0, 2.0, z(6)), (-6.0, 2.0, z(-6)))]
+        report = dem.blend_to_bridge_edges(samples, n, n, 10.0, 10.0, {"ramp": deck}, blend_m=4.0, reference=reference)
+        at = lambda x, y: samples[(y + 10) * n + (x + 10)]
+        for x in (-6, -4, -2):  # deck 0.5 .. 2.33 m above the ground
+            self.assertAlmostEqual(at(x, 0), z(x) - dem.UNDER_FLOOR_GAP_M, places=6)
+        self.assertEqual(at(4, 0), 4.0)  # 3.2 m above the ground: a car could pass, the carving stays
+        self.assertGreater(report["samples_seated"], 0)
 
     def test_the_dem_joins_a_bridge_end_and_leaves_its_side_over_a_drop(self):
         # 21 x 21 samples, 1 m apart (x, y in -10..10). West half (x < 0): ground at 10. East half: a

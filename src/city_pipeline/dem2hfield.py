@@ -596,7 +596,7 @@ def _bilinear(samples, nrow: int, ncol: int, ns_m: float, ew_m: float, x: float,
 
 def blend_to_bridge_edges(samples, nrow: int, ncol: int, ns_m: float, ew_m: float, floors: dict,
                           blend_m: float = 6.0, max_step_m: float = 2.5, tolerance_m: float = 0.05,
-                          keep=frozenset()) -> dict:
+                          keep=frozenset(), reference=None) -> dict:
     """Ease the DEM to the bridges' floor edges where the ground meets them (in place); a report.
 
     Every point along a floor's outer edges (every 0.5 m) whose ground 1 m
@@ -605,8 +605,14 @@ def blend_to_bridge_edges(samples, nrow: int, ncol: int, ns_m: float, ew_m: floa
     its own over blend_m, when its own height is within max_step_m of that
     point (a road on another level stays). A sample under a floor within
     ABUTMENT_M of one of its joined points is filled to just under it.
-    Samples in `keep` (lowered to a road surface) are left as they are."""
+    Samples in `keep` (lowered to a road surface) are left as they are.
+
+    Under a floor that is within max_step_m of the ground (`reference`: the
+    DEM before carve_under_bridges; a car cannot pass under it), every sample
+    is seated: filled or lowered to just under the floor, so the floor lies
+    on the ground with no pit or gap beside or under it."""
     original = list(samples)
+    reference = original if reference is None else list(reference)
     col_spacing_m = (2.0 * ns_m) / (ncol - 1)
     row_spacing_m = (2.0 * ew_m) / (nrow - 1)
     reach_cols = max(1, math.ceil(blend_m / col_spacing_m))
@@ -614,6 +620,7 @@ def blend_to_bridge_edges(samples, nrow: int, ncol: int, ns_m: float, ew_m: floa
     report = {"policy": "ease the DEM to the bridges' floor edges where the ground meets them",
               "blend_m": blend_m, "max_step_m": max_step_m, "abutment_m": ABUTMENT_M, "bridges": {}}
     under: dict[int, set] = {}  # sample -> the bridges over it
+    seat: dict[int, tuple[float, str]] = {}  # sample -> (the floor it lies under, near the ground; its bridge)
     for bridge, triangles in floors.items():
         for triangle in triangles:
             xs = [point[0] for point in triangle]
@@ -622,8 +629,14 @@ def blend_to_bridge_edges(samples, nrow: int, ncol: int, ns_m: float, ew_m: floa
                              min(nrow - 1, math.floor((max(ys) + ew_m) / row_spacing_m + 1e-9)) + 1):
                 for col in range(max(0, math.ceil((min(xs) + ns_m) / col_spacing_m - 1e-9)),
                                  min(ncol - 1, math.floor((max(xs) + ns_m) / col_spacing_m + 1e-9)) + 1):
-                    if _barycentric_height(-ns_m + col * col_spacing_m, -ew_m + row * row_spacing_m, triangle) is not None:
-                        under.setdefault(row * ncol + col, set()).add(bridge)
+                    height = _barycentric_height(-ns_m + col * col_spacing_m, -ew_m + row * row_spacing_m, triangle)
+                    if height is None:
+                        continue
+                    index = row * ncol + col
+                    under.setdefault(index, set()).add(bridge)
+                    if abs(height - reference[index]) <= max_step_m and (
+                            index not in seat or abs(height - reference[index]) < abs(seat[index][0] - reference[index])):
+                        seat[index] = (height, bridge)
     nearest: dict[int, tuple[float, float, str]] = {}  # sample -> (distance, joined point's height, bridge)
     for bridge, triangles in sorted(floors.items()):
         joined = left = 0
@@ -641,7 +654,7 @@ def blend_to_bridge_edges(samples, nrow: int, ncol: int, ns_m: float, ew_m: floa
                 px, py, pz = a[0] + dx * t, a[1] + dy * t, a[2] + (b[2] - a[2]) * t
                 if abs(px) > ns_m or abs(py) > ew_m:
                     continue
-                ground = _bilinear(original, nrow, ncol, ns_m, ew_m, px + nx, py + ny)
+                ground = _bilinear(reference, nrow, ncol, ns_m, ew_m, px + nx, py + ny)
                 if abs(ground - pz) > max_step_m:
                     left += 1
                     continue
@@ -659,13 +672,25 @@ def blend_to_bridge_edges(samples, nrow: int, ncol: int, ns_m: float, ew_m: floa
                         over = under.get(index)
                         if over is not None and (bridge not in over or distance > ABUTMENT_M):
                             continue  # under a floor: only its own abutment
-                        if over is None and abs(original[index] - pz) > max_step_m:
+                        if over is None and abs(reference[index] - pz) > max_step_m:
                             continue  # ground on another level
                         nearest[index] = (distance, pz, bridge)
         if joined or left:
             report["bridges"][bridge] = {"edge_points_joined": joined, "edge_points_left": left,
                                          "samples_changed": 0, "max_change_m": 0.0}
+    for index, (height, bridge) in seat.items():
+        seated = height - UNDER_FLOOR_GAP_M
+        if abs(seated - original[index]) <= tolerance_m:
+            continue
+        entry = report["bridges"].setdefault(bridge, {"edge_points_joined": 0, "edge_points_left": 0,
+                                                      "samples_changed": 0, "max_change_m": 0.0})
+        entry["samples_changed"] += 1
+        entry["max_change_m"] = max(entry["max_change_m"], abs(seated - original[index]))
+        samples[index] = seated
+    report["samples_seated"] = len(seat)
     for index, (distance, edge_z, bridge) in nearest.items():
+        if index in seat:
+            continue
         if index in under:  # the abutment: only ever raised, to just under the floor
             eased = edge_z - UNDER_FLOOR_GAP_M
             if eased <= original[index] + tolerance_m:
@@ -801,6 +826,7 @@ def main() -> int:
               f"(max {road_carving['max_carved_depth_m']:.2f} m), "
               f"{road_carving['skipped_deeper_sample_count']} deeper left out")
     bridge_carving = {"policy": "off"}
+    before_bridges = list(samples)
     if sources and args.bridge_carve:
         floors = bridge_floor_triangles(args.source, args.latitude, args.longitude, args.north_south, args.east_west)
         bridge_carving = carve_under_bridges(samples, nrow, ncol, args.north_south, args.east_west, floors)
@@ -811,7 +837,7 @@ def main() -> int:
         floors = bridge_floor_triangles(args.source, args.latitude, args.longitude, args.north_south, args.east_west)
         on_roads = frozenset(index for index, (was, now) in enumerate(zip(before_roads, samples)) if now < was)
         bridge_blend = blend_to_bridge_edges(samples, nrow, ncol, args.north_south, args.east_west, floors,
-                                             args.bridge_blend_distance, keep=on_roads)
+                                             args.bridge_blend_distance, keep=on_roads, reference=before_bridges)
         print(f"OK: bridge edges: {bridge_blend['samples_changed']} samples eased to the floor edges of "
               f"{len(bridge_blend['bridges'])} bridges")
     hfield = args.out.with_suffix(".hf")
