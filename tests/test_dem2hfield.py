@@ -100,6 +100,21 @@ class DemToHeightfieldTest(unittest.TestCase):
         self.assertEqual(at(4, 0), 4.0)  # 3.2 m above the ground: a car could pass, the carving stays
         self.assertGreater(report["samples_seated"], 0)
 
+    def test_ground_under_a_higher_deck_beside_a_joined_end_is_raised_below_it(self):
+        # Ground 8; a low deck at 8.2 ends at x = 0 (x -6..0); a high deck at 14 starts there (x 0..6),
+        # and bridge carving dug the ground under it to 3. Next to the low deck's end the ground under
+        # the high deck rises towards 8.2, never above the high deck.
+        n = 21
+        reference = [8.0] * (n * n)
+        samples = [3.0 if 1 <= col - 10 <= 6 and -2 <= row - 10 <= 2 else 8.0 for row in range(n) for col in range(n)]
+        low = [((-6.0, -2.0, 8.2), (0.0, -2.0, 8.2), (0.0, 2.0, 8.2)), ((-6.0, -2.0, 8.2), (0.0, 2.0, 8.2), (-6.0, 2.0, 8.2))]
+        high = [((0.5, -2.0, 14.0), (6.0, -2.0, 14.0), (6.0, 2.0, 14.0)), ((0.5, -2.0, 14.0), (6.0, 2.0, 14.0), (0.5, 2.0, 14.0))]
+        dem.blend_to_bridge_edges(samples, n, n, 10.0, 10.0, {"low": low, "high": high}, blend_m=4.0, reference=reference)
+        at = lambda x, y: samples[(y + 10) * n + (x + 10)]
+        self.assertGreater(at(1, 0), 6.5)  # 8.2 eased back towards the carved 3 over 4 m: 6.9
+        self.assertLess(at(1, 0), 14.0)
+        self.assertEqual(at(6, 0), 3.0)  # far from the end: the carving stays
+
     def test_the_dem_joins_a_bridge_end_and_leaves_its_side_over_a_drop(self):
         # 21 x 21 samples, 1 m apart (x, y in -10..10). West half (x < 0): ground at 10. East half: a
         # valley at 4. A deck at 10.5 runs east from x = 0 over the valley (y -2..2).
