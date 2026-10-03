@@ -204,24 +204,6 @@ city_world:
 利用可能な橋面（LOD3、無ければLOD2の`OuterFloorSurface`）を得られない場合、LOD1 Solidなどで橋下を塞ぐfallbackは行わず、
 `capability: scoped_out`、`reason: usable_bridge_surface_not_available`として継続します。
 
-## 建物の中を通る車道（`mjcf.building_road_passage`）
-
-PLATEAUは、道路をまたぐ建物（東京都庁の議事堂など）を地面まで詰まった形で
-記録することがあります。LOD2には底面と屋根が道路の上まであり、通り抜けの
-開口（アーチ）の面はありません。そのため建物のcolliderが道路を塞ぎます。
-`mjcf.building_road_passage: true`（既定false）にすると、LOD3の車道
-（TrafficArea function 1000 車道部・1020 車道交差部）が建物のcolliderの
-中を通っている所で、車道の上を`building_road_passage_clearance_m`
-（既定4.5 m、建築限界）までcolliderからくり抜きます
-（`building_road_passages.py`）。colliderは凸形（箱と凸プリズム）なので、
-通路の面で平面クリップして外側の凸片だけを書き戻します。見た目（GLB）は
-変えません。`components/buildings/road-passages.json`に、くり抜いた
-colliderと体積を記録します。
-
-車道のデータが建物の下まで入っていない所（都庁通りの議事堂の下は、
-南側で途切れて北側の中央通りまで約160 mの間に車道ポリゴンが無い）では、
-くり抜く根拠が無いので何も起きません。
-
 ## 実行
 
 ```bash
