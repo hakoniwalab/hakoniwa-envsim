@@ -620,6 +620,7 @@ def blend_to_bridge_edges(samples, nrow: int, ncol: int, ns_m: float, ew_m: floa
     report = {"policy": "ease the DEM to the bridges' floor edges where the ground meets them",
               "blend_m": blend_m, "max_step_m": max_step_m, "abutment_m": ABUTMENT_M, "bridges": {}}
     under: dict[int, set] = {}  # sample -> the bridges over it
+    lowest_floor: dict[int, float] = {}  # sample -> the lowest floor over it
     seat: dict[int, tuple[float, str]] = {}  # sample -> (the floor it lies under, near the ground; its bridge)
     for bridge, triangles in floors.items():
         for triangle in triangles:
@@ -634,6 +635,7 @@ def blend_to_bridge_edges(samples, nrow: int, ncol: int, ns_m: float, ew_m: floa
                         continue
                     index = row * ncol + col
                     under.setdefault(index, set()).add(bridge)
+                    lowest_floor[index] = min(height, lowest_floor.get(index, math.inf))
                     if abs(height - reference[index]) <= max_step_m and (
                             index not in seat or abs(height - reference[index]) < abs(seat[index][0] - reference[index])):
                         seat[index] = (height, bridge)
@@ -670,10 +672,10 @@ def blend_to_bridge_edges(samples, nrow: int, ncol: int, ns_m: float, ew_m: floa
                         if distance > blend_m or (index in nearest and nearest[index][0] <= distance):
                             continue
                         over = under.get(index)
-                        if over is not None and (bridge not in over or distance > ABUTMENT_M):
-                            continue  # under a floor: only its own abutment
-                        if over is None and abs(reference[index] - pz) > max_step_m:
-                            continue  # ground on another level
+                        if over is not None and bridge in over and distance > ABUTMENT_M:
+                            continue  # under its own floor: only the abutment
+                        if (over is None or bridge not in over) and abs(reference[index] - pz) > max_step_m:
+                            continue  # ground on another level (its own abutment is filled whatever is below)
                         nearest[index] = (distance, pz, bridge)
         if joined or left:
             report["bridges"][bridge] = {"edge_points_joined": joined, "edge_points_left": left,
@@ -691,8 +693,13 @@ def blend_to_bridge_edges(samples, nrow: int, ncol: int, ns_m: float, ew_m: floa
     for index, (distance, edge_z, bridge) in nearest.items():
         if index in seat:
             continue
-        if index in under:  # the abutment: only ever raised, to just under the floor
+        if index in under and bridge in under[index]:  # the abutment: only ever raised, to just under the floor
             eased = edge_z - UNDER_FLOOR_GAP_M
+            if eased <= original[index] + tolerance_m:
+                continue
+        elif index in under:  # under another (higher) floor, beside this one's joined edge: raised, never above it
+            eased = min(edge_z + (original[index] - edge_z) * (distance / blend_m),
+                        lowest_floor[index] - UNDER_FLOOR_GAP_M)
             if eased <= original[index] + tolerance_m:
                 continue
         else:
