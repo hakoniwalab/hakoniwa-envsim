@@ -48,6 +48,24 @@ class ConvexClippingTest(unittest.TestCase):
             lo, hi = piece.bounds
             self.assertFalse(lo[2] < 4.5 - 1e-6 and lo[0] < 3 - 1e-6 and hi[0] > -3 + 1e-6)
 
+    def test_a_box_volume_is_taken_out_of_a_wall_and_its_surface(self):
+        wall = box((0, 0, 5), (10, 1, 5))
+        hole = box((0, 0, 2), (3, 5, 2.5))  # x -3..3, through the wall, z -0.5..4.5
+        pieces, removed = module.subtract_halfspaces(wall, module.polyhedron_planes(hole))
+        self.assertAlmostEqual(removed, 6 * 2 * 4.5, places=4)
+        # The wall's front face as two triangles: the part in the hole goes, the rest stays.
+        positions = np.array([[-10, -1, 0], [10, -1, 0], [10, -1, 10], [-10, -1, 10]], dtype=float)
+        uvs = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], dtype=float)
+        out_positions, attributes, faces = module.clip_triangles(
+            positions, {"uv": uvs}, np.array([[0, 1, 2], [0, 2, 3]]), module.polyhedron_planes(hole))
+        area = sum(abs(np.cross(out_positions[b] - out_positions[a], out_positions[c] - out_positions[a])[1]) / 2
+                   for a, b, c in faces)
+        self.assertAlmostEqual(area, 20 * 10 - 6 * 4.5, places=4)
+        self.assertTrue(all(-3 - 1e-6 <= p[0] <= 3 + 1e-6 and p[2] < 4.5 + 1e-6 for p in out_positions) is False)
+        # UVs follow the positions (u = (x + 10) / 20).
+        for p, uv in zip(out_positions, attributes["uv"]):
+            self.assertAlmostEqual(uv[0], (p[0] + 10) / 20, places=5)
+
     def test_the_mjcf_is_rewritten_with_convex_pieces_and_a_receipt(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -242,6 +242,96 @@ def geom_polyhedron(geom: ET.Element, meshes: dict) -> Polyhedron | None:
     return None
 
 
+def subtract_halfspaces(polyhedron: Polyhedron, planes) -> tuple[list[Polyhedron], float]:
+    """polyhedron minus the convex volume inside every plane ((normal, origin),
+    normals pointing out of that volume): the convex pieces outside it, in the
+    planes' order, and the volume taken out."""
+    outside, remainder = [], polyhedron
+    for normal, origin in planes:
+        part = clip(remainder, normal, origin)
+        if part is not None:
+            outside.append(part)
+        remainder = clip(remainder, tuple(-c for c in normal), origin)
+        if remainder is None:
+            return outside, polyhedron.volume - sum(p.volume for p in outside)
+    return outside, remainder.volume
+
+
+def polyhedron_planes(polyhedron: Polyhedron) -> list:
+    """(outward normal, a point) of each face of a convex polyhedron."""
+    centre = polyhedron.vertices.mean(axis=0)
+    planes = []
+    for face in polyhedron.faces:
+        normal = np.cross(face[1] - face[0], face[2] - face[0])
+        length = np.linalg.norm(normal)
+        if length < 1e-12:
+            continue
+        normal = normal / length
+        if (centre - face[0]) @ normal > 0:
+            normal = -normal
+        planes.append((tuple(normal), tuple(face[0])))
+    return planes
+
+
+def box_polyhedron(corners) -> Polyhedron:
+    """A box from its 8 corners in the order of BOX_FACES ((-,-,-), (-,-,+), (-,+,-), ...)."""
+    corners = np.asarray(corners, dtype=float)
+    return Polyhedron([corners[list(face)] for face in BOX_FACES])
+
+
+def clip_triangles(positions: np.ndarray, attributes: dict, indices: np.ndarray, planes) -> tuple:
+    """Surface triangles minus the convex volume inside every plane (as
+    subtract_halfspaces, for a surface): (positions, attributes, indices) with
+    the parts inside the volume cut away; attributes (normals, UVs, colours)
+    interpolated along the cut edges. Triangles clear of the volume are kept."""
+    positions = np.asarray(positions, dtype=float)
+    names = list(attributes)
+    out_positions, out_attributes, out_faces = [], {name: [] for name in names}, []
+    cache: dict = {}
+
+    def emit(point, values):
+        key = tuple(np.round(point, 6)) + tuple(tuple(np.round(v, 5)) for v in values)
+        if key not in cache:
+            cache[key] = len(out_positions)
+            out_positions.append(point)
+            for name, value in zip(names, values):
+                out_attributes[name].append(value)
+        return cache[key]
+
+    def clip_polygon(polygon, normal, origin, epsilon=1e-9):
+        kept = []
+        distances = [(p - origin) @ normal for p, _ in polygon]
+        for i in range(len(polygon)):
+            (p, vp), (q, vq) = polygon[i], polygon[(i + 1) % len(polygon)]
+            dp, dq = distances[i], distances[(i + 1) % len(polygon)]
+            if dp >= -epsilon:
+                kept.append((p, vp))
+            if (dp > epsilon and dq < -epsilon) or (dp < -epsilon and dq > epsilon):
+                t = dp / (dp - dq)
+                kept.append((p + t * (q - p), [a + t * (b - a) for a, b in zip(vp, vq)]))
+        return kept if len(kept) >= 3 else None
+
+    plane_arrays = [(np.asarray(n, float) / np.linalg.norm(n), np.asarray(o, float)) for n, o in planes]
+    for face in np.asarray(indices).reshape(-1, 3):
+        corners = [(positions[i], [np.asarray(attributes[name][i], float) for name in names]) for i in face]
+        # Clear of the volume when all three corners are outside one plane.
+        if any(all((p - o) @ n > 1e-9 for p, _ in corners) for n, o in plane_arrays):
+            out_faces.append([emit(p, v) for p, v in corners])
+            continue
+        remainder = corners
+        for n, o in plane_arrays:
+            outside = clip_polygon(remainder, n, o)
+            if outside:
+                ids = [emit(p, v) for p, v in outside]
+                out_faces.extend([ids[0], ids[i], ids[i + 1]] for i in range(1, len(ids) - 1))
+            remainder = clip_polygon(remainder, -n, o)
+            if remainder is None:
+                break
+    return (np.array(out_positions, dtype=float).reshape(-1, 3),
+            {name: np.array(values, dtype=float) for name, values in out_attributes.items()},
+            np.array(out_faces, dtype=int).reshape(-1, 3))
+
+
 def subtract_prism(polyhedron: Polyhedron, triangle, top: float) -> tuple[list[Polyhedron], float]:
     """polyhedron minus the volume under `top` over a 2D triangle: the convex
     pieces outside it (split by the top plane first, then the triangle's
@@ -255,15 +345,7 @@ def subtract_prism(polyhedron: Polyhedron, triangle, top: float) -> tuple[list[P
         if length < 1e-9:
             continue
         planes.append(((nx / length, ny / length, 0.0), (px, py, 0.0)))
-    outside, remainder = [], polyhedron
-    for normal, origin in planes:
-        part = clip(remainder, normal, origin)
-        if part is not None:
-            outside.append(part)
-        remainder = clip(remainder, tuple(-c for c in normal), origin)
-        if remainder is None:
-            return outside, polyhedron.volume - sum(p.volume for p in outside)
-    return outside, remainder.volume
+    return subtract_halfspaces(polyhedron, planes)
 
 
 def footprint(polyhedron: Polyhedron) -> Polygon:
