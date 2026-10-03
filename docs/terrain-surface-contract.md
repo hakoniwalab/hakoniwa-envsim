@@ -35,7 +35,10 @@ the floor take the edge's (measured) height and ease back into the DEM over
 6 m (`--bridge-blend-distance`), when the ground at the edge is within 2.5 m of it; an
 edge high above a road below is left alone. Under the floor, within 2 m of
 a joined edge, the ground is filled to just under the floor (an abutment),
-so no gap is left under a bridge's end. Samples the road carving lowered are not raised. The receipt's `bridge_blend`
+so no gap is left under a bridge's end.
+Where a floor is within 2.5 m of the ground (the DEM before bridge carving;
+no car passes under it), the ground under all of it is seated to just under
+the floor, so it lies on the ground with no pit beside or under it. Samples the road carving lowered are not raised. The receipt's `bridge_blend`
 lists each bridge's joined and left edges and the samples changed.
 
 All components consume the same row-major DEM samples and world frame:
