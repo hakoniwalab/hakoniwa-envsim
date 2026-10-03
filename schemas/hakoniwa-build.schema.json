@@ -110,7 +110,8 @@
         "terrain_uncovered_elevation_m": {"type": "number"},
         "marking_vertical_offset_m": {"type": "number", "exclusiveMinimum": 0},
         "bridge_collision_thickness_m": {"type": "number", "exclusiveMinimum": 0},
-        "bridge_max_surface_slope_deg": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 90}
+        "bridge_max_surface_slope_deg": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 90},
+        "terrain_bridge_carve": {"type": "boolean"}
       }
     },
     "output": {
