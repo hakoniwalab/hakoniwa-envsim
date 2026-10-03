@@ -65,6 +65,51 @@ class DemToHeightfieldTest(unittest.TestCase):
         dem.carve_under_bridges(samples, 9, 9, 4.0, 4.0, {"bridge-1": deck}, ring_m=2.0)
         self.assertEqual(samples, [5.0] * 81)
 
+    def test_the_dem_eases_to_a_bridge_floors_edge(self):
+        # A 21 x 21 grid (1 m) at 8 m; a deck at 10 m over x -3..3, y -3..3.
+        def deck(z):
+            return [((-3.0, -3.0, z), (3.0, -3.0, z), (3.0, 3.0, z)), ((-3.0, -3.0, z), (3.0, 3.0, z), (-3.0, 3.0, z))]
+
+        samples = [8.0] * 441
+        report = dem.blend_to_bridge_edges(samples, 21, 21, 10.0, 10.0, {"bridge-1": deck(10.0)}, blend_m=4.0)
+        at = lambda x, y: samples[(y + 10) * 21 + (x + 10)]
+        self.assertAlmostEqual(at(4, 0), 10.0 + (8.0 - 10.0) * 1 / 4)   # 1 m outside the edge: most of the way up
+        self.assertAlmostEqual(at(6, 0), 10.0 + (8.0 - 10.0) * 3 / 4)   # 3 m outside: nearly the DEM
+        self.assertEqual(at(8, 0), 8.0)                                 # beyond the blend: the DEM
+        self.assertEqual(at(0, 0), 8.0)                                 # under the deck, away from its edges: not touched
+        self.assertGreater(report["samples_changed"], 0)
+        # A deck high above the ground (a side over a road below) is left alone.
+        samples = [8.0] * 441
+        report = dem.blend_to_bridge_edges(samples, 21, 21, 10.0, 10.0, {"bridge-1": deck(15.0)}, blend_m=4.0)
+        self.assertEqual(samples, [8.0] * 441)
+        self.assertEqual(report["bridges"]["bridge-1"]["edge_points_joined"], 0)
+
+    def test_the_dem_joins_a_bridge_end_and_leaves_its_side_over_a_drop(self):
+        # 21 x 21 samples, 1 m apart (x, y in -10..10). West half (x < 0): ground at 10. East half: a
+        # valley at 4. A deck at 10.5 runs east from x = 0 over the valley (y -2..2).
+        n = 21
+        samples = [10.0 if col < 10 else 4.0 for row in range(n) for col in range(n)]
+        deck = [((0.0, -2.0, 10.5), (10.0, -2.0, 10.5), (10.0, 2.0, 10.5)),
+                ((0.0, -2.0, 10.5), (10.0, 2.0, 10.5), (0.0, 2.0, 10.5))]
+        report = dem.blend_to_bridge_edges(samples, n, n, 10.0, 10.0, {"bridge-1": deck}, blend_m=4.0)
+
+        def at(x, y):
+            return samples[(y + 10) * n + (x + 10)]
+
+        self.assertGreater(at(-1, 0), 10.3)             # the ground at the deck's end rises to it
+        self.assertLess(abs(at(-8, 0) - 10.0), 0.05)    # and is itself again 8 m away
+        self.assertAlmostEqual(at(5, 4), 4.0)           # the valley beside the deck stays (a 6.5 m drop)
+        self.assertAlmostEqual(at(5, -4), 4.0)
+        self.assertGreater(at(1, 0), 10.0)              # no gap under the deck's end
+        self.assertLessEqual(at(1, 0), 10.5 - dem.UNDER_FLOOR_GAP_M + 1e-9)
+        self.assertAlmostEqual(at(8, 0), 4.0)           # the valley under the deck's span stays
+        self.assertGreater(report["bridges"]["bridge-1"]["edge_points_left"], 0)
+        # A sample lowered to a road surface is kept.
+        samples = [10.0 if col < 10 else 4.0 for row in range(n) for col in range(n)]
+        dem.blend_to_bridge_edges(samples, n, n, 10.0, 10.0, {"bridge-1": deck}, blend_m=4.0, keep={10 * n + 9})
+        self.assertEqual(at(-1, 0), 10.0)
+        self.assertGreater(report["samples_changed"], 0)
+
     def test_rejects_uncovered_grid_samples(self):
         triangles = [((-1.0, -1.0, 0.0), (0.0, -1.0, 0.0), (-1.0, 0.0, 0.0))]
         with self.assertRaisesRegex(dem.DemError, "uncovered"):
