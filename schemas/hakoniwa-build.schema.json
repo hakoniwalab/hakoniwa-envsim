@@ -85,7 +85,9 @@
         "collision": {"enum": ["all", "drone", "none"]},
         "floor": {"type": "boolean"},
         "building_physics_level": {"type": "integer", "minimum": 0, "maximum": 3, "default": 3},
-        "building_collider_reduction": {"enum": ["safe", "coplanar-union", "convex-decompose", "tolerant-planar"], "default": "safe"}
+        "building_collider_reduction": {"enum": ["safe", "coplanar-union", "convex-decompose", "tolerant-planar"], "default": "safe"},
+        "building_road_passage": {"type": "boolean", "default": false},
+        "building_road_passage_clearance_m": {"type": "number", "exclusiveMinimum": 0, "default": 4.5}
       }
     },
     "glb": {

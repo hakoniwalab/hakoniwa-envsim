@@ -68,6 +68,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "model_name": "plateau_city", "collision": "all", "floor": False,
         "building_physics_level": 3,
         "building_collider_reduction": "safe",
+        # Open passages through building colliders where a LOD3 carriageway
+        # runs through them (PLATEAU models such buildings solid to the ground).
+        "building_road_passage": False,
+        "building_road_passage_clearance_m": 4.5,
     },
     "glb": {
         "enabled": True,
@@ -261,6 +265,11 @@ def resolve_config(raw: Mapping[str, Any]) -> dict[str, Any]:
             "mjcf.building_collider_reduction must be safe, coplanar-union, "
             "convex-decompose, or tolerant-planar"
         )
+    if not isinstance(cfg["mjcf"]["building_road_passage"], bool):
+        raise ConfigError("mjcf.building_road_passage must be true or false")
+    clearance = cfg["mjcf"]["building_road_passage_clearance_m"]
+    if isinstance(clearance, bool) or not isinstance(clearance, (int, float)) or clearance <= 0:
+        raise ConfigError("mjcf.building_road_passage_clearance_m must be positive")
     if not isinstance(cfg["glb"]["enabled"], bool):
         raise ConfigError("glb.enabled must be true or false")
     if cfg["glb"]["lod_policy"] != "highest_available":
@@ -531,7 +540,7 @@ def doctor(manifest: Path) -> int:
     scripts = ["gml_lod1_extract.py", "gml2obb.py", "obb2mjcf.py", "citygml2glb.py"]
     if cfg["city_world"]["enabled"]:
         scripts.extend([
-            "dem2hfield.py", "road_terrain_probe.py", "city_furniture2glb.py",
+            "dem2hfield.py", "road_terrain_probe.py", "city_furniture2glb.py", "building_road_passages.py",
             "bridge2glb.py", "bridge2mjcf.py", "city_world_composer.py", "city_dataset_validator.py",
             "building_physics_classifier.py", "mjcf_colliders2glb.py", "world_frame.py",
             "terrain_surface.py",
@@ -660,6 +669,15 @@ def _convert(
         ]
         if cfg["mjcf"]["floor"]:
             buildings_mjcf_command.append("--floor")
+        building_commands = [classifier_command, buildings_mjcf_command]
+        if cfg["mjcf"]["building_road_passage"]:
+            building_commands.append([
+                sys.executable, str(PIPELINE / "building_road_passages.py"),
+                "--mjcf", str(buildings_xml), "--source", str(source_root),
+                "--world-frame", str(world_frame),
+                "--receipt", str(buildings_dir / "road-passages.json"),
+                "--clearance", str(cfg["mjcf"]["building_road_passage_clearance_m"]),
+            ])
 
         terrain_glb = terrain_dir / "terrain.glb"
         roads_glb = roads_dir / "roads.glb"
@@ -699,7 +717,7 @@ def _convert(
         ]
         _run_groups([
             [glb_command],
-            [classifier_command, buildings_mjcf_command],
+            building_commands,
             [roads_command],
             [markings_command],
             [bridges_glb_command],
