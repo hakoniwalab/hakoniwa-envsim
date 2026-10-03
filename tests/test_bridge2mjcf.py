@@ -26,7 +26,7 @@ def world_frame(path: Path, altitude_offset=0.0) -> Path:
     return path
 
 
-def bridge_gml(path: Path, surfaces, bridge_count=1, lods=(3,)) -> Path:
+def bridge_gml(path: Path, surfaces, bridge_count=1, lods=(3,), walls=()) -> Path:
     members = []
     for bridge_index in range(bridge_count):
         surface_xml = []
@@ -40,6 +40,15 @@ def bridge_gml(path: Path, surfaces, bridge_count=1, lods=(3,)) -> Path:
   </gml:LinearRing></gml:exterior></gml:Polygon>
  </gml:surfaceMember></gml:MultiSurface></brid:lod{lod}MultiSurface>
 </brid:OuterFloorSurface></brid:boundedBy>''')
+            for wall_index, points in enumerate(walls):
+                values = " ".join(str(value) for point in points for value in point)
+                surface_xml.append(f'''<brid:boundedBy><brid:WallSurface gml:id="wall-{bridge_index}-{lod}-{wall_index}">
+ <brid:lod{lod}MultiSurface><gml:MultiSurface><gml:surfaceMember>
+  <gml:Polygon gml:id="wall-polygon-{bridge_index}-{lod}-{wall_index}"><gml:exterior><gml:LinearRing>
+   <gml:posList>{values}</gml:posList>
+  </gml:LinearRing></gml:exterior></gml:Polygon>
+ </gml:surfaceMember></gml:MultiSurface></brid:lod{lod}MultiSurface>
+</brid:WallSurface></brid:boundedBy>''')
         members.append(
             f'<core:cityObjectMember><brid:Bridge gml:id="bridge-{bridge_index}">'
             + "".join(surface_xml)
@@ -85,6 +94,25 @@ class BridgePhysicsTest(unittest.TestCase):
             self.assertEqual(len(pieces), 2)
             self.assertEqual({piece["lod"] for piece in pieces}, {2})
             self.assertEqual(list(counts["bridge_ids"]), ["bridge-0"])
+
+    def test_walls_collide_when_asked_and_stay_out_of_the_floors(self):
+        # A pier face under the deck: vertical, so the floor reader skips it.
+        (lat0, lon0, _), (_lat1, lon1, _) = self.FLAT[0][0], self.FLAT[0][1]
+        pier = [(lat0, lon0, 0.0), (lat0, lon1, 0.0), (lat0, lon1, 5.0), (lat0, lon0, 5.0), (lat0, lon0, 0.0)]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            gml = bridge_gml(root / "pier_brid_6697_op.gml", self.FLAT, lods=(2,), walls=[pier])
+            frame = module.load_world_frame(world_frame(root / "frame.json"))
+            floors, _boundary, counts = module.extract_prisms(gml, frame, 0.02, 60.0)
+            self.assertEqual(len(floors), 2)
+            self.assertEqual(counts["wall_triangle_count"], 0)
+            pieces, _boundary, counts = module.extract_prisms(gml, frame, 0.02, 60.0, include_walls=True)
+            walls = [piece for piece in pieces if piece.get("surface_kind") == "wall"]
+            self.assertEqual(len(walls), 2)
+            self.assertEqual(counts["wall_triangle_count"], 2)
+            heights = [point[2] for piece in walls for point in piece["source_vertices"]]
+            self.assertAlmostEqual(min(heights), 0.0, places=6)
+            self.assertAlmostEqual(max(heights), 5.0, places=6)
 
     def test_a_bridge_with_lod3_uses_only_its_lod3_floor(self):
         with tempfile.TemporaryDirectory() as temporary:

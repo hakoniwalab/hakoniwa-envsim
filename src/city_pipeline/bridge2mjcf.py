@@ -28,7 +28,7 @@ from bridge2glb import LOD2_TAGS, bridge_lod_in_use, bridge_source_paths, bridge
 from citygml2glb import GlbError, _polygon_rings, triangulate_rings
 from geodesy import epsg_label, project_to_local_enu
 from mjcf_collision import COLLISION_MODES, collision_attributes
-from mjcf_prism import format_numbers, triangular_prism
+from mjcf_prism import format_numbers, polygon_prism_along_normal, triangular_prism
 from road_terrain_probe import read_hfield, terrain_height
 from world_frame import load_world_frame
 
@@ -37,6 +37,11 @@ BRID = "http://www.opengis.net/citygml/bridge/2.0"
 GML_ID = f"{{{GML}}}id"
 BRIDGE_TAG = f"{{{BRID}}}Bridge"
 OUTER_FLOOR_TAG = f"{{{BRID}}}OuterFloorSurface"
+WALL_TAG = f"{{{BRID}}}WallSurface"
+# Bridge walls (piers, side walls, parapets) as colliders: a car drove through
+# a pier that only had a look. Each wall triangle is a slab this thick along
+# its normal (inwards), its face kept where the source puts it.
+WALL_THICKNESS_M = 0.2
 LOD3_TAGS = {f"{{{BRID}}}lod3Geometry", f"{{{BRID}}}lod3MultiSurface"}
 POLYGON_TAG = f"{{{GML}}}Polygon"
 
@@ -91,8 +96,13 @@ def _edge_key(first, second, tolerance_m=0.001):
     return (a, b) if a <= b else (b, a)
 
 
-def extract_prisms(source: Path, frame: dict, thickness_m: float, max_slope_deg: float):
+def extract_prisms(source: Path, frame: dict, thickness_m: float, max_slope_deg: float,
+                   *, include_walls: bool = False):
+    """The floor pieces (OuterFloorSurface triangles as thin prisms), and with
+    include_walls the WallSurface triangles too (surface_kind "wall"); the
+    boundary and the counts describe the floors."""
     pieces = []
+    wall_triangles = 0
     source_surfaces = selected_surfaces = rejected_polygons = 0
     rejected_slopes = rejected_degenerate = 0
     bridge_ids: set[str] = set()
@@ -105,7 +115,7 @@ def extract_prisms(source: Path, frame: dict, thickness_m: float, max_slope_deg:
         epsg = validate_bridge_crs(path)
         source_crs.add(epsg_label(epsg))
         current_bridge = None
-        floor_depth = lod3_depth = lod2_depth = polygon_depth = 0
+        floor_depth = wall_depth = lod3_depth = lod2_depth = polygon_depth = 0
         lod3_bridges = bridges_with_lod3(path)
         stack: list[ET.Element] = []
         for event, element in ET.iterparse(path, events=("start", "end")):
@@ -117,6 +127,8 @@ def extract_prisms(source: Path, frame: dict, thickness_m: float, max_slope_deg:
                 if element.tag == OUTER_FLOOR_TAG:
                     floor_depth += 1
                     source_surfaces += 1
+                if element.tag == WALL_TAG:
+                    wall_depth += 1
                 if element.tag in LOD3_TAGS:
                     lod3_depth += 1
                 if element.tag in LOD2_TAGS:
@@ -127,6 +139,32 @@ def extract_prisms(source: Path, frame: dict, thickness_m: float, max_slope_deg:
 
             if element.tag == POLYGON_TAG:
                 lod = bridge_lod_in_use(lod3_depth, lod2_depth, current_bridge, lod3_bridges)
+                if include_walls and wall_depth and lod:
+                    parsed = _polygon_rings(element)
+                    if parsed:
+                        rings = [_mjcf_points(points, frame, epsg).tolist() for _, points in parsed]
+                        try:
+                            vertices, faces = triangulate_rings(rings)
+                        except (GlbError, ValueError):
+                            vertices, faces = None, []
+                        if vertices is not None and _intersects_range(vertices, frame):
+                            for triangle_index, face in enumerate(faces):
+                                triangle = np.asarray(vertices[face], dtype=float)
+                                if np.linalg.norm(np.cross(triangle[1] - triangle[0], triangle[2] - triangle[0])) < 1e-4:
+                                    continue
+                                prism, prism_faces = polygon_prism_along_normal(triangle, WALL_THICKNESS_M)
+                                pieces.append({
+                                    "id": f"bridge_piece_{len(pieces):06d}",
+                                    "bridge_id": current_bridge or "unknown-bridge",
+                                    "lod": lod,
+                                    "surface_kind": "wall",
+                                    "surface_id": element.get(GML_ID, "wall"),
+                                    "triangle_index": triangle_index,
+                                    "source_vertices": triangle.tolist(),
+                                    "vertices": prism,
+                                    "faces": prism_faces,
+                                })
+                                wall_triangles += 1
                 if floor_depth and lod:
                     parsed = _polygon_rings(element)
                     polygon_id = element.get(GML_ID, f"polygon-{source_surfaces}")
@@ -182,6 +220,8 @@ def extract_prisms(source: Path, frame: dict, thickness_m: float, max_slope_deg:
                 element.clear()
             if element.tag == OUTER_FLOOR_TAG:
                 floor_depth -= 1
+            if element.tag == WALL_TAG:
+                wall_depth -= 1
             if element.tag in LOD3_TAGS:
                 lod3_depth -= 1
             if element.tag in LOD2_TAGS:
@@ -208,6 +248,7 @@ def extract_prisms(source: Path, frame: dict, thickness_m: float, max_slope_deg:
         "rejected_polygon_count": rejected_polygons,
         "rejected_slope_triangle_count": rejected_slopes,
         "rejected_degenerate_triangle_count": rejected_degenerate,
+        "wall_triangle_count": wall_triangles,
     }
 
 
@@ -316,7 +357,7 @@ def write_mjcf(path: Path, pieces, collision_mode: str) -> None:
 
 def convert(source: Path, world_frame_path: Path, output: Path, receipt_path: Path,
             terrain_receipt: Path | None, thickness_m: float, max_slope_deg: float,
-            collision_mode: str = "all"):
+            collision_mode: str = "all", walls: bool = True):
     if thickness_m <= 0:
         raise BridgePhysicsError("collision thickness must be positive")
     if not 0 < max_slope_deg < 90:
@@ -325,10 +366,11 @@ def convert(source: Path, world_frame_path: Path, output: Path, receipt_path: Pa
         raise BridgePhysicsError("collision mode must be all, drone, or none")
     frame = load_world_frame(world_frame_path)
     sources = bridge_source_paths(source)
-    pieces, boundary, counts = extract_prisms(source, frame, thickness_m, max_slope_deg)
+    pieces, boundary, counts = extract_prisms(source, frame, thickness_m, max_slope_deg, include_walls=walls)
+    floors = [piece for piece in pieces if piece.get("surface_kind") != "wall"]
     source_crs = ",".join(counts.pop("source_crs", None) or ["EPSG:6697"])
     endpoint, endpoint_records = endpoint_validation(boundary, terrain_receipt)
-    terrain_relationship = terrain_relationship_validation(pieces, terrain_receipt)
+    terrain_relationship = terrain_relationship_validation(floors, terrain_receipt)
     write_mjcf(output, pieces, collision_mode)
     debug_dir = output.parent / "debug"
     debug_dir.mkdir(parents=True, exist_ok=True)
@@ -353,7 +395,7 @@ def convert(source: Path, world_frame_path: Path, output: Path, receipt_path: Pa
         "lod_policy": "per bridge: LOD3 OuterFloorSurface when it has LOD3 geometry, else LOD2",
         "lod2_bridge_count": len({piece["bridge_id"] for piece in pieces if piece["lod"] == 2}),
         "lod3_bridge_count": len({piece["bridge_id"] for piece in pieces if piece["lod"] == 3}),
-        "surface_source": "OuterFloorSurface",
+        "surface_source": "OuterFloorSurface" + (" + WallSurface" if walls else ""),
         "surface_selection": {"maximum_slope_deg": max_slope_deg},
         "physics_representation": "independent_thin_convex_triangular_prism_meshes",
         "collision_filter": {
@@ -375,7 +417,7 @@ def convert(source: Path, world_frame_path: Path, output: Path, receipt_path: Pa
         "corrections": [],
         "limitations": [
             "bridge inspection geometry is outside current scope",
-            "only geometrically walkable OuterFloorSurface triangles (LOD3, else LOD2) are collision-enabled",
+            "floors: only geometrically walkable OuterFloorSurface triangles (LOD3, else LOD2) are collision-enabled",
             "triangular-prism pieces are not yet merged or otherwise optimized",
         ],
         "mjcf": {"path": str(output.resolve()), "sha256": _sha256(output)},
@@ -395,11 +437,13 @@ def main() -> int:
     parser.add_argument("--collision-thickness", type=float, default=0.02)
     parser.add_argument("--max-slope-deg", type=float, default=60.0)
     parser.add_argument("--collide", choices=tuple(COLLISION_MODES), default="all")
+    parser.add_argument("--no-walls", action="store_true",
+                        help="floors only (default: the bridges' WallSurface piers and parapets collide too)")
     args = parser.parse_args()
     receipt = args.receipt or args.out.with_name("receipt.json")
     result = convert(
         args.source, args.world_frame, args.out, receipt, args.terrain_receipt,
-        args.collision_thickness, args.max_slope_deg, args.collide,
+        args.collision_thickness, args.max_slope_deg, args.collide, walls=not args.no_walls,
     )
     print(f"OK: bridge physics status={result['status']} geoms={result['physics_geom_count']}")
     print(f"OK: bridge MJCF: {args.out}")
