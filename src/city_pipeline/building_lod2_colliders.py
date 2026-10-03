@@ -137,6 +137,17 @@ def _convex_planar_ring(points):
     return values, None
 
 
+# A deck (an installation's level face, a helipad) is landed on: a thin slab lets
+# a landing Drone sink into it. Its collider reaches this far below its top.
+INSTALLATION_DECK_THICKNESS_M = 0.5
+
+
+def _surface_thickness(surface_kind: str, points, thickness_m: float) -> float:
+    if surface_kind == "BuildingInstallation" and _extrude_vertically(surface_kind, points):
+        return max(thickness_m, INSTALLATION_DECK_THICKNESS_M)
+    return thickness_m
+
+
 def _extrude_vertically(surface_kind: str, points) -> bool:
     """Roofs, and an installation's level faces (a deck), are extruded along world z."""
     if surface_kind == "RoofSurface":
@@ -352,7 +363,7 @@ def _apply_coplanar_union(
                 ring = ring[::-1]
             prism, prism_faces, _ = polygon_prism_for_surface(
                 ring,
-                thickness_m,
+                _surface_thickness(first["surface_kind"], ring, thickness_m),
                 prefer_world_z=_extrude_vertically(first["surface_kind"], ring),
             )
             merged.append({
@@ -568,7 +579,7 @@ def _surface_pieces_for_classes(
                                 prism, prism_faces, extrusion_mode = (
                                     polygon_prism_for_surface(
                                         merged_ring,
-                                        thickness_m,
+                                        _surface_thickness(surface_kind, merged_ring, thickness_m),
                                         prefer_world_z=_extrude_vertically(
                                             surface_kind, merged_ring
                                         ),
@@ -607,7 +618,7 @@ def _surface_pieces_for_classes(
                                 prism, prism_faces, extrusion_mode = (
                                     polygon_prism_for_surface(
                                         triangle,
-                                        thickness_m,
+                                        _surface_thickness(surface_kind, triangle, thickness_m),
                                         prefer_world_z=_extrude_vertically(
                                             surface_kind, triangle
                                         ),
