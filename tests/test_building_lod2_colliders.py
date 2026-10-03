@@ -20,5 +20,14 @@ class BuildingInstallationTest(unittest.TestCase):
         self.assertFalse(colliders._extrude_vertically("WallSurface", deck))
 
 
+    def test_a_deck_is_thick_enough_to_land_on(self):
+        deck = [(0.0, 0.0, 248.4), (10.0, 0.0, 248.4), (10.0, 8.0, 248.4), (0.0, 8.0, 248.4)]
+        mast = [(0.0, 0.0, 246.7), (1.0, 0.0, 246.7), (1.0, 0.0, 265.3), (0.0, 0.0, 265.3)]
+        self.assertEqual(colliders._surface_thickness("BuildingInstallation", deck, 0.02),
+                         colliders.INSTALLATION_DECK_THICKNESS_M)
+        self.assertEqual(colliders._surface_thickness("BuildingInstallation", mast, 0.02), 0.02)
+        self.assertEqual(colliders._surface_thickness("RoofSurface", deck, 0.02), 0.02)
+
+
 if __name__ == "__main__":
     unittest.main()
