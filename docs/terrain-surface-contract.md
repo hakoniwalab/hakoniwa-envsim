@@ -28,6 +28,16 @@ ground around the bridge (the 20th percentile of the samples within 6 m
 outside it), by at most 8 m. The receipt's `bridge_carving` lists each
 bridge's lowered samples and the ground used.
 
+Where a bridge's floor meets the ground (its ends), the DEM is joined to it
+(`city_world.terrain_bridge_blend`, off by default; `dem2hfield.py
+--bridge-blend`): along each floor's outer edges the samples just outside
+the floor take the edge's (measured) height and ease back into the DEM over
+6 m (`--bridge-blend-distance`), when the ground at the edge is within 2.5 m of it; an
+edge high above a road below is left alone. Under the floor, within 2 m of
+a joined edge, the ground is filled to just under the floor (an abutment),
+so no gap is left under a bridge's end. Samples the road carving lowered are not raised. The receipt's `bridge_blend`
+lists each bridge's joined and left edges and the samples changed.
+
 All components consume the same row-major DEM samples and world frame:
 
 ```text
