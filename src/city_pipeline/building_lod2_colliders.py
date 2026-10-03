@@ -47,10 +47,13 @@ UNION_AREA_TOLERANCE_M2 = 1e-6
 COLLIDER_REDUCTION_MODES = {
     "safe", "coplanar-union", "convex-decompose", "tolerant-planar"
 }
+# BuildingInstallation: rooftop decks, masts and the like (outerBuildingInstallation
+# lod2Geometry). Its look is in the GLB; without it a helipad deck (the Tokyo
+# Metropolitan Government Building's, 1.6 m above the roof) has nothing to stand on.
 CLASS_SURFACE_KINDS = {
-    "P1": ("WallSurface", "RoofSurface"),
-    "P2": ("WallSurface", "RoofSurface"),
-    "P3": ("WallSurface", "RoofSurface", "OuterCeilingSurface", "OuterFloorSurface"),
+    "P1": ("WallSurface", "RoofSurface", "BuildingInstallation"),
+    "P2": ("WallSurface", "RoofSurface", "BuildingInstallation"),
+    "P3": ("WallSurface", "RoofSurface", "OuterCeilingSurface", "OuterFloorSurface", "BuildingInstallation"),
 }
 
 
@@ -132,6 +135,21 @@ def _convex_planar_ring(points):
     if positive and negative:
         return None, "concave"
     return values, None
+
+
+def _extrude_vertically(surface_kind: str, points) -> bool:
+    """Roofs, and an installation's level faces (a deck), are extruded along world z."""
+    if surface_kind == "RoofSurface":
+        return True
+    if surface_kind != "BuildingInstallation":
+        return False
+    points = np.asarray(points, dtype=float)
+    normal = np.zeros(3)
+    for index in range(len(points)):  # Newell's method
+        current, following = points[index], points[(index + 1) % len(points)]
+        normal += np.cross(current, following)
+    length = float(np.linalg.norm(normal))
+    return bool(length > 0.0 and abs(normal[2]) / length > 0.9)
 
 
 def _oriented_plane(points):
@@ -335,7 +353,7 @@ def _apply_coplanar_union(
             prism, prism_faces, _ = polygon_prism_for_surface(
                 ring,
                 thickness_m,
-                prefer_world_z=(first["surface_kind"] == "RoofSurface"),
+                prefer_world_z=_extrude_vertically(first["surface_kind"], ring),
             )
             merged.append({
                 **first,
@@ -551,8 +569,8 @@ def _surface_pieces_for_classes(
                                     polygon_prism_for_surface(
                                         merged_ring,
                                         thickness_m,
-                                        prefer_world_z=(
-                                            surface_kind == "RoofSurface"
+                                        prefer_world_z=_extrude_vertically(
+                                            surface_kind, merged_ring
                                         ),
                                     )
                                 )
@@ -590,8 +608,8 @@ def _surface_pieces_for_classes(
                                     polygon_prism_for_surface(
                                         triangle,
                                         thickness_m,
-                                        prefer_world_z=(
-                                            surface_kind == "RoofSurface"
+                                        prefer_world_z=_extrude_vertically(
+                                            surface_kind, triangle
                                         ),
                                     )
                                 )
