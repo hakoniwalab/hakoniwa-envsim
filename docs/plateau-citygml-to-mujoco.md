@@ -17,8 +17,8 @@ latitude / longitude / half extents
 ```
 
 City World構成では、同じworld-frameへDEM、道路、建物を統合します。
-`source.feature_types.brid: true` の場合は、PLATEAUのLOD3橋梁を追加のGLB表示
-コンポーネントとして統合します。橋梁の元高度は保持し、DEMへ貼り付けたり、
+`source.feature_types.brid: true` の場合は、PLATEAUの橋梁（橋ごとにLOD3があればLOD3、
+なければLOD2）を追加のGLB表示コンポーネントとして統合します。橋梁の元高度は保持し、DEMへ貼り付けたり、
 欠落した橋形状を推定したりしません。利用可能な`OuterFloorSurface`があれば、
 独立した軽量MJCF橋面collisionも生成します。
 
@@ -72,7 +72,7 @@ query-centered local ENU上で範囲交差を判定します。範囲外の不�
 | `glb.enabled` | 同じ建物選択と原点からGLBも生成するか |
 | `glb.lod_policy` | Visualは`highest_available` |
 | `glb.texture_mode` | `embedded-if-available`で利用可能なtextureを使用 |
-| `source.feature_types.brid` | LOD3橋梁を検索し、GLB表示と利用可能な橋面collisionへ変換するか（City Worldのみ、既定false） |
+| `source.feature_types.brid` | 橋梁（LOD3、無ければLOD2）を検索し、GLB表示と利用可能な橋面collisionへ変換するか（City Worldのみ、既定false） |
 | `city_world.parallel_workers` | source・LOD2 texture取得、建物GML抽出、独立component生成、道路・路面標示の面分割に使う並列worker上限（1〜16、既定8）。建物GML抽出と面分割は最大4process |
 | `city_world.dem_parallel_workers` | DEM source抽出専用のprocess上限（1〜4、既定4） |
 | `city_world.building_physics_workers` | 建物Physicsのsource GML解析・三角形化のprocess上限（1〜8、既定4）。`safe` reductionでsourceが複数ある場合に有効 |
@@ -145,11 +145,15 @@ GLB頂点はThree.jsネイティブの`X=East, Y=Up, Z=-North`で出力します
 
 橋梁データは疎に配置され、PLATEAUカタログでは第2次メッシュ単位で検索される
 場合があります。そのためEnvsimは、通常地物の第3次メッシュ検索とは分けて
-`brid`だけを第2次メッシュで検索し、返されたLOD3ファイルを対象範囲で絞ります。
+`brid`だけを第2次メッシュで検索し、返されたLOD2以上のファイルを対象範囲で絞ります。
+多くの都市（例: 2025年の新宿区・渋谷区）は橋梁をLOD2だけで公開しています。LOD2の橋梁も
+`brid:boundedBy`に`OuterFloorSurface`などの面区分を持つため、橋ごとにLOD3の形状があれば
+LOD3を、無ければLOD2（`lod2MultiSurface`の境界面と`lod2Geometry`の構造部材。`lod2Solid`は
+それらの面をxlinkで参照するだけなので読みません）を使います。
 
 ```text
-brid LOD3 CityGML (EPSG:6697, 3D)
-  → 対象範囲と交差するLOD3面
+brid LOD3/LOD2 CityGML (EPSG:6697, 3D)
+  → 対象範囲と交差する面（橋ごとにLOD3、無ければLOD2）
   → X3DMaterial diffuseColor（無い面だけ既定色）
   → source altitude - world-frame altitude_offset
   → bridges.glb
@@ -160,7 +164,7 @@ brid LOD3 CityGML (EPSG:6697, 3D)
 最大100件のpolygon IDを`bridges-glb-receipt.json`へ記録します。Dataset Validatorは
 橋梁について `bridge_visualization` と `bridge_collision` を別々に報告します。
 
-Physics側はLOD3 `brid:OuterFloorSurface`のうち、設定した最大傾斜以下の面だけを
+Physics側は`brid:OuterFloorSurface`（橋ごとにLOD3、無ければLOD2）のうち、設定した最大傾斜以下の面だけを
 通行可能な橋面候補として扱います。各source polygonをtriangulateし、source XYZを
 上面に保ったまま負Z方向へ薄く押し出した独立convex meshを生成します。
 
@@ -197,7 +201,7 @@ city_world:
   bridge_max_surface_slope_deg: 60
 ```
 
-LOD3の利用可能な橋面を得られない場合、LOD1 Solidなどで橋下を塞ぐfallbackは行わず、
+利用可能な橋面（LOD3、無ければLOD2の`OuterFloorSurface`）を得られない場合、LOD1 Solidなどで橋下を塞ぐfallbackは行わず、
 `capability: scoped_out`、`reason: usable_bridge_surface_not_available`として継続します。
 
 ## 実行

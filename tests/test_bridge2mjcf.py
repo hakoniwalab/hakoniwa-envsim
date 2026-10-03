@@ -26,18 +26,19 @@ def world_frame(path: Path, altitude_offset=0.0) -> Path:
     return path
 
 
-def bridge_gml(path: Path, surfaces, bridge_count=1) -> Path:
+def bridge_gml(path: Path, surfaces, bridge_count=1, lods=(3,)) -> Path:
     members = []
     for bridge_index in range(bridge_count):
         surface_xml = []
-        for surface_index, points in enumerate(surfaces):
-            values = " ".join(str(value) for point in points for value in point)
-            surface_xml.append(f'''<brid:boundedBy><brid:OuterFloorSurface gml:id="surface-{bridge_index}-{surface_index}">
- <brid:lod3MultiSurface><gml:MultiSurface><gml:surfaceMember>
-  <gml:Polygon gml:id="polygon-{bridge_index}-{surface_index}"><gml:exterior><gml:LinearRing>
+        for lod in lods:
+            for surface_index, points in enumerate(surfaces):
+                values = " ".join(str(value) for point in points for value in point)
+                surface_xml.append(f'''<brid:boundedBy><brid:OuterFloorSurface gml:id="surface-{bridge_index}-{lod}-{surface_index}">
+ <brid:lod{lod}MultiSurface><gml:MultiSurface><gml:surfaceMember>
+  <gml:Polygon gml:id="polygon-{bridge_index}-{lod}-{surface_index}"><gml:exterior><gml:LinearRing>
    <gml:posList>{values}</gml:posList>
   </gml:LinearRing></gml:exterior></gml:Polygon>
- </gml:surfaceMember></gml:MultiSurface></brid:lod3MultiSurface>
+ </gml:surfaceMember></gml:MultiSurface></brid:lod{lod}MultiSurface>
 </brid:OuterFloorSurface></brid:boundedBy>''')
         members.append(
             f'<core:cityObjectMember><brid:Bridge gml:id="bridge-{bridge_index}">'
@@ -68,6 +69,32 @@ def terrain_receipt(root: Path, altitude=0.0) -> Path:
 
 
 class BridgePhysicsTest(unittest.TestCase):
+    FLAT = [[
+        (35.0, 139.0, 5.0), (35.0, 139.00001, 5.0),
+        (35.00001, 139.00001, 5.0), (35.00001, 139.0, 5.0),
+        (35.0, 139.0, 5.0),
+    ]]
+
+    def test_a_lod2_only_bridge_gets_its_floor_as_collision(self):
+        # Many cities publish bridges at LOD2 only; they still name their floor.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pieces, _boundary, counts = module.extract_prisms(
+                bridge_gml(root / "lod2_brid_6697_op.gml", self.FLAT, lods=(2,)),
+                module.load_world_frame(world_frame(root / "frame.json")), 0.02, 60.0)
+            self.assertEqual(len(pieces), 2)
+            self.assertEqual({piece["lod"] for piece in pieces}, {2})
+            self.assertEqual(list(counts["bridge_ids"]), ["bridge-0"])
+
+    def test_a_bridge_with_lod3_uses_only_its_lod3_floor(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pieces, _boundary, _counts = module.extract_prisms(
+                bridge_gml(root / "both_brid_6697_op.gml", self.FLAT, lods=(3, 2)),
+                module.load_world_frame(world_frame(root / "frame.json")), 0.02, 60.0)
+            self.assertEqual(len(pieces), 2)  # the LOD2 copy of the floor is not used
+            self.assertEqual({piece["lod"] for piece in pieces}, {3})
+
     def test_flat_bridge_preserves_top_and_leaves_under_bridge_space(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

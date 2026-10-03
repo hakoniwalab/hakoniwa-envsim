@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Generate lightweight MuJoCo bridge-deck collision from PLATEAU LOD3 data.
+"""Generate lightweight MuJoCo bridge-deck collision from PLATEAU bridge data.
+
+The deck is each bridge's OuterFloorSurface: from its LOD3 geometry when it
+has any, else from its LOD2 bounded surfaces (many cities publish bridges at
+LOD2 only; those still name their floor surfaces).
 
 Each accepted OuterFloorSurface triangle is represented by one thin convex
 triangular-prism mesh.  Keeping each prism independent is intentional:
@@ -20,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 
-from bridge2glb import bridge_source_paths, validate_bridge_crs
+from bridge2glb import LOD2_TAGS, bridge_lod_in_use, bridge_source_paths, bridges_with_lod3, validate_bridge_crs
 from citygml2glb import GlbError, _polygon_rings, triangulate_rings
 from geodesy import epsg_label, project_to_local_enu
 from mjcf_collision import COLLISION_MODES, collision_attributes
@@ -101,7 +105,8 @@ def extract_prisms(source: Path, frame: dict, thickness_m: float, max_slope_deg:
         epsg = validate_bridge_crs(path)
         source_crs.add(epsg_label(epsg))
         current_bridge = None
-        floor_depth = lod3_depth = polygon_depth = 0
+        floor_depth = lod3_depth = lod2_depth = polygon_depth = 0
+        lod3_bridges = bridges_with_lod3(path)
         stack: list[ET.Element] = []
         for event, element in ET.iterparse(path, events=("start", "end")):
             if event == "start":
@@ -114,12 +119,15 @@ def extract_prisms(source: Path, frame: dict, thickness_m: float, max_slope_deg:
                     source_surfaces += 1
                 if element.tag in LOD3_TAGS:
                     lod3_depth += 1
+                if element.tag in LOD2_TAGS:
+                    lod2_depth += 1
                 if element.tag == POLYGON_TAG:
                     polygon_depth += 1
                 continue
 
             if element.tag == POLYGON_TAG:
-                if floor_depth and lod3_depth:
+                lod = bridge_lod_in_use(lod3_depth, lod2_depth, current_bridge, lod3_bridges)
+                if floor_depth and lod:
                     parsed = _polygon_rings(element)
                     polygon_id = element.get(GML_ID, f"polygon-{source_surfaces}")
                     if parsed:
@@ -146,6 +154,7 @@ def extract_prisms(source: Path, frame: dict, thickness_m: float, max_slope_deg:
                                     pieces.append({
                                         "id": piece_id,
                                         "bridge_id": current_bridge or "unknown-bridge",
+                                        "lod": lod,
                                         "surface_id": polygon_id,
                                         "triangle_index": triangle_index,
                                         "slope_deg": slope,
@@ -175,6 +184,8 @@ def extract_prisms(source: Path, frame: dict, thickness_m: float, max_slope_deg:
                 floor_depth -= 1
             if element.tag in LOD3_TAGS:
                 lod3_depth -= 1
+            if element.tag in LOD2_TAGS:
+                lod2_depth -= 1
             stack.pop()
 
     boundary = []
@@ -338,7 +349,10 @@ def convert(source: Path, world_frame_path: Path, output: Path, receipt_path: Pa
         "source": "PLATEAU CityGML",
         "sources": [{"path": str(path.resolve()), "sha256": _sha256(path)} for path in sources],
         "source_crs": source_crs,
-        "lod_used": 3 if pieces else None,
+        "lod_used": max((piece["lod"] for piece in pieces), default=None),
+        "lod_policy": "per bridge: LOD3 OuterFloorSurface when it has LOD3 geometry, else LOD2",
+        "lod2_bridge_count": len({piece["bridge_id"] for piece in pieces if piece["lod"] == 2}),
+        "lod3_bridge_count": len({piece["bridge_id"] for piece in pieces if piece["lod"] == 3}),
         "surface_source": "OuterFloorSurface",
         "surface_selection": {"maximum_slope_deg": max_slope_deg},
         "physics_representation": "independent_thin_convex_triangular_prism_meshes",
@@ -361,7 +375,7 @@ def convert(source: Path, world_frame_path: Path, output: Path, receipt_path: Pa
         "corrections": [],
         "limitations": [
             "bridge inspection geometry is outside current scope",
-            "only geometrically walkable LOD3 OuterFloorSurface triangles are collision-enabled",
+            "only geometrically walkable OuterFloorSurface triangles (LOD3, else LOD2) are collision-enabled",
             "triangular-prism pieces are not yet merged or otherwise optimized",
         ],
         "mjcf": {"path": str(output.resolve()), "sha256": _sha256(output)},

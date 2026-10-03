@@ -875,7 +875,7 @@ def build(manifest: Path, offline: bool = False) -> int:
             allow_empty=(
                 cfg["city_world"]["enabled"] and feature_type in {"frn", "brid"}
             ),
-            min_lod=3 if feature_type == "brid" else 1,
+            min_lod=2 if feature_type == "brid" else 1,  # bridges: LOD3, or LOD2 where that is all
         )
         if feature_type == "brid":
             selected = [
